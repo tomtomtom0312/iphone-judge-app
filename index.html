@@ -250,6 +250,43 @@
     .edit-actions button { flex: 1; height: 48px; border-radius: 10px; font-size: 15px; font-weight: 600; }
     .cancel-btn { background: transparent; color: var(--muted); border: 1px solid var(--line); }
     .savee-btn { background: var(--accent); color: #fff; border: none; }
+
+    /* 撮影モード切替（単品判定 / 連続撮影） */
+    .mode-switch { display: flex; gap: 0; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .mode-switch button {
+      flex: 1; height: 44px; background: #0d1117; color: var(--muted);
+      border: none; font-size: 14px; font-weight: 600;
+    }
+    .mode-switch button + button { border-left: 1px solid var(--line); }
+    .mode-switch button.active { background: var(--accent); color: #fff; }
+
+    /* 連続撮影パネル */
+    .burst-note { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0 0 12px; }
+    .burst-status { font-size: 14px; line-height: 1.6; margin-top: 12px; min-height: 1.2em; }
+    .burst-count { font-weight: 700; color: #4ade80; }
+    .burst-last { font-size: 13px; color: var(--muted); margin-top: 4px; word-break: break-word; }
+
+    /* カテゴリ・ランク表示 */
+    .cat-tag {
+      font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+      background: rgba(139,92,246,.18); color: #c4b5fd;
+    }
+    .rank-badge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+    .rank-S, .rank-A { background: rgba(22,163,74,.18); color: #4ade80; }
+    .rank-B { background: rgba(34,197,94,.14); color: #86efac; }
+    .rank-C, .rank-D { background: rgba(217,119,6,.18); color: #fbbf24; }
+    .rank-ジャンク { background: rgba(220,38,38,.18); color: #f87171; }
+    .b-draft { background: rgba(154,167,178,.18); color: var(--muted); }
+    .b-none { background: rgba(154,167,178,.18); color: var(--muted); }
+    .v-none.modal-verdict { font-size: 18px; font-weight: 700; }
+
+    /* 履歴アイテムの名称・操作ボタン */
+    .hist-name { font-weight: 600; margin-bottom: 4px; word-break: break-word; }
+    .hist-name.empty { color: var(--muted); font-weight: 500; }
+    .hist-btns { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; align-self: stretch; }
+    .hist-edit, .hist-del { border-radius: 8px; font-size: 12px; padding: 8px 10px; flex: 1; }
+    .hist-edit { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .hist-del { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   </style>
 </head>
 <body>
@@ -265,6 +302,10 @@
 
   <!-- 写真 -->
   <div class="card">
+    <div class="mode-switch" id="modeSwitch">
+      <button data-mode="single" class="active">単品判定</button>
+      <button data-mode="burst">連続撮影</button>
+    </div>
     <button class="photo-btn" id="cameraBtn">📷 写真を撮る / 選ぶ</button>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
@@ -276,8 +317,25 @@
     <div class="ai-status" id="aiStatus"></div>
   </div>
 
+  <!-- 連続撮影パネル（連続モードのみ表示） -->
+  <div class="card burst-only" id="burstCard" style="display:none;">
+    <p class="burst-note">📦 1枚撮るたびにAIが認識して<b>履歴へ自動保存</b>します。売価・原価・送料・メモは、あとで各履歴の「編集」から入力してください。</p>
+    <div class="field" style="margin-bottom:0;">
+      <label>カテゴリのヒント（任意）</label>
+      <select id="burstCategoryHint">
+        <option value="">AIにおまかせ</option>
+        <option value="iPhone">iPhone</option>
+        <option value="trading_card_single">トレカ単品</option>
+        <option value="trading_card_box">トレカBOX</option>
+        <option value="figure">フィギュア</option>
+        <option value="other">その他</option>
+      </select>
+    </div>
+    <div class="burst-status" id="burstStatus"></div>
+  </div>
+
   <!-- 主要入力（写真直下・現場で最初に入力。将来は写真からAI自動入力） -->
-  <div class="card primary-card">
+  <div class="card primary-card single-only">
     <div class="field">
       <label>商品名 / メモ</label>
       <input id="memo" class="primary-input" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
@@ -290,7 +348,7 @@
   </div>
 
   <!-- 詳細入力 -->
-  <div class="card">
+  <div class="card single-only">
     <div class="field">
       <label>商品状態</label>
       <select id="condition">
@@ -316,7 +374,7 @@
   </div>
 
   <!-- 結果 -->
-  <div class="card">
+  <div class="card single-only">
     <div class="verdict v-none" id="verdict">数値を入力してください</div>
     <div class="reasons" id="reasons"></div>
     <div class="breakdown" id="breakdown" style="display:none;">
@@ -416,6 +474,16 @@
           <input id="eMemo" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
         </div>
         <div class="field">
+          <label>カテゴリ</label>
+          <select id="eCategory">
+            <option value="iPhone">iPhone</option>
+            <option value="trading_card_single">トレカ単品</option>
+            <option value="trading_card_box">トレカBOX</option>
+            <option value="figure">フィギュア</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="field">
           <label>商品状態</label>
           <select id="eCondition">
             <option value="新品">新品</option>
@@ -424,6 +492,18 @@
             <option value="美品">美品</option>
             <option value="良品">良品</option>
             <option value="難あり">難あり</option>
+            <option value="ジャンク">ジャンク</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>状態ランク（AI推定・任意）</label>
+          <select id="eRank">
+            <option value="">—（未設定）</option>
+            <option value="S">S</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
             <option value="ジャンク">ジャンク</option>
           </select>
         </div>
@@ -507,15 +587,67 @@
 
     var activeMarket = 'ebay'; // 現在選択中の販路ID
 
+    /* ============================================================
+       商品カテゴリ レジストリ（機械値 → 表示ラベル）
+       APIの category enum（CATEGORY_VALUES）とキーを一致させること。
+       ============================================================ */
+    var CATEGORIES = {
+      iPhone:              'iPhone',
+      trading_card_single: 'トレカ単品',
+      trading_card_box:    'トレカBOX',
+      figure:              'フィギュア',
+      other:               'その他'
+    };
+    function categoryLabel(v) { return CATEGORIES[v] || 'その他'; }
+    function normCategory(v) { return CATEGORIES[v] ? v : 'other'; }
+
+    // AI状態ランク（S/A/B/C/D/ジャンク）→ 既存の商品状態セレクト値へのマッピング
+    var RANK_TO_CONDITION = {
+      'S': '新品同様', 'A': '美品', 'B': '良品',
+      'C': '難あり', 'D': 'ジャンク', 'ジャンク': 'ジャンク'
+    };
+
+    // AI認識の生フィールドだけを抜き出す（履歴に参照用として保存）
+    function pickAi(j) {
+      return {
+        brand: j.brand || '', series: j.series || '', setName: j.setName || '',
+        cardName: j.cardName || '', boxName: j.boxName || '',
+        storage: j.storage || '', color: j.color || '',
+        condition: j.condition || '', notes: j.notes || '',
+        confidence: Number(j.confidence) || 0
+      };
+    }
+
+    // 認識結果から出品名（メモ欄）を組み立て（iPhoneは容量・色を付与）
+    function composeName(j) {
+      var name = j.productName || '';
+      if (normCategory(j.category) === 'iPhone') {
+        if (j.storage) name += ' ' + j.storage;
+        if (j.color) name += ' ' + j.color;
+      }
+      return name.trim();
+    }
+
     // --- 写真 ---
     var currentPhoto = null;   // 履歴保存用の縮小サムネイル(400px dataURL)
     var currentAiImage = null; // AI認識用のやや高解像度(768px dataURL)
+    // 単品モードでAI認識した結果（保存時に履歴へ載せる）
+    var currentCategory = 'other';
+    var currentRank = '';
+    var currentAi = null;
+    var captureMode = 'single'; // 'single' = 単品判定 / 'burst' = 連続撮影
+
     $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });
     $('photoInput').addEventListener('change', function (e) {
       var file = e.target.files[0];
       if (!file) return;
+      if (captureMode === 'burst') { burstCapture(file); $('photoInput').value = ''; return; }
+
+      // --- 単品モード ---
       $('preview').src = URL.createObjectURL(file);
       $('previewWrap').style.display = 'block';
+      // 新しい写真を選んだら前回のAI結果はリセット
+      currentCategory = 'other'; currentRank = ''; currentAi = null;
       makeThumb(file, 400, function (dataUrl) { currentPhoto = dataUrl; });          // 履歴用（軽量）
       makeThumb(file, 768, function (dataUrl) {                                       // AI用（認識精度）
         currentAiImage = dataUrl;
@@ -523,6 +655,32 @@
       });
       $('aiStatus').textContent = '';
     });
+
+    // --- 撮影モード切替 ---
+    function applyCaptureMode(mode) {
+      captureMode = (mode === 'burst') ? 'burst' : 'single';
+      var btns = $('modeSwitch').querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === captureMode);
+      }
+      var burst = (captureMode === 'burst');
+      // 単品専用カードの表示切替
+      var singles = document.querySelectorAll('.single-only');
+      for (var s = 0; s < singles.length; s++) singles[s].style.display = burst ? 'none' : '';
+      $('burstCard').style.display = burst ? '' : 'none';
+      // 写真カード内の見た目
+      $('cameraBtn').textContent = burst ? '📷 連続撮影：1枚撮る' : '📷 写真を撮る / 選ぶ';
+      $('aiBtn').style.display = burst ? 'none' : '';
+      $('aiStatus').textContent = '';
+      $('previewWrap').style.display = 'none';
+      if (burst) renderBurstStatus();
+    }
+    (function () {
+      var btns = $('modeSwitch').querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function () { applyCaptureMode(this.getAttribute('data-mode')); });
+      }
+    })();
 
     // 画像を最大幅 maxW のJPEGに縮小して dataURL を返す
     function makeThumb(file, maxW, cb) {
@@ -587,14 +745,30 @@
               + esc(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'));
             return;
           }
-          // 商品名を自動入力（人が上書き可能）
-          $('memo').value = j.productName || '';
+          // 認識結果を保持（保存時に履歴へ載せる）
+          currentCategory = normCategory(j.category);
+          currentRank = j.estimatedRank || '';
+          currentAi = pickAi(j);
+
+          // 商品名（＋容量・色）を自動入力（人が上書き可能）
+          $('memo').value = composeName(j);
+
+          // 推定ランクを状態セレクトへ反映（無ければ現状維持）
+          var mapped = RANK_TO_CONDITION[currentRank];
+          if (mapped) $('condition').value = mapped;
           calc();
+
+          // ステータス表示：確信度バッジ＋カテゴリ／ランク／状態説明／懸念点
           var c = Number(j.confidence) || 0;
           var cls = c >= 0.8 ? 'ai-hi' : c >= 0.5 ? 'ai-mid' : 'ai-lo';
-          $('aiStatus').innerHTML =
+          var detail = [categoryLabel(currentCategory)];
+          if (currentRank) detail.push('ランク' + esc(currentRank));
+          if (j.condition) detail.push(esc(j.condition));
+          var html =
             '<span class="ai-badge ' + cls + '">AI提案 ' + Math.round(c * 100) + '%</span>' +
-            esc(j.category || '') + ' / 内容を確認・修正してください';
+            detail.join(' / ') + ' / 内容を確認・修正してください';
+          if (j.notes) html += '<br>⚠️ ' + esc(j.notes);
+          $('aiStatus').innerHTML = html;
         })
         .catch(function () {
           if (timedOut) {
@@ -610,6 +784,115 @@
           btn.disabled = false;
           btn.textContent = orig;
         });
+    }
+
+    // --- 連続撮影モード（1枚ごとにAI認識→ドラフト履歴へ自動保存） ---
+    var burstCount = 0;     // このセッションで連続撮影・保存した枚数
+    var burstLast = '';     // 直近で保存した内容のラベル（表示用）
+    var burstBusy = false;  // 認識処理中フラグ
+
+    function renderBurstStatus(msg, cls) {
+      var html = '';
+      if (burstCount > 0) html += '<span class="burst-count">✓ ' + burstCount + '枚 認識・保存しました</span>';
+      if (msg) html += (html ? '<br>' : '') + (cls ? '<span class="ai-badge ' + cls + '">' + esc(cls === 'ai-lo' ? '注意' : 'OK') + '</span>' : '') + esc(msg);
+      if (burstLast) html += '<div class="burst-last">直近: ' + esc(burstLast) + '</div>';
+      if (!html) html = '「📷 連続撮影：1枚撮る」を押して撮影してください。';
+      $('burstStatus').innerHTML = html;
+    }
+
+    // 認識結果オブジェクト j からドラフト履歴エントリを生成（売価・原価・送料は未入力）
+    function entryFromRecognition(j, thumb) {
+      var market = activeMarket;
+      var m = MARKETPLACES[market] || MARKETPLACES.ebay;
+      var rank = j.estimatedRank || '';
+      var ship0 = effectiveShipping(market)[0] || { label: '送料込み / なし', cost: 0 };
+      var e = {
+        id: String(new Date().getTime()) + Math.round(Math.random() * 1000),
+        date: nowLabel(),
+        photo: thumb || '',
+        memo: composeName(j),
+        category: normCategory(j.category),
+        estimatedRank: rank,
+        ai: pickAi(j),
+        market: market,
+        marketName: m.name,
+        currency: m.currency,
+        symbol: m.symbol,
+        condition: RANK_TO_CONDITION[rank] || '美品',
+        price: 0,
+        cost: 0,
+        ship: 0,
+        shipName: ship0.label
+      };
+      recompute(e); // ドラフト（売価0）として profit=null・パラメータ確定
+      return e;
+    }
+
+    function burstCapture(file) {
+      if (burstBusy) return;
+      burstBusy = true;
+      $('cameraBtn').disabled = true;
+      $('preview').src = URL.createObjectURL(file);
+      $('previewWrap').style.display = 'block';
+      renderBurstStatus('🤖 認識中...');
+
+      var controller = new AbortController();
+      var timedOut = false;
+      var timer = setTimeout(function () { timedOut = true; controller.abort(); }, AI_TIMEOUT_MS);
+      var hint = $('burstCategoryHint').value || '';
+
+      function finish() {
+        clearTimeout(timer);
+        burstBusy = false;
+        $('cameraBtn').disabled = false;
+      }
+
+      // 履歴用サムネ(400) と AI用(768) を作ってから認識
+      makeThumb(file, 400, function (thumb) {
+        makeThumb(file, 768, function (aiImg) {
+          if (!aiImg) { finish(); renderBurstStatus('画像の処理に失敗しました。撮り直してください。', 'ai-lo'); return; }
+          fetch('/api/recognize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: aiImg, categoryHint: hint }),
+            signal: controller.signal
+          })
+            .then(function (r) {
+              return r.text().then(function (t) {
+                var jj = {};
+                try { jj = JSON.parse(t); } catch (e) {}
+                return { ok: r.ok, status: r.status, j: jj };
+              });
+            })
+            .then(function (res) {
+              var j = res.j || {};
+              if (res.status === 404 || res.status === 501) {
+                renderBurstStatus('AI関数(/api)が無い環境です。連続撮影はVercelデプロイ後に利用できます。', 'ai-lo');
+                return;
+              }
+              if (!res.ok || j.error || !j.productName) {
+                renderBurstStatus(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'), 'ai-lo');
+                return;
+              }
+              var entry = entryFromRecognition(j, thumb);
+              var list = getHistory();
+              list.unshift(entry);
+              try { setHistory(list); }
+              catch (e) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
+              burstCount++;
+              burstLast = (entry.memo || '(名称未設定)') + '（' + categoryLabel(entry.category)
+                + (entry.estimatedRank ? ' / ランク' + entry.estimatedRank : '') + '）';
+              renderHistory();
+              renderBurstStatus('保存しました。続けて次の1枚を撮影できます。');
+            })
+            .catch(function () {
+              renderBurstStatus(timedOut
+                ? (AI_TIMEOUT_MS / 1000) + '秒以内に応答がありませんでした。電波の良い場所で再試行してください。'
+                : 'ネット接続を確認してください（連続撮影はVercelデプロイ後に利用できます）。', 'ai-lo');
+            })
+            .then(finish);
+        });
+      });
     }
 
     // --- 設定（販路ごとに保存） ---
@@ -916,6 +1199,9 @@
         date: nowLabel(),
         photo: currentPhoto || '',
         memo: ($('memo').value || '').trim(),
+        category: currentCategory || 'other',
+        estimatedRank: currentRank || '',
+        ai: currentAi || null,
         market: lastResult.market,
         marketName: lastResult.marketName,
         currency: lastResult.currency,
@@ -972,32 +1258,48 @@
       $('histCount').textContent = '(' + list.length + ')';
       $('histEmpty').style.display = list.length ? 'none' : 'block';
       var html = list.map(function (e) {
-        var profitClass = e.profit >= 0 ? 'pos' : 'neg';
+        var draft = e.draft || e.profit == null;   // 売価未入力のドラフト
         var sym = e.symbol || '$';                 // 旧データ互換
-        var mname = e.marketName || 'eBay';        // 旧データ互換
         var img = e.photo
           ? '<img src="' + e.photo + '" alt="">'
           : '<img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22%3E%3C/svg%3E" alt="">';
-        var levelBadge = e.level ? '<span class="badge b-' + e.vClass + '">' + stars(e.level) + ' ' + esc(e.verdict) + '</span>'
-                                 : '<span class="badge b-' + e.vClass + '">' + esc(e.verdict) + '</span>';
+
+        // カテゴリタグ＋状態ランクバッジ
+        var catTag = '<span class="cat-tag">' + esc(categoryLabel(e.category)) + '</span>';
+        var rankBadge = e.estimatedRank ? '<span class="rank-badge rank-' + esc(e.estimatedRank) + '">ランク' + esc(e.estimatedRank) + '</span>' : '';
+
+        // 利益（ドラフトは未入力表示）
+        var profitHtml = draft
+          ? '<span class="hist-profit muted">利益 —</span>'
+          : '<span class="hist-profit ' + (e.profit >= 0 ? 'pos' : 'neg') + '">' + e.profit.toLocaleString('ja-JP') + '円</span>';
+
+        // メタ行（売価・状態・日時）。ドラフトは売価/利益率を伏せる
+        var meta = draft
+          ? '<span class="muted">売価・原価・送料は未入力（編集で入力）</span><br>🕒 ' + esc(e.date)
+          : esc(sym) + esc(e.price) + ' / ' + esc(e.condition) + ' / 利益率' + esc(e.margin) + '%<br>' +
+            '原価' + (+e.cost || 0).toLocaleString('ja-JP') + '円 / ' + esc(e.shipName || '') + '<br>🕒 ' + esc(e.date);
+
+        var nameHtml = e.memo
+          ? '<div class="hist-name">' + esc(e.memo) + '</div>'
+          : '<div class="hist-name empty">(名称未設定)</div>';
+
         return '' +
           '<div class="hist-item" data-id="' + e.id + '">' +
             img +
             '<div class="hist-info">' +
-              (e.memo ? '<div style="font-weight:600;margin-bottom:3px;word-break:break-word;">' + esc(e.memo) + '</div>' : '') +
+              nameHtml +
               '<div class="top">' +
-                '<span class="market-tag">' + esc(mname) + '</span>' +
-                levelBadge +
-                '<span class="hist-profit ' + profitClass + '">' + e.profit.toLocaleString('ja-JP') + '円</span>' +
+                catTag +
+                rankBadge +
+                profitHtml +
               '</div>' +
-              '<div class="hist-meta">' +
-                esc(sym) + esc(e.price) + ' / ' + esc(e.condition) + ' / 利益率' + esc(e.margin) + '%<br>' +
-                '原価' + e.cost.toLocaleString('ja-JP') + '円 / ' + esc(e.shipName) + '<br>' +
-                esc(e.date) +
-              '</div>' +
+              '<div class="hist-meta">' + meta + '</div>' +
               '<div class="tap-hint">タップで詳細 ›</div>' +
             '</div>' +
-            '<button class="hist-del" data-id="' + e.id + '">削除</button>' +
+            '<div class="hist-btns">' +
+              '<button class="hist-edit" data-id="' + e.id + '">編集</button>' +
+              '<button class="hist-del" data-id="' + e.id + '">削除</button>' +
+            '</div>' +
           '</div>';
       }).join('');
       $('histList').innerHTML = html;
@@ -1007,6 +1309,15 @@
         dels[i].addEventListener('click', function (ev) {
           ev.stopPropagation();
           deleteEntry(this.getAttribute('data-id'));
+        });
+      }
+      // 編集ボタン配線（詳細を開いてそのまま編集モードへ）
+      var edits = $('histList').querySelectorAll('.hist-edit');
+      for (var j = 0; j < edits.length; j++) {
+        edits[j].addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          openDetail(this.getAttribute('data-id'));
+          enterEdit();
         });
       }
       // 履歴カードのタップ → 詳細モーダル
@@ -1035,7 +1346,25 @@
       var marginOk = e.marginOk != null ? +e.marginOk : s.marginOk;
       var marginNg = e.marginNg != null ? +e.marginNg : s.marginNg;
 
+      // パラメータは（ドラフトでも）常に確定保存しておく
+      e.rate = rate; e.feeRate = feeRate;
+      e.thOk = thOk; e.thNg = thNg; e.marginOk = marginOk; e.marginNg = marginNg;
+
       var price = +e.price || 0, cost = +e.cost || 0, ship = +e.ship || 0;
+
+      // 売価未入力（連続撮影の自動保存直後など）はドラフト扱い：利益判定はしない
+      if (price <= 0) {
+        e.draft = true;
+        e.profit = null;
+        e.margin = null;
+        e.level = 0;
+        e.verdict = '売価未入力';
+        e.vClass = 'none';
+        e.reasons = [];
+        return e;
+      }
+
+      e.draft = false;
       var revenue = price * rate;
       var fee = revenue * (feeRate / 100);
       var profit = revenue - fee - cost - ship;
@@ -1052,9 +1381,6 @@
       e.verdict = j.label;
       e.vClass = j.cls;
       e.reasons = j.reasons;
-      // 今後の編集でも正確に再計算できるようパラメータを確定保存
-      e.rate = rate; e.feeRate = feeRate;
-      e.thOk = thOk; e.thNg = thNg; e.marginOk = marginOk; e.marginNg = marginNg;
       return e;
     }
 
@@ -1069,18 +1395,33 @@
       if (e.photo) { ph.src = e.photo; ph.style.display = 'block'; }
       else { ph.removeAttribute('src'); ph.style.display = 'none'; }
 
+      var draft = e.draft || e.profit == null;
       var dv = $('dVerdict');
       dv.className = 'modal-verdict v-' + (e.vClass || 'warn');
-      dv.textContent = (e.level ? stars(e.level) + ' ' : '') + (e.verdict || '');
+      dv.textContent = draft ? '売価未入力（編集で入力）' : ((e.level ? stars(e.level) + ' ' : '') + (e.verdict || ''));
 
       var rows = '';
       if (e.memo) rows += detailRow('商品名 / メモ', esc(e.memo));
+      rows += detailRow('カテゴリ', esc(categoryLabel(e.category)));
+      if (e.estimatedRank) rows += detailRow('状態ランク（AI）', esc(e.estimatedRank));
       rows += detailRow('販路', esc(mname));
       rows += detailRow('商品状態', esc(e.condition));
-      rows += detailRow('売価', esc(sym) + esc(e.price) + '（' + esc(e.currency || '') + '）');
-      rows += detailRow('利益', e.profit.toLocaleString('ja-JP') + '円', e.profit >= 0 ? 'pos' : 'neg');
-      rows += detailRow('利益率', esc(e.margin) + '%');
-      rows += detailRow('原価 / 送料', e.cost.toLocaleString('ja-JP') + '円 / ' + e.ship.toLocaleString('ja-JP') + '円');
+      // AIが読み取った識別情報（あるものだけ）
+      var ai = e.ai || {};
+      [['ブランド', ai.brand], ['シリーズ', ai.series], ['セット/弾', ai.setName],
+       ['カード名', ai.cardName], ['BOX名', ai.boxName], ['容量', ai.storage], ['色', ai.color]
+      ].forEach(function (r) { if (r[1]) rows += detailRow(r[0], esc(r[1])); });
+      if (draft) {
+        rows += detailRow('売価', '<span class="muted">未入力</span>');
+        rows += detailRow('利益', '<span class="muted">— （売価を入力すると計算）</span>');
+        rows += detailRow('原価 / 送料', '<span class="muted">未入力</span>');
+      } else {
+        rows += detailRow('売価', esc(sym) + esc(e.price) + '（' + esc(e.currency || '') + '）');
+        rows += detailRow('利益', e.profit.toLocaleString('ja-JP') + '円', e.profit >= 0 ? 'pos' : 'neg');
+        rows += detailRow('利益率', esc(e.margin) + '%');
+        rows += detailRow('原価 / 送料', (+e.cost || 0).toLocaleString('ja-JP') + '円 / ' + (+e.ship || 0).toLocaleString('ja-JP') + '円');
+      }
+      if (ai.notes) rows += detailRow('AIメモ', '⚠️ ' + esc(ai.notes));
       rows += detailRow('日時', esc(e.date));
       $('dRows').innerHTML = rows;
 
@@ -1106,10 +1447,13 @@
       currentEditMarket = e.market || 'ebay';
 
       $('eMemo').value = e.memo || '';
+      $('eCategory').value = normCategory(e.category);
       $('eCondition').value = e.condition;
+      $('eRank').value = e.estimatedRank || '';
       $('ePriceLabel').textContent = '売価（' + (e.currency || '') + '）';
-      $('ePrice').value = e.price;
-      $('eCost').value = e.cost;
+      // ドラフト（売価0）のときは空欄にして入力を促す
+      $('ePrice').value = (+e.price > 0) ? e.price : '';
+      $('eCost').value = (+e.cost > 0) ? e.cost : '';
 
       // 発送方法（エントリの販路の実効送料）＋「カスタム」
       var list = effectiveShipping(currentEditMarket);
@@ -1140,7 +1484,9 @@
       if (!e) return;
 
       e.memo = ($('eMemo').value || '').trim();
+      e.category = normCategory($('eCategory').value);
       e.condition = $('eCondition').value;
+      e.estimatedRank = $('eRank').value || '';
       e.price = num('ePrice');
       e.cost = num('eCost');
 
@@ -1204,21 +1550,24 @@
     function exportCsv() {
       var list = getHistory();
       if (!list.length) { alert('履歴がありません。'); return; }
-      var headers = ['日時', '販路', '商品名/メモ', '商品状態', '売価(通貨)', '通貨',
+      var headers = ['日時', 'カテゴリ', '状態ランク', '販路', '商品名/メモ', '商品状態', '売価(通貨)', '通貨',
         '原価(円)', '送料(円)', '利益(円)', '利益率(%)', '判定'];
       var rows = list.map(function (e) {
+        var draft = e.draft || e.profit == null;
         return [
           e.date,
+          categoryLabel(e.category),
+          e.estimatedRank || '',
           e.marketName || '',
           e.memo || '',
           e.condition,
-          e.price,
+          draft ? '' : e.price,
           e.currency || '',
-          e.cost,
-          e.ship,
-          e.profit,
-          e.margin,
-          e.verdict
+          draft ? '' : e.cost,
+          draft ? '' : e.ship,
+          draft ? '' : e.profit,
+          draft ? '' : e.margin,
+          draft ? '売価未入力' : e.verdict
         ].map(csvEscape).join(',');
       });
       var csv = '﻿' + headers.join(',') + '\r\n' + rows.join('\r\n') + '\r\n';

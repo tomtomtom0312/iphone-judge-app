@@ -1,6 +1,6 @@
 # 引き継ぎメモ（直近作業用）
 
-最終更新: 2026-06-11
+最終更新: 2026-06-12
 
 ## 現状
 越境販売 判断アプリ。単一 `index.html`（静的・サーバー不要・データは localStorage）。
@@ -27,13 +27,21 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 
 ## Phase 2 MVP（AI商品認識）— コード実装済み・未デプロイ
 構成: 静的フロント + Vercel サーバーレス関数。前提はモバイル回線あり（ケースA）。
-- ✅ `api/recognize.js`：写真→Claude Vision(`claude-opus-4-8`)→構造化出力で `{productName, category, confidence}` を返す。`max_tokens:300`
+- ✅ `api/recognize.js`：写真→Claude Vision(`claude-opus-4-8`)→構造化出力で `{productName, category, storage, color, condition, estimatedRank, confidence, notes}` を返す。`max_tokens:400`。フロントは productName＋容量・色を商品名欄へ、estimatedRank(S/A/B/C/D/ジャンク)を状態セレクトへマップ、condition/notes をステータス表示
 - ✅ `package.json`（`@anthropic-ai/sdk`）/ `.gitignore` 追加
 - ✅ フロント：写真撮影後「🤖 AIで商品名を提案」→ 商品名/メモ欄に自動入力＋信頼度バッジ。人が上書き可
 - APIキーは関数の環境変数 `ANTHROPIC_API_KEY` のみ（フロントに一切無し）。AI用は768px・履歴用は400px
 - ✅ 中央の主役だけ認識：プロンプトで背景/周辺物を無視・中央の最大1点に限定。撮影案内＋プレビューにガイド枠（トリミングはPhase2.5+）
 - ✅ タイムアウト30秒（フロントAbortController / Vercel maxDuration）。ローカルの501/404は「未デプロイ」表示
 - まだ未実装: eBay相場取得 / 関数URLの簡易認証（共有トークン） / 画像トリミング(Phase2.5+)
+
+## Phase 2 追加（2026-06-12）— 連続撮影＋カテゴリ別認識（コード実装済み・未デプロイ）
+- ✅ 認識スキーマをカテゴリ別に拡張: `category` enum = `iPhone/trading_card_single/trading_card_box/figure/other`。`brand/series/setName/cardName/boxName/storage/color/condition/estimatedRank/notes` を返す（無関係項目は空文字）。`max_tokens:400`。任意 `categoryHint` でカテゴリをバイアス可。
+- ✅ 連続撮影モード: 撮影カードに「単品判定／連続撮影」トグル。連続モードは1枚ごとにAI認識→**ドラフト履歴へ自動保存**（売価0=未計算）。撮影枚数・直近認識をステータス表示。
+- ✅ 履歴エントリに `category/estimatedRank/ai/draft` を追加（非破壊・旧データ互換）。`draft` は `recompute` が売価≤0で立て、編集で売価を入れると利益確定。
+- ✅ 履歴一覧: 撮影日時/カテゴリ/状態ランク/商品名/利益＋「編集」「削除」ボタン。ドラフトは利益「—」表示。
+- ✅ 編集モーダルにカテゴリ・状態ランクを追加。売価/原価/送料/メモを後入力→利益再計算。CSVにカテゴリ・ランク列追加。
+- 検証: `node --check`（両ファイル）＋ DOMシムで全スクリプト読込＆ recompute/ドラフト遷移の単体テスト（17件PASS）。実機・AI動作はデプロイ後に確認。
 
 ### 次にやること（デプロイ＝ユーザー作業）
 1. Anthropic APIキー取得＋**Spend limit 設定**

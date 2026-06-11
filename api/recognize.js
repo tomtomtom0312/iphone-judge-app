@@ -5,34 +5,81 @@
 //   - この関数URLは公開される。Anthropic 側の Spend limit を前提に運用すること。
 //   - 本格運用時は共有トークン等の簡易認証を追加する（ROADMAP の Phase 2 残課題）。
 //
-// 返却: { productName, category, confidence } もしくは { error }
+// 返却: { productName, category, brand, series, setName, cardName, boxName,
+//        storage, color, condition, estimatedRank, confidence, notes } もしくは { error }
 
 import Anthropic from '@anthropic-ai/sdk';
 
 // Vercel: 関数の最大実行時間（秒）。Vision 呼び出しに余裕を持たせる（既定の短い上限で切られないように）
 export const config = { maxDuration: 30 };
 
-// 不用品回収で扱う主なカテゴリ（後で増やせる）
-const CATEGORIES = [
-  'スマートフォン', 'タブレット', 'ノートPC', 'デスクトップPC',
-  'カメラ', '腕時計', 'ゲーム機', 'オーディオ', '家電', 'その他'
-];
+// 取り扱いカテゴリ（機械値）。フロント CATEGORIES のキーと一致させること。
+const CATEGORY_VALUES = ['iPhone', 'trading_card_single', 'trading_card_box', 'figure', 'other'];
 
-// 構造化出力で返答の形を固定する
+// 状態ランク（外観グレード）。フロントの状態セレクトへマッピングして使う
+const RANKS = ['S', 'A', 'B', 'C', 'D', 'ジャンク'];
+
+// 構造化出力で返答の形を固定する。カテゴリ別の項目を1スキーマに集約し、
+// 関係しない項目は空文字を返させる（例: iPhone のとき cardName は空）。
 const SCHEMA = {
   type: 'object',
   properties: {
     productName: {
       type: 'string',
-      description: '出品タイトルに使える商品名。メーカー名と機種/型番を含める（例: Apple iPhone 13 128GB / CASIO G-SHOCK DW-5600）。'
+      description: '出品タイトルに使える簡潔な商品名（日本語可）。iPhoneなら機種名、トレカ単品ならカード名、BOXならBOX名、フィギュアなら作品＋キャラ名など。'
     },
-    category: { type: 'string', enum: CATEGORIES },
+    category: {
+      type: 'string',
+      enum: CATEGORY_VALUES,
+      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り）/ trading_card_box=トレカの未開封BOX・パック箱 / figure=フィギュア・プライズ・プラモ完成品 / other=それ以外。'
+    },
+    brand: {
+      type: 'string',
+      description: 'ブランド/メーカー/IP（例: Apple, ポケモン, BANDAI, 鬼滅の刃, 一番くじ）。不明なら空文字。'
+    },
+    series: {
+      type: 'string',
+      description: 'シリーズ/作品名（例: ワンピース, ポケモンカード, ドラゴンボール）。不明なら空文字。'
+    },
+    setName: {
+      type: 'string',
+      description: 'トレカの弾/セット名（例: 強化拡張パック 黒炎の支配者）。トレカ以外や不明なら空文字。'
+    },
+    cardName: {
+      type: 'string',
+      description: 'トレカ単品のカード名（例: リザードンex SAR）。trading_card_single 以外や不明なら空文字。'
+    },
+    boxName: {
+      type: 'string',
+      description: 'トレカBOXの商品名（例: スカーレットex BOX）。trading_card_box 以外や不明なら空文字。'
+    },
+    storage: {
+      type: 'string',
+      description: 'iPhoneのストレージ容量（例: 256GB）。読み取れなければ、またはiPhone以外なら空文字。'
+    },
+    color: {
+      type: 'string',
+      description: 'iPhoneの本体色（例: Graphite）。読み取れなければ、またはiPhone以外なら空文字。'
+    },
+    condition: {
+      type: 'string',
+      description: '写真から実際に見える外観状態の説明（例: 画面割れなし背面小傷あり / 未開封シュリンク有 / 箱に潰れ）。憶測は書かず見える範囲のみ。'
+    },
+    estimatedRank: {
+      type: 'string',
+      enum: RANKS,
+      description: '外観の状態ランク。S=新品同様・未開封 / A=美品 / B=良品（目立たない小傷）/ C=難あり（目立つ傷・割れ・箱潰れ）/ D=ジャンク相当 / ジャンク=破損・動作不可の疑い。'
+    },
     confidence: {
       type: 'number',
-      description: '推定の確信度 0.0〜1.0。型番まで読み取れたら高め、判別が難しければ低め。'
+      description: '推定の確信度 0.0〜1.0。型番/カード名まで読み取れたら高め、判別が難しければ低め。'
+    },
+    notes: {
+      type: 'string',
+      description: '確証が持てない懸念点・追加で確認したい点（例: カメラ周りに傷の可能性 / 偽物の可能性）。無ければ空文字。'
     }
   },
-  required: ['productName', 'category', 'confidence'],
+  required: ['productName', 'category', 'condition', 'estimatedRank', 'confidence'],
   additionalProperties: false
 };
 
@@ -59,11 +106,17 @@ export default async function handler(req, res) {
     const mediaType = m[1];
     const base64 = m[2];
 
+    // フロントからの任意カテゴリヒント（連続撮影で同種をまとめ撮りするとき用）。
+    // 既知の値のときだけプロンプトに反映する。矛盾する画像なら無視させる。
+    const hint = CATEGORY_VALUES.indexOf(String(body.categoryHint || '')) >= 0
+      ? String(body.categoryHint)
+      : '';
+
     const client = new Anthropic(); // ANTHROPIC_API_KEY を環境変数から自動読込
 
     const response = await client.messages.create({
       model: 'claude-opus-4-8',
-      max_tokens: 300, // 小さく絞ってコスト抑制
+      max_tokens: 400, // 出力項目が増えたぶん少し広げつつコストは抑える
       output_config: { format: { type: 'json_schema', schema: SCHEMA } },
       messages: [{
         role: 'user',
@@ -71,11 +124,16 @@ export default async function handler(req, res) {
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
           {
             type: 'text',
-            text: 'この写真には、ゴミ袋・家具・段ボール・周辺の雑多な物など複数の物が写っている可能性があります。'
+            text: 'この写真には、背景・周辺の雑多な物が一緒に写っている可能性があります。'
               + ' それら背景・周辺物は無視し、画像の中央に最も大きく写っている主要な商品「1点だけ」を特定してください。'
-              + ' 複数の商品が写っている場合も、最も中央で大きい1点のみを対象にします。'
-              + ' フリマ/eBay 出品を想定し、productName はメーカー名と機種/型番を含む簡潔な商品名（日本語可）。'
-              + ' 型番まで確証が持てない場合や、中央の対象がはっきり判別できない場合は confidence を低くしてください。'
+              + ' フリマ/eBay 出品を想定し、まず category を判定し、そのカテゴリに関係する項目だけを埋めてください（関係しない項目は空文字）。'
+              + ' トレカ単品なら cardName/series/setName、トレカBOXなら boxName/series/setName、iPhoneなら storage/color を優先的に読み取ります。'
+              + ' productName はそのカテゴリで出品タイトルに使える簡潔な商品名にします。'
+              + ' condition は写真から実際に見える外観状態のみを記述し（割れ・傷・汚れ・未開封か否か）、見えない部分を憶測で断定しないでください。'
+              + ' estimatedRank は外観から推定した状態ランク（S/A/B/C/D/ジャンク）です。'
+              + ' 確証が持てない懸念点（例: 角度的に確認できない傷、真贋の不安）は notes に書いてください。'
+              + ' 型番/カード名まで確証が持てない場合や、中央の対象がはっきり判別できない場合は confidence を低くしてください。'
+              + (hint ? ' なお、ユーザーはこの商品のカテゴリを「' + hint + '」と申告しています。画像と明らかに矛盾しない限り、その category を採用してください。' : '')
           }
         ]
       }]
@@ -93,10 +151,23 @@ export default async function handler(req, res) {
     }
 
     const data = JSON.parse(textBlock.text);
+    const category = CATEGORY_VALUES.indexOf(String(data.category)) >= 0
+      ? String(data.category)
+      : 'other';
     res.status(200).json({
       productName: String(data.productName || ''),
-      category: String(data.category || 'その他'),
-      confidence: Number(data.confidence) || 0
+      category: category,
+      brand: String(data.brand || ''),
+      series: String(data.series || ''),
+      setName: String(data.setName || ''),
+      cardName: String(data.cardName || ''),
+      boxName: String(data.boxName || ''),
+      storage: String(data.storage || ''),
+      color: String(data.color || ''),
+      condition: String(data.condition || ''),
+      estimatedRank: String(data.estimatedRank || ''),
+      confidence: Number(data.confidence) || 0,
+      notes: String(data.notes || '')
     });
   } catch (err) {
     const msg = err && err.message ? err.message : 'unknown';

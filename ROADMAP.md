@@ -100,8 +100,10 @@ Shopee相場取得（第2販路の売価を自動入力）
 | Haiku 4.5 (`claude-haiku-4-5`) | $1 / $5 | 約0.4円 | 約1,200円 |
 方針: まず Opus 4.8 で精度確認 → 十分なら Sonnet/Haiku に下げてコスト最適化。
 
-#### Phase 2 MVP の状態（2026-06-11）
-- 実装済み・未デプロイ。`api/recognize.js` + `package.json` + フロント配線。商品名/カテゴリ/信頼度の自動入力のみ（売価取得なし）。
+#### Phase 2 MVP の状態（2026-06-11 / 2026-06-12 拡張）
+- 実装済み・未デプロイ。`api/recognize.js` + `package.json` + フロント配線。売価取得は引き続きなし。
+- **認識スキーマをカテゴリ別に拡張（2026-06-12）**: `{productName, category, brand, series, setName, cardName, boxName, storage, color, condition, estimatedRank, confidence, notes}`。`category` enum = `iPhone / trading_card_single / trading_card_box / figure / other`。カテゴリに関係する項目だけを埋め、無関係は空文字。`max_tokens:400`。
+- **連続撮影モード（2026-06-12）**: 撮影画面に「単品判定／連続撮影」切替を追加。連続モードは1枚撮るたびにAI認識→ドラフト履歴へ自動保存（売価0=未計算）。売価・原価・送料・メモは後から各履歴の「編集」で入力し、利益を再計算。`categoryHint`（任意）で同種まとめ撮りのカテゴリをバイアス可能。
 - 前提: 現場のモバイル回線あり（ケースA）。電波が無い現場向けの「オフライン撮りため→後でまとめて認識」は将来対応。
 - タイムアウト: フロント30秒（AbortController）・Vercel関数30秒（maxDuration）。
 
@@ -158,6 +160,6 @@ Shopee相場取得（第2販路の売価を自動入力）
   - `judgeActiveMarket` … 選択中の販路
   - `judgeSettings_<販路ID>` … 販路ごとの為替・手数料・しきい値
   - `judgeShipping_<販路ID>` … 販路ごとの送料の編集値（発送方法labelをキーに上書き）
-  - `judgeHistory` … 判定履歴（写真サムネイル含む）
+  - `judgeHistory` … 判定履歴（写真サムネイル含む）。各エントリに `category`/`estimatedRank`/`ai`（認識生フィールド）/`draft`（売価未入力フラグ）を保存。`draft:true` は売価0で利益未計算、編集で売価を入れると確定。
 - 写真は保存時に最大幅400px・JPEG品質0.7のサムネイルへ縮小（localStorage 節約）。
 - ローカル確認: `python3 -m http.server 8000` → iPhone Safari で `http://<PCのLAN IP>:8000`。
