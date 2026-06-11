@@ -35,9 +35,10 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 - ✅ タイムアウト30秒（フロントAbortController / Vercel maxDuration）。ローカルの501/404は「未デプロイ」表示
 - まだ未実装: eBay相場取得 / 関数URLの簡易認証（共有トークン） / 画像トリミング(Phase2.5+)
 
-## Phase 2 追加（2026-06-12）— 連続撮影＋カテゴリ別認識（コード実装済み・未デプロイ）
+## Phase 2 追加（2026-06-12）— 連続撮影＋カテゴリ別認識＋撮影後クロップ（コード実装済み・未デプロイ）
 - ✅ 認識スキーマをカテゴリ別に拡張: `category` enum = `iPhone/trading_card_single/trading_card_box/figure/other`。`brand/series/setName/cardName/boxName/storage/color/condition/estimatedRank/notes` を返す（無関係項目は空文字）。`max_tokens:400`。任意 `categoryHint` でカテゴリをバイアス可。
-- ✅ 連続撮影モード: 撮影カードに「単品判定／連続撮影」トグル。連続モードは1枚ごとにAI認識→**ドラフト履歴へ自動保存**（売価0=未計算）。撮影枚数・直近認識をステータス表示。
+- ✅ 連続撮影モード: 撮影カードに「単品判定／連続撮影」トグル。連続モードは1枚ごとに撮影→クロップ調整→「この位置でAI認識」→**ドラフト履歴へ保存**（売価0=未計算）。撮影枚数・直近認識をステータス表示。
+- ✅ **撮影後クロップ（ライブカメラ不使用＝軽量）**: 撮影/選択した静止画をプレビューに表示し、点線ガイド枠（枠外は薄暗）を重ねる。写真を指ドラッグでパン、＋/−/リセットでズーム（ピンチ不使用）。「この位置でAI認識」で枠内を canvas で切り出し（履歴用400px・AI用768px）AIへ送信。作業画像は最大辺2000pxへ縮小して保持。実装は `crop` 状態＋`cropApply/cropClamp/cropLayout/cropRect/cropRender/loadForCrop`。`CROP_INSET`(JS)＝CSS `.crop-frame{inset:8%}` と一致させること。
 - ✅ 履歴エントリに `category/estimatedRank/ai/draft` を追加（非破壊・旧データ互換）。`draft` は `recompute` が売価≤0で立て、編集で売価を入れると利益確定。
 - ✅ 履歴一覧: 撮影日時/カテゴリ/状態ランク/商品名/利益＋「編集」「削除」ボタン。ドラフトは利益「—」表示。
 - ✅ 編集モーダルにカテゴリ・状態ランクを追加。売価/原価/送料/メモを後入力→利益再計算。CSVにカテゴリ・ランク列追加。

@@ -287,6 +287,31 @@
     .hist-edit, .hist-del { border-radius: 8px; font-size: 12px; padding: 8px 10px; flex: 1; }
     .hist-edit { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
     .hist-del { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+
+    /* 撮影後クロップ（静止画調整・ライブカメラは使わない） */
+    .crop-stage {
+      position: relative; width: 100%; aspect-ratio: 1 / 1;
+      margin-top: 12px; border-radius: 12px; overflow: hidden;
+      background: #000; touch-action: none;
+      user-select: none; -webkit-user-select: none;
+    }
+    .crop-stage img {
+      position: absolute; left: 50%; top: 50%; will-change: transform;
+      pointer-events: none; -webkit-user-drag: none;
+    }
+    /* ガイド枠（インセット8%＝JSの CROP_INSET と一致）。枠外は薄暗くして枠を強調 */
+    .crop-frame {
+      position: absolute; inset: 8%; pointer-events: none;
+      border: 2px dashed rgba(96,165,250,.95); border-radius: 8px;
+      box-shadow: 0 0 0 100vmax rgba(0,0,0,.30);
+    }
+    .crop-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.5; }
+    .crop-controls { display: flex; gap: 8px; margin-top: 10px; }
+    .crop-controls button {
+      flex: 1; height: 44px; border-radius: 10px; font-size: 18px; font-weight: 700;
+      background: #0d1117; color: var(--text); border: 1px solid var(--line);
+    }
+    .crop-controls button:active { background: #11161d; }
   </style>
 </head>
 <body>
@@ -309,11 +334,17 @@
     <button class="photo-btn" id="cameraBtn">📷 写真を撮る / 選ぶ</button>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
-    <div class="preview-wrap" id="previewWrap">
-      <img class="preview" id="preview" alt="プレビュー" />
-      <div class="guide-frame"><span>この枠の中に商品を大きく</span></div>
+    <div class="crop-stage" id="cropStage" style="display:none;">
+      <img id="cropImg" alt="プレビュー" />
+      <div class="crop-frame"></div>
     </div>
-    <button class="ai-btn" id="aiBtn" disabled>🤖 AIで商品名を提案</button>
+    <p class="crop-hint" id="cropHint" style="display:none;">点線枠の中だけがAIに送られます。写真を指でドラッグして位置を合わせ、＋ / − で拡大・縮小できます。</p>
+    <div class="crop-controls" id="cropControls" style="display:none;">
+      <button type="button" id="zoomOut">−</button>
+      <button type="button" id="zoomReset">リセット</button>
+      <button type="button" id="zoomIn">＋</button>
+    </div>
+    <button class="ai-btn" id="aiBtn" style="display:none;" disabled>🤖 この位置でAI認識</button>
     <div class="ai-status" id="aiStatus"></div>
   </div>
 
@@ -628,33 +659,161 @@
       return name.trim();
     }
 
-    // --- 写真 ---
-    var currentPhoto = null;   // 履歴保存用の縮小サムネイル(400px dataURL)
-    var currentAiImage = null; // AI認識用のやや高解像度(768px dataURL)
+    // --- 写真（撮影後の静止画をクロップ調整 → AI認識。ライブカメラは使わない） ---
+    var currentPhoto = null;   // 履歴保存用サムネ(400px) — クロップ枠から生成
+    var currentAiImage = null; // AI認識用(768px) — クロップ枠から生成
     // 単品モードでAI認識した結果（保存時に履歴へ載せる）
     var currentCategory = 'other';
     var currentRank = '';
     var currentAi = null;
     var captureMode = 'single'; // 'single' = 単品判定 / 'burst' = 連続撮影
 
+    var CROP_INSET = 0.08;  // ガイド枠のインセット（CSS .crop-frame の inset:8% と一致させる）
+    var WORK_MAX = 2000;    // 作業用に読み込む画像の最大辺（メモリ・処理を軽く保つ）
+    // クロップ状態（ガイド枠＝表示VW×VH、image は base*z で拡大し tx,ty で平行移動）
+    var crop = {
+      active: false, NW: 0, NH: 0, VW: 0, VH: 0, base: 1, z: 1, tx: 0, ty: 0,
+      dragging: false, px: 0, py: 0, stx: 0, sty: 0
+    };
+
+    function showCropUI(show) {
+      $('cropStage').style.display = show ? 'block' : 'none';
+      $('cropControls').style.display = show ? 'flex' : 'none';
+      $('cropHint').style.display = show ? 'block' : 'none';
+      $('aiBtn').style.display = show ? '' : 'none';
+      $('aiBtn').disabled = !show;
+    }
+    function resetCrop() { crop.active = false; showCropUI(false); }
+
+    // クロップ枠を画像へ反映（transform。translateは画面px・scaleは中心基準）
+    function cropApply() {
+      var img = $('cropImg');
+      var dw = crop.NW * crop.base, dh = crop.NH * crop.base;
+      img.style.width = dw + 'px';
+      img.style.height = dh + 'px';
+      img.style.marginLeft = (-dw / 2) + 'px';
+      img.style.marginTop = (-dh / 2) + 'px';
+      img.style.transform = 'translate(' + crop.tx + 'px,' + crop.ty + 'px) scale(' + crop.z + ')';
+    }
+    // ガイド枠が常に画像で埋まるよう平行移動を制限
+    function cropClamp() {
+      var dw = crop.NW * crop.base * crop.z, dh = crop.NH * crop.base * crop.z;
+      var mx = Math.max(0, (dw - crop.VW) / 2), my = Math.max(0, (dh - crop.VH) / 2);
+      if (crop.tx > mx) crop.tx = mx;
+      if (crop.tx < -mx) crop.tx = -mx;
+      if (crop.ty > my) crop.ty = my;
+      if (crop.ty < -my) crop.ty = -my;
+    }
+    function cropLayout() {
+      var SW = $('cropStage').clientWidth || 320;
+      crop.VW = crop.VH = SW * (1 - 2 * CROP_INSET); // 正方形ガイド枠の表示サイズ
+      crop.base = Math.max(crop.VW / crop.NW, crop.VH / crop.NH); // 枠を覆う基準倍率
+      cropClamp();
+      cropApply();
+    }
+    function cropZoom(factor) {
+      if (!crop.active) return;
+      crop.z = Math.min(5, Math.max(1, crop.z * factor));
+      cropClamp();
+      cropApply();
+    }
+    function cropResetView() {
+      if (!crop.active) return;
+      crop.z = 1; crop.tx = 0; crop.ty = 0;
+      cropClamp();
+      cropApply();
+    }
+
+    // 現在のガイド枠に対応する元画像の矩形（純関数・テスト容易化のため分離）
+    function cropRect() {
+      var f = crop.base * crop.z;
+      var sw = crop.VW / f, sh = crop.VH / f;
+      var sx = (crop.NW / 2 - crop.tx / f) - sw / 2;
+      var sy = (crop.NH / 2 - crop.ty / f) - sh / 2;
+      return { sx: sx, sy: sy, sw: sw, sh: sh };
+    }
+    // ガイド枠の中身を size×size の JPEG dataURL に描画
+    function cropRender(size) {
+      if (!crop.active) return null;
+      var r = cropRect();
+      try {
+        var cv = document.createElement('canvas');
+        cv.width = size; cv.height = size;
+        cv.getContext('2d').drawImage($('cropImg'), r.sx, r.sy, r.sw, r.sh, 0, 0, size, size);
+        return cv.toDataURL('image/jpeg', 0.7);
+      } catch (e) { return null; }
+    }
+
+    // ファイル → 作業用に縮小した画像をクロップ台に読み込む
+    function loadForCrop(file) {
+      currentCategory = 'other'; currentRank = ''; currentAi = null;
+      currentPhoto = null; currentAiImage = null;
+      $('aiStatus').textContent = '';
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        var image = new Image();
+        image.onload = function () {
+          // 作業用に最大辺 WORK_MAX へ縮小（重さ対策）
+          var w = image.width, h = image.height;
+          var scale = Math.min(1, WORK_MAX / Math.max(w, h));
+          var ww = Math.max(1, Math.round(w * scale)), hh = Math.max(1, Math.round(h * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = ww; canvas.height = hh;
+          canvas.getContext('2d').drawImage(image, 0, 0, ww, hh);
+          var work;
+          try { work = canvas.toDataURL('image/jpeg', 0.85); } catch (e) { work = ev.target.result; }
+          var cimg = $('cropImg');
+          cimg.onload = function () {
+            crop.NW = cimg.naturalWidth || ww;
+            crop.NH = cimg.naturalHeight || hh;
+            crop.z = 1; crop.tx = 0; crop.ty = 0; crop.active = true;
+            showCropUI(true);
+            cropLayout();
+            currentPhoto = cropRender(400); // 初期（中央）サムネ。未AIの手動保存でも写真が残る
+          };
+          cimg.src = work;
+        };
+        image.onerror = function () { resetCrop(); $('aiStatus').textContent = '画像を読み込めませんでした。'; };
+        image.src = ev.target.result;
+      };
+      reader.onerror = function () { resetCrop(); $('aiStatus').textContent = '画像を読み込めませんでした。'; };
+      reader.readAsDataURL(file);
+    }
+
     $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });
     $('photoInput').addEventListener('change', function (e) {
       var file = e.target.files[0];
       if (!file) return;
-      if (captureMode === 'burst') { burstCapture(file); $('photoInput').value = ''; return; }
-
-      // --- 単品モード ---
-      $('preview').src = URL.createObjectURL(file);
-      $('previewWrap').style.display = 'block';
-      // 新しい写真を選んだら前回のAI結果はリセット
-      currentCategory = 'other'; currentRank = ''; currentAi = null;
-      makeThumb(file, 400, function (dataUrl) { currentPhoto = dataUrl; });          // 履歴用（軽量）
-      makeThumb(file, 768, function (dataUrl) {                                       // AI用（認識精度）
-        currentAiImage = dataUrl;
-        $('aiBtn').disabled = !dataUrl;
-      });
-      $('aiStatus').textContent = '';
+      loadForCrop(file);
+      $('photoInput').value = ''; // 同じ写真を選び直しても change が発火するように
     });
+
+    // ドラッグで位置調整 / ＋−リセットでズーム（ポインタイベント＝タッチ・マウス両対応）
+    (function () {
+      var stage = $('cropStage');
+      stage.addEventListener('pointerdown', function (e) {
+        if (!crop.active) return;
+        crop.dragging = true;
+        crop.px = e.clientX; crop.py = e.clientY;
+        crop.stx = crop.tx; crop.sty = crop.ty;
+        if (stage.setPointerCapture) { try { stage.setPointerCapture(e.pointerId); } catch (err) {} }
+      });
+      stage.addEventListener('pointermove', function (e) {
+        if (!crop.dragging) return;
+        crop.tx = crop.stx + (e.clientX - crop.px);
+        crop.ty = crop.sty + (e.clientY - crop.py);
+        cropClamp();
+        cropApply();
+        e.preventDefault();
+      });
+      function end() { crop.dragging = false; }
+      stage.addEventListener('pointerup', end);
+      stage.addEventListener('pointercancel', end);
+      stage.addEventListener('pointerleave', end);
+      $('zoomIn').addEventListener('click', function () { cropZoom(1.25); });
+      $('zoomOut').addEventListener('click', function () { cropZoom(1 / 1.25); });
+      $('zoomReset').addEventListener('click', cropResetView);
+    })();
 
     // --- 撮影モード切替 ---
     function applyCaptureMode(mode) {
@@ -670,9 +829,8 @@
       $('burstCard').style.display = burst ? '' : 'none';
       // 写真カード内の見た目
       $('cameraBtn').textContent = burst ? '📷 連続撮影：1枚撮る' : '📷 写真を撮る / 選ぶ';
-      $('aiBtn').style.display = burst ? 'none' : '';
       $('aiStatus').textContent = '';
-      $('previewWrap').style.display = 'none';
+      resetCrop(); // モード切替時はクロップ台を片付ける
       if (burst) renderBurstStatus();
     }
     (function () {
@@ -682,29 +840,19 @@
       }
     })();
 
-    // 画像を最大幅 maxW のJPEGに縮小して dataURL を返す
-    function makeThumb(file, maxW, cb) {
-      var reader = new FileReader();
-      reader.onload = function (ev) {
-        var image = new Image();
-        image.onload = function () {
-          var w = image.width, h = image.height;
-          if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-          var canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          canvas.getContext('2d').drawImage(image, 0, 0, w, h);
-          try { cb(canvas.toDataURL('image/jpeg', 0.7)); }
-          catch (err) { cb(null); }
-        };
-        image.onerror = function () { cb(null); };
-        image.src = ev.target.result;
-      };
-      reader.onerror = function () { cb(null); };
-      reader.readAsDataURL(file);
-    }
-
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
-    $('aiBtn').addEventListener('click', recognize);
+    // 「この位置でAI認識」：クロップ枠の画像を生成し、モードに応じて認識へ回す
+    function onAiConfirm() {
+      if (!crop.active) { $('aiStatus').textContent = '先に写真を撮ってください。'; return; }
+      if (captureMode === 'burst') {
+        burstRecognize(cropRender(400), cropRender(768));
+      } else {
+        currentPhoto = cropRender(400);
+        currentAiImage = cropRender(768);
+        recognize();
+      }
+    }
+    $('aiBtn').addEventListener('click', onAiConfirm);
     var AI_TIMEOUT_MS = 30000; // AI認識のタイムアウト（30秒）。これを過ぎたら必ずエラー表示に復帰する
     function recognize() {
       if (!currentAiImage) { $('aiStatus').textContent = '先に写真を撮ってください。'; return; }
@@ -828,12 +976,15 @@
       return e;
     }
 
-    function burstCapture(file) {
+    // クロップ枠から作った thumb(400)/aiImg(768) を認識→ドラフト履歴へ保存
+    function burstRecognize(thumb, aiImg) {
       if (burstBusy) return;
+      if (!aiImg) { renderBurstStatus('画像の処理に失敗しました。撮り直してください。', 'ai-lo'); return; }
       burstBusy = true;
-      $('cameraBtn').disabled = true;
-      $('preview').src = URL.createObjectURL(file);
-      $('previewWrap').style.display = 'block';
+      var btn = $('aiBtn');
+      var orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '🤖 認識中...';
       renderBurstStatus('🤖 認識中...');
 
       var controller = new AbortController();
@@ -844,55 +995,51 @@
       function finish() {
         clearTimeout(timer);
         burstBusy = false;
-        $('cameraBtn').disabled = false;
+        btn.textContent = orig;
+        btn.disabled = !crop.active; // 成功時はクロップ解除済みなので無効、失敗時は再試行可
       }
 
-      // 履歴用サムネ(400) と AI用(768) を作ってから認識
-      makeThumb(file, 400, function (thumb) {
-        makeThumb(file, 768, function (aiImg) {
-          if (!aiImg) { finish(); renderBurstStatus('画像の処理に失敗しました。撮り直してください。', 'ai-lo'); return; }
-          fetch('/api/recognize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: aiImg, categoryHint: hint }),
-            signal: controller.signal
-          })
-            .then(function (r) {
-              return r.text().then(function (t) {
-                var jj = {};
-                try { jj = JSON.parse(t); } catch (e) {}
-                return { ok: r.ok, status: r.status, j: jj };
-              });
-            })
-            .then(function (res) {
-              var j = res.j || {};
-              if (res.status === 404 || res.status === 501) {
-                renderBurstStatus('AI関数(/api)が無い環境です。連続撮影はVercelデプロイ後に利用できます。', 'ai-lo');
-                return;
-              }
-              if (!res.ok || j.error || !j.productName) {
-                renderBurstStatus(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'), 'ai-lo');
-                return;
-              }
-              var entry = entryFromRecognition(j, thumb);
-              var list = getHistory();
-              list.unshift(entry);
-              try { setHistory(list); }
-              catch (e) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
-              burstCount++;
-              burstLast = (entry.memo || '(名称未設定)') + '（' + categoryLabel(entry.category)
-                + (entry.estimatedRank ? ' / ランク' + entry.estimatedRank : '') + '）';
-              renderHistory();
-              renderBurstStatus('保存しました。続けて次の1枚を撮影できます。');
-            })
-            .catch(function () {
-              renderBurstStatus(timedOut
-                ? (AI_TIMEOUT_MS / 1000) + '秒以内に応答がありませんでした。電波の良い場所で再試行してください。'
-                : 'ネット接続を確認してください（連続撮影はVercelデプロイ後に利用できます）。', 'ai-lo');
-            })
-            .then(finish);
-        });
-      });
+      fetch('/api/recognize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: aiImg, categoryHint: hint }),
+        signal: controller.signal
+      })
+        .then(function (r) {
+          return r.text().then(function (t) {
+            var jj = {};
+            try { jj = JSON.parse(t); } catch (e) {}
+            return { ok: r.ok, status: r.status, j: jj };
+          });
+        })
+        .then(function (res) {
+          var j = res.j || {};
+          if (res.status === 404 || res.status === 501) {
+            renderBurstStatus('AI関数(/api)が無い環境です。連続撮影はVercelデプロイ後に利用できます。', 'ai-lo');
+            return;
+          }
+          if (!res.ok || j.error || !j.productName) {
+            renderBurstStatus(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'), 'ai-lo');
+            return;
+          }
+          var entry = entryFromRecognition(j, thumb);
+          var list = getHistory();
+          list.unshift(entry);
+          try { setHistory(list); }
+          catch (e) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
+          burstCount++;
+          burstLast = (entry.memo || '(名称未設定)') + '（' + categoryLabel(entry.category)
+            + (entry.estimatedRank ? ' / ランク' + entry.estimatedRank : '') + '）';
+          renderHistory();
+          resetCrop(); // 次の撮影に備えてクロップ台を片付ける
+          renderBurstStatus('保存しました。続けて次の1枚を撮影できます。');
+        })
+        .catch(function () {
+          renderBurstStatus(timedOut
+            ? (AI_TIMEOUT_MS / 1000) + '秒以内に応答がありませんでした。電波の良い場所で再試行してください。'
+            : 'ネット接続を確認してください（連続撮影はVercelデプロイ後に利用できます）。', 'ai-lo');
+        })
+        .then(finish);
     }
 
     // --- 設定（販路ごとに保存） ---
@@ -1194,6 +1341,8 @@
 
     function saveCurrent() {
       if (!lastResult) return;
+      // 直近のクロップ位置をサムネへ反映（調整したのにAI未実行で保存した場合も枠どおりに残す）
+      if (crop.active) { var t = cropRender(400); if (t) currentPhoto = t; }
       var entry = {
         id: String(new Date().getTime()) + Math.round(Math.random() * 1000),
         date: nowLabel(),
