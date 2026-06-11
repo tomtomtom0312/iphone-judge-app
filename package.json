@@ -1,0 +1,10 @@
+{
+  "name": "iphone-judge-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "越境販売 判断アプリ（静的フロント + AI商品認識サーバーレス関数）",
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest"
+  }
+}

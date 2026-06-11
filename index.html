@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>越境販売 判断アプリ</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2129;
+      --line: #2a333d;
+      --text: #e6edf3;
+      --muted: #9aa7b2;
+      --accent: #3b82f6;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --ng: #dc2626;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px 16px 48px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 18px; margin: 4px 0 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    input, select {
+      width: 100%;
+      font-size: 17px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0d1117;
+      color: var(--text);
+      appearance: none;
+    }
+    input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .row { display: flex; gap: 10px; }
+    .row > .field { flex: 1; }
+
+    /* marketplace selector */
+    .market-field label { font-size: 13px; }
+    #market { font-weight: 600; }
+
+    /* camera */
+    .photo-btn {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; width: 100%; height: 56px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 12px; font-size: 17px; font-weight: 600;
+    }
+    .photo-input { display: none; }
+    .preview-wrap { position: relative; margin-top: 12px; display: none; }
+    .preview { border-radius: 12px; width: 100%; display: block; }
+    /* 中央の商品を狙うためのガイド枠（視覚的な目安・トリミングはしない） */
+    .guide-frame {
+      position: absolute; left: 12%; top: 12%; right: 12%; bottom: 12%;
+      border: 2px dashed rgba(96,165,250,.9); border-radius: 10px;
+      pointer-events: none; display: flex; align-items: flex-start; justify-content: center;
+    }
+    .guide-frame span {
+      margin-top: 6px; font-size: 11px; color: #93c5fd; font-weight: 600;
+      background: rgba(13,17,23,.65); padding: 2px 8px; border-radius: 999px;
+    }
+    .shot-hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+
+    /* AI商品認識 */
+    .ai-btn {
+      width: 100%; height: 48px; margin-top: 12px;
+      background: #0d1117; color: var(--text);
+      border: 1px solid var(--accent); border-radius: 12px;
+      font-size: 15px; font-weight: 600;
+    }
+    .ai-btn:disabled { opacity: .4; border-color: var(--line); color: var(--muted); }
+    .ai-status { font-size: 13px; margin-top: 8px; line-height: 1.6; color: var(--muted); }
+    .ai-badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-right: 6px; }
+    .ai-hi { background: rgba(22,163,74,.18); color: #4ade80; }
+    .ai-mid { background: rgba(217,119,6,.18); color: #fbbf24; }
+    .ai-lo { background: rgba(220,38,38,.18); color: #f87171; }
+
+    /* 主要入力（写真直下・現場で最初に入力する項目） */
+    .primary-card { border-color: var(--accent); }
+    .primary-card label { font-size: 14px; color: var(--text); font-weight: 600; }
+    .primary-input { font-size: 18px; padding: 14px; }
+    .price-input {
+      font-size: 28px; font-weight: 700; padding: 16px;
+      letter-spacing: 1px;
+    }
+    .price-input::placeholder { font-size: 18px; font-weight: 400; }
+
+    /* result */
+    .verdict {
+      text-align: center; padding: 20px 14px; border-radius: 16px;
+      font-size: 26px; font-weight: 800; letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    /* 旧3段階（履歴互換） */
+    .v-ok { background: rgba(22,163,74,.15); color: #4ade80; border: 2px solid var(--ok); }
+    .v-warn { background: rgba(217,119,6,.15); color: #fbbf24; border: 2px solid var(--warn); }
+    .v-ng { background: rgba(220,38,38,.15); color: #f87171; border: 2px solid var(--ng); }
+    /* 5段階 */
+    .v-l5 { background: rgba(22,163,74,.18); color: #4ade80; border: 2px solid #16a34a; }
+    .v-l4 { background: rgba(34,197,94,.14); color: #86efac; border: 2px solid #22c55e; }
+    .v-l3 { background: rgba(217,119,6,.15); color: #fbbf24; border: 2px solid #d97706; }
+    .v-l2 { background: rgba(234,88,12,.15); color: #fb923c; border: 2px solid #ea580c; }
+    .v-l1 { background: rgba(220,38,38,.15); color: #f87171; border: 2px solid #dc2626; }
+    .v-none { background: #0d1117; color: var(--muted); border: 2px dashed var(--line); font-size: 18px; font-weight: 600; letter-spacing: normal; }
+
+    /* 判定理由 */
+    .reasons { margin-bottom: 14px; }
+    .reason { font-size: 13px; padding: 5px 0; line-height: 1.4; }
+    .r-good { color: #4ade80; }
+    .r-bad { color: #f87171; }
+    .r-warn { color: #fbbf24; }
+    .r-info { color: var(--muted); }
+
+    .breakdown { font-size: 15px; }
+    .breakdown .line { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .breakdown .line:last-child { border-bottom: none; }
+    .breakdown .profit { font-size: 22px; font-weight: 700; padding-top: 12px; }
+    .pos { color: #4ade80; }
+    .neg { color: #f87171; }
+
+    details summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .muted { color: var(--muted); }
+
+    /* 送料編集 */
+    .ship-section { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+    .ship-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .reset-btn {
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--accent); border-radius: 8px;
+      font-size: 13px; padding: 6px 12px;
+    }
+
+    /* save button */
+    .save-btn {
+      width: 100%; height: 50px; margin-top: 14px;
+      background: #0d1117; color: var(--text);
+      border: 1px solid var(--accent); border-radius: 12px;
+      font-size: 16px; font-weight: 600;
+    }
+    .save-btn:disabled { opacity: .4; border-color: var(--line); color: var(--muted); }
+
+    /* history */
+    .hist-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 15px; font-weight: 600; margin-bottom: 12px;
+    }
+    .hist-actions { display: flex; gap: 8px; }
+    .clear-btn {
+      background: transparent; color: var(--ng);
+      border: 1px solid var(--ng); border-radius: 8px;
+      font-size: 13px; padding: 6px 12px;
+    }
+    .csv-btn {
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--accent); border-radius: 8px;
+      font-size: 13px; padding: 6px 12px;
+    }
+    .hist-item {
+      display: flex; gap: 12px; align-items: center;
+      background: #0d1117; border: 1px solid var(--line);
+      border-radius: 12px; padding: 10px; margin-bottom: 10px;
+    }
+    .hist-item img {
+      width: 64px; height: 64px; object-fit: cover;
+      border-radius: 8px; flex-shrink: 0; background: #000;
+    }
+    .hist-info { flex: 1; min-width: 0; font-size: 13px; }
+    .hist-info .top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+    .badge {
+      font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    }
+    .b-ok { background: rgba(22,163,74,.18); color: #4ade80; }
+    .b-warn { background: rgba(217,119,6,.18); color: #fbbf24; }
+    .b-ng { background: rgba(220,38,38,.18); color: #f87171; }
+    .b-l5 { background: rgba(22,163,74,.18); color: #4ade80; }
+    .b-l4 { background: rgba(34,197,94,.16); color: #86efac; }
+    .b-l3 { background: rgba(217,119,6,.18); color: #fbbf24; }
+    .b-l2 { background: rgba(234,88,12,.18); color: #fb923c; }
+    .b-l1 { background: rgba(220,38,38,.18); color: #f87171; }
+    .market-tag {
+      font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+      background: rgba(59,130,246,.18); color: #93c5fd;
+    }
+    .hist-profit { font-size: 16px; font-weight: 700; }
+    .hist-meta { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .hist-del {
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 8px;
+      font-size: 12px; padding: 8px 10px; flex-shrink: 0; align-self: stretch;
+    }
+    .hist-item { cursor: pointer; }
+    .hist-info .tap-hint { font-size: 11px; color: var(--accent); margin-top: 3px; }
+
+    /* 詳細モーダル */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.72);
+      display: none; align-items: center; justify-content: center;
+      padding: 16px; z-index: 50;
+    }
+    .modal {
+      background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+      width: 100%; max-width: 460px; max-height: 90vh; overflow: auto;
+      padding: 18px; position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 10px; right: 10px;
+      background: #0d1117; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; width: 36px; height: 36px; font-size: 16px;
+    }
+    .modal-photo { width: 100%; border-radius: 12px; margin-bottom: 14px; background: #000; display: none; }
+    .modal-verdict {
+      text-align: center; padding: 16px; border-radius: 14px;
+      font-size: 22px; font-weight: 800; margin: 6px 0 14px;
+    }
+    .modal-rows .line {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px;
+    }
+    .modal-rows .line:last-child { border-bottom: none; }
+    .modal-rows .line .v { font-weight: 600; text-align: right; word-break: break-word; }
+    .modal-reasons { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+    .modal-reasons h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+
+    /* 履歴編集 */
+    .edit-btn {
+      width: 100%; height: 46px; margin-top: 14px;
+      background: #0d1117; color: var(--text);
+      border: 1px solid var(--accent); border-radius: 10px;
+      font-size: 15px; font-weight: 600;
+    }
+    #dEdit .field { margin-bottom: 12px; }
+    .edit-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .edit-actions button { flex: 1; height: 48px; border-radius: 10px; font-size: 15px; font-weight: 600; }
+    .cancel-btn { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+    .savee-btn { background: var(--accent); color: #fff; border: none; }
+  </style>
+</head>
+<body>
+  <h1>🌏 越境販売 判断アプリ <span style="color:var(--muted);font-weight:400;font-size:13px;">MVP</span></h1>
+
+  <!-- 販路 -->
+  <div class="card">
+    <div class="field market-field" style="margin-bottom:0;">
+      <label>販路（マーケットプレイス）</label>
+      <select id="market"><!-- JSが MARKETPLACES から生成 --></select>
+    </div>
+  </div>
+
+  <!-- 写真 -->
+  <div class="card">
+    <button class="photo-btn" id="cameraBtn">📷 写真を撮る / 選ぶ</button>
+    <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
+    <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
+    <div class="preview-wrap" id="previewWrap">
+      <img class="preview" id="preview" alt="プレビュー" />
+      <div class="guide-frame"><span>この枠の中に商品を大きく</span></div>
+    </div>
+    <button class="ai-btn" id="aiBtn" disabled>🤖 AIで商品名を提案</button>
+    <div class="ai-status" id="aiStatus"></div>
+  </div>
+
+  <!-- 主要入力（写真直下・現場で最初に入力。将来は写真からAI自動入力） -->
+  <div class="card primary-card">
+    <div class="field">
+      <label>商品名 / メモ</label>
+      <input id="memo" class="primary-input" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
+    </div>
+    <div class="field" style="margin-bottom:0;">
+      <label id="priceLabel">想定売価</label>
+      <input id="price" class="price-input" type="number" inputmode="decimal" placeholder="例: 120" />
+    </div>
+    <p class="hint" id="aiHint">💡 将来（Phase 2）：写真から商品名・想定売価を自動入力予定。手入力で上書きも可。</p>
+  </div>
+
+  <!-- 詳細入力 -->
+  <div class="card">
+    <div class="field">
+      <label>商品状態</label>
+      <select id="condition">
+        <option value="新品">新品</option>
+        <option value="未使用品">未使用品</option>
+        <option value="新品同様">新品同様</option>
+        <option value="美品" selected>美品</option>
+        <option value="良品">良品</option>
+        <option value="難あり">難あり</option>
+        <option value="ジャンク">ジャンク</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>原価（円）</label>
+      <input id="cost" type="number" inputmode="numeric" value="0" />
+    </div>
+
+    <div class="field" style="margin-bottom:0;">
+      <label>発送方法</label>
+      <select id="shipping"><!-- JSが販路ごとに生成 --></select>
+    </div>
+  </div>
+
+  <!-- 結果 -->
+  <div class="card">
+    <div class="verdict v-none" id="verdict">数値を入力してください</div>
+    <div class="reasons" id="reasons"></div>
+    <div class="breakdown" id="breakdown" style="display:none;">
+      <div class="line"><span>売上（<span id="curLabel">USD</span>×レート）</span><span id="revenue">-</span></div>
+      <div class="line"><span>販売手数料（<span id="feeRateLabel">16</span>%）</span><span id="fee">-</span></div>
+      <div class="line"><span>送料</span><span id="shipCost">-</span></div>
+      <div class="line"><span>原価</span><span id="costOut">-</span></div>
+      <div class="line profit"><span>利益</span><span id="profit">-</span></div>
+      <div class="line"><span>利益率</span><span id="margin">-</span></div>
+    </div>
+    <button class="save-btn" id="saveBtn" disabled>💾 この判定を履歴に保存</button>
+  </div>
+
+  <!-- 設定（為替・手数料・しきい値）販路ごとに保存 -->
+  <div class="card">
+    <details>
+      <summary>⚙️ 設定（<span id="settingMarketName">eBay</span> の為替・手数料・判定しきい値）</summary>
+      <div style="margin-top:14px;">
+        <div class="row">
+          <div class="field">
+            <label id="rateLabel">為替（円/USD）</label>
+            <input id="rate" type="number" inputmode="decimal" />
+          </div>
+          <div class="field">
+            <label>手数料（%）</label>
+            <input id="feeRate" type="number" inputmode="decimal" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>推奨ライン（円以上）</label>
+            <input id="thOk" type="number" inputmode="numeric" />
+          </div>
+          <div class="field">
+            <label>見送りライン（円未満）</label>
+            <input id="thNg" type="number" inputmode="numeric" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>推奨利益率（%以上）</label>
+            <input id="marginOk" type="number" inputmode="decimal" />
+          </div>
+          <div class="field">
+            <label>見送り利益率（%未満）</label>
+            <input id="marginNg" type="number" inputmode="decimal" />
+          </div>
+        </div>
+        <p class="hint">推奨＝利益額・利益率の<b>両方</b>がライン以上。見送り＝利益額か利益率の<b>どちらか</b>が下限未満。設定は<b>販路ごと</b>に端末へ保存されます。</p>
+
+        <div class="ship-section">
+          <div class="ship-head">
+            <label style="margin:0;">発送方法ごとの送料（円）</label>
+            <button class="reset-btn" id="resetShipBtn">初期値に戻す</button>
+          </div>
+          <div id="shipEditor"></div>
+          <p class="hint">送料は販路ごとに保存されます。「初期値に戻す」で登録時の値へ戻ります。</p>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- 履歴 -->
+  <div class="card">
+    <div class="hist-head">
+      <span>📋 判定履歴 <span id="histCount" class="muted">(0)</span></span>
+      <div class="hist-actions">
+        <button class="csv-btn" id="csvBtn">CSV出力</button>
+        <button class="clear-btn" id="clearAllBtn">全削除</button>
+      </div>
+    </div>
+    <div id="histList"></div>
+    <p class="hint" id="histEmpty">まだ履歴がありません。判定後に「履歴に保存」を押すと、ここに残ります。</p>
+  </div>
+
+  <!-- 履歴詳細モーダル -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal">
+      <button class="modal-close" id="detailClose">✕</button>
+      <img class="modal-photo" id="dPhoto" alt="" />
+      <div class="modal-verdict" id="dVerdict"></div>
+
+      <!-- 表示モード -->
+      <div id="dView">
+        <div class="modal-rows" id="dRows"></div>
+        <div class="modal-reasons" id="dReasons" style="display:none;">
+          <h4>判定理由</h4>
+          <div id="dReasonList"></div>
+        </div>
+        <button class="edit-btn" id="dEditBtn">✏️ 編集</button>
+      </div>
+
+      <!-- 編集モード -->
+      <div id="dEdit" style="display:none;">
+        <div class="field">
+          <label>商品名 / メモ</label>
+          <input id="eMemo" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
+        </div>
+        <div class="field">
+          <label>商品状態</label>
+          <select id="eCondition">
+            <option value="新品">新品</option>
+            <option value="未使用品">未使用品</option>
+            <option value="新品同様">新品同様</option>
+            <option value="美品">美品</option>
+            <option value="良品">良品</option>
+            <option value="難あり">難あり</option>
+            <option value="ジャンク">ジャンク</option>
+          </select>
+        </div>
+        <div class="field">
+          <label id="ePriceLabel">売価</label>
+          <input id="ePrice" type="number" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label>原価（円）</label>
+          <input id="eCost" type="number" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label>発送方法</label>
+          <select id="eShipping"></select>
+        </div>
+        <div class="field">
+          <label>送料（円）</label>
+          <input id="eShip" type="number" inputmode="numeric" />
+        </div>
+        <div class="edit-actions">
+          <button class="cancel-btn" id="eCancel">キャンセル</button>
+          <button class="savee-btn" id="eSave">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var $ = function (id) { return document.getElementById(id); };
+    var yen = function (n) { return Math.round(n).toLocaleString('ja-JP') + '円'; };
+
+    /* ============================================================
+       販路レジストリ
+       新しい販路を増やすときは、ここに1ブロック追加するだけ。
+       UI（販路セレクト・通貨表示・発送方法・既定値）は自動で反映される。
+       - currency / symbol : 売価の通貨と表示記号
+       - defaultRate       : 円/通貨（為替の初期値、設定で変更可）
+       - defaultFee        : 販売手数料%（初期値）
+       - defaultThOk/ThNg  : 推奨/見送りの利益しきい値（円）
+       - shipping          : 発送方法（label と 送料cost(円)）
+       ============================================================ */
+    var MARKETPLACES = {
+      ebay: {
+        name: 'eBay',
+        currency: 'USD',
+        symbol: '$',
+        defaultRate: 155,
+        defaultFee: 16,
+        defaultThOk: 3000,
+        defaultThNg: 0,
+        defaultMarginOk: 20,
+        defaultMarginNg: 0,
+        shipping: [
+          { label: '送料込み / なし', cost: 0 },
+          { label: '小型包装物 航空', cost: 1200 },
+          { label: 'eパケット', cost: 1500 },
+          { label: 'EMS', cost: 3600 },
+          { label: 'クーリエ FedEx/DHL', cost: 5000 }
+        ]
+      }
+
+      /* === 将来: Shopee を追加する例（コメントを外すだけで有効化）===
+      , shopee: {
+        name: 'Shopee',
+        currency: 'SGD',
+        symbol: 'S$',
+        defaultRate: 115,
+        defaultFee: 10,
+        defaultThOk: 2000,
+        defaultThNg: 0,
+        defaultMarginOk: 20,
+        defaultMarginNg: 0,
+        shipping: [
+          { label: '送料込み / なし', cost: 0 },
+          { label: 'SLS 経由', cost: 800 },
+          { label: '国際eパケット', cost: 1500 }
+        ]
+      }
+      */
+    };
+
+    var activeMarket = 'ebay'; // 現在選択中の販路ID
+
+    // --- 写真 ---
+    var currentPhoto = null;   // 履歴保存用の縮小サムネイル(400px dataURL)
+    var currentAiImage = null; // AI認識用のやや高解像度(768px dataURL)
+    $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });
+    $('photoInput').addEventListener('change', function (e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      $('preview').src = URL.createObjectURL(file);
+      $('previewWrap').style.display = 'block';
+      makeThumb(file, 400, function (dataUrl) { currentPhoto = dataUrl; });          // 履歴用（軽量）
+      makeThumb(file, 768, function (dataUrl) {                                       // AI用（認識精度）
+        currentAiImage = dataUrl;
+        $('aiBtn').disabled = !dataUrl;
+      });
+      $('aiStatus').textContent = '';
+    });
+
+    // 画像を最大幅 maxW のJPEGに縮小して dataURL を返す
+    function makeThumb(file, maxW, cb) {
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        var image = new Image();
+        image.onload = function () {
+          var w = image.width, h = image.height;
+          if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(image, 0, 0, w, h);
+          try { cb(canvas.toDataURL('image/jpeg', 0.7)); }
+          catch (err) { cb(null); }
+        };
+        image.onerror = function () { cb(null); };
+        image.src = ev.target.result;
+      };
+      reader.onerror = function () { cb(null); };
+      reader.readAsDataURL(file);
+    }
+
+    // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
+    $('aiBtn').addEventListener('click', recognize);
+    var AI_TIMEOUT_MS = 30000; // AI認識のタイムアウト（30秒）。これを過ぎたら必ずエラー表示に復帰する
+    function recognize() {
+      if (!currentAiImage) { $('aiStatus').textContent = '先に写真を撮ってください。'; return; }
+      var btn = $('aiBtn');
+      var orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '🤖 認識中...';
+      $('aiStatus').textContent = '';
+
+      // タイムアウト：30秒で中断（fetchには既定のタイムアウトが無いため明示的に止める）
+      var controller = new AbortController();
+      var timedOut = false;
+      var timer = setTimeout(function () { timedOut = true; controller.abort(); }, AI_TIMEOUT_MS);
+
+      fetch('/api/recognize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: currentAiImage }),
+        signal: controller.signal
+      })
+        // JSON以外（ローカルの501/404のHTMLなど）でも落ちないよう text→parse
+        .then(function (r) {
+          return r.text().then(function (t) {
+            var j = {};
+            try { j = JSON.parse(t); } catch (e) {}
+            return { ok: r.ok, status: r.status, j: j };
+          });
+        })
+        .then(function (res) {
+          var j = res.j || {};
+          if (res.status === 404 || res.status === 501) {
+            $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">未デプロイ</span>'
+              + 'この環境にはAI関数(/api)がありません。AI認識はVercelデプロイ後に利用できます。';
+            return;
+          }
+          if (!res.ok || j.error || !j.productName) {
+            $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">エラー</span>'
+              + esc(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'));
+            return;
+          }
+          // 商品名を自動入力（人が上書き可能）
+          $('memo').value = j.productName || '';
+          calc();
+          var c = Number(j.confidence) || 0;
+          var cls = c >= 0.8 ? 'ai-hi' : c >= 0.5 ? 'ai-mid' : 'ai-lo';
+          $('aiStatus').innerHTML =
+            '<span class="ai-badge ' + cls + '">AI提案 ' + Math.round(c * 100) + '%</span>' +
+            esc(j.category || '') + ' / 内容を確認・修正してください';
+        })
+        .catch(function () {
+          if (timedOut) {
+            $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">タイムアウト</span>'
+              + (AI_TIMEOUT_MS / 1000) + '秒以内に応答がありませんでした。電波の良い場所で再試行してください。';
+          } else {
+            $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">通信エラー</span>'
+              + 'ネット接続を確認してください（AI認識はVercelデプロイ後に利用できます）。';
+          }
+        })
+        .then(function () {
+          clearTimeout(timer);
+          btn.disabled = false;
+          btn.textContent = orig;
+        });
+    }
+
+    // --- 設定（販路ごとに保存） ---
+    var SETTING_IDS = ['rate', 'feeRate', 'thOk', 'thNg', 'marginOk', 'marginNg'];
+    function settingsKey(marketId) { return 'judgeSettings_' + marketId; }
+
+    // DOMを触らずに販路の設定値（保存値 or 既定値）を返す
+    function getSettings(marketId) {
+      var m = MARKETPLACES[marketId] || MARKETPLACES.ebay;
+      var saved = {};
+      try { saved = JSON.parse(localStorage.getItem(settingsKey(marketId)) || '{}'); } catch (e) {}
+      return {
+        rate:     saved.rate     != null ? +saved.rate     : m.defaultRate,
+        feeRate:  saved.feeRate  != null ? +saved.feeRate  : m.defaultFee,
+        thOk:     saved.thOk     != null ? +saved.thOk     : m.defaultThOk,
+        thNg:     saved.thNg     != null ? +saved.thNg     : m.defaultThNg,
+        marginOk: saved.marginOk != null ? +saved.marginOk : m.defaultMarginOk,
+        marginNg: saved.marginNg != null ? +saved.marginNg : m.defaultMarginNg
+      };
+    }
+
+    function loadMarketSettings(marketId) {
+      var s = getSettings(marketId);
+      $('rate').value = s.rate;
+      $('feeRate').value = s.feeRate;
+      $('thOk').value = s.thOk;
+      $('thNg').value = s.thNg;
+      $('marginOk').value = s.marginOk;
+      $('marginNg').value = s.marginNg;
+    }
+    function saveMarketSettings() {
+      var s = {};
+      SETTING_IDS.forEach(function (id) { s[id] = $(id).value; });
+      localStorage.setItem(settingsKey(activeMarket), JSON.stringify(s));
+    }
+
+    // --- 販路セレクトの生成 ---
+    function buildMarketSelect() {
+      $('market').innerHTML = Object.keys(MARKETPLACES).map(function (id) {
+        return '<option value="' + id + '">' + MARKETPLACES[id].name + '</option>';
+      }).join('');
+    }
+
+    // --- 送料の編集（販路ごとに保存。発送方法のlabelをキーに上書き） ---
+    function shipKey(marketId) { return 'judgeShipping_' + marketId; }
+
+    function loadShipOverrides(marketId) {
+      try { return JSON.parse(localStorage.getItem(shipKey(marketId)) || '{}'); }
+      catch (e) { return {}; }
+    }
+
+    // 登録時の送料に編集値を反映した実効リストを返す
+    function effectiveShipping(marketId) {
+      var m = MARKETPLACES[marketId];
+      var ov = loadShipOverrides(marketId);
+      return m.shipping.map(function (s) {
+        return { label: s.label, cost: ov[s.label] != null ? ov[s.label] : s.cost };
+      });
+    }
+
+    // 発送方法セレクトを実効送料で再構築（選択中の項目は維持）
+    function buildShippingSelect(marketId, forceIndex) {
+      var sel = $('shipping');
+      var prev = (forceIndex != null) ? forceIndex : sel.selectedIndex;
+      sel.innerHTML = effectiveShipping(marketId).map(function (s) {
+        return '<option value="' + s.cost + '">' + s.label + '（' + s.cost.toLocaleString('ja-JP') + '円）</option>';
+      }).join('');
+      if (prev >= 0 && prev < sel.options.length) sel.selectedIndex = prev;
+    }
+
+    // 設定内の送料エディタを描画
+    function renderShipEditor(marketId) {
+      $('shipEditor').innerHTML = effectiveShipping(marketId).map(function (s) {
+        return '<div class="field" style="margin-bottom:10px;">' +
+          '<label>' + esc(s.label) + '</label>' +
+          '<input class="ship-input" type="number" inputmode="numeric" data-label="' + esc(s.label) + '" value="' + s.cost + '" />' +
+          '</div>';
+      }).join('');
+      var inputs = $('shipEditor').querySelectorAll('.ship-input');
+      for (var i = 0; i < inputs.length; i++) {
+        inputs[i].addEventListener('input', onShipEdit);
+        inputs[i].addEventListener('change', onShipEdit);
+      }
+    }
+
+    function onShipEdit() {
+      var ov = {};
+      var inputs = $('shipEditor').querySelectorAll('.ship-input');
+      for (var i = 0; i < inputs.length; i++) {
+        var v = parseFloat(inputs[i].value);
+        ov[inputs[i].getAttribute('data-label')] = isNaN(v) ? 0 : v;
+      }
+      localStorage.setItem(shipKey(activeMarket), JSON.stringify(ov));
+      buildShippingSelect(activeMarket); // 選択維持のまま送料を反映
+      calc();
+    }
+
+    function resetShipping() {
+      if (!confirm('この販路の送料を初期値に戻しますか？')) return;
+      localStorage.removeItem(shipKey(activeMarket));
+      renderShipEditor(activeMarket);
+      buildShippingSelect(activeMarket);
+      calc();
+    }
+
+    // --- 販路を適用（通貨表示・発送方法・設定をまとめて切替） ---
+    function applyMarketplace(marketId) {
+      activeMarket = marketId;
+      var m = MARKETPLACES[marketId];
+      localStorage.setItem('judgeActiveMarket', marketId);
+
+      // 通貨ラベル
+      $('priceLabel').textContent = '想定売価（' + m.currency + '）';
+      $('curLabel').textContent = m.currency;
+      $('rateLabel').textContent = '為替（円/' + m.currency + '）';
+      $('settingMarketName').textContent = m.name;
+
+      // 発送方法（販路ごと・編集された送料を反映）。販路切替時は先頭を選択
+      buildShippingSelect(marketId, 0);
+      renderShipEditor(marketId);
+
+      // 為替・手数料・しきい値
+      loadMarketSettings(marketId);
+      calc();
+    }
+
+    // --- 計算 ---
+    function num(id) { var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
+
+    var lastResult = null; // 直近の有効な判定（保存用）
+
+    // --- 5段階評価 ---
+    var LEVELS = {
+      5: { label: '積極推奨', cls: 'l5' },
+      4: { label: '推奨',     cls: 'l4' },
+      3: { label: '要検討',   cls: 'l3' },
+      2: { label: '低利益',   cls: 'l2' },
+      1: { label: '見送り',   cls: 'l1' }
+    };
+    function stars(level) {
+      return '★★★★★'.slice(0, level) + '☆☆☆☆☆'.slice(0, 5 - level);
+    }
+    function reasonIcon(k) {
+      return k === 'good' ? '✓' : k === 'bad' ? '✕' : k === 'warn' ? '⚠' : '•';
+    }
+    function renderReasons(reasons, el) {
+      el.innerHTML = reasons.map(function (r) {
+        return '<div class="reason r-' + r.k + '">' + reasonIcon(r.k) + ' ' + esc(r.t) + '</div>';
+      }).join('');
+    }
+
+    // 利益額・利益率から5段階レベルと判定理由を算出
+    function judge(v) {
+      var level;
+      if (v.profit < v.thNg || v.margin < v.marginNg) {
+        level = 1; // 見送り
+      } else {
+        var meetsP = v.profit >= v.thOk;
+        var meetsM = v.margin >= v.marginOk;
+        var strongP = v.profit >= v.thOk * 2;
+        var strongM = v.margin >= v.marginOk + 15;
+        if (meetsP && meetsM) level = (strongP && strongM) ? 5 : 4;
+        else if (meetsP || meetsM) level = 3;
+        else level = 2;
+      }
+
+      var reasons = [];
+      if (v.profit < 0) reasons.push({ k: 'bad', t: '売ると赤字になる' });
+      else if (v.profit >= v.thOk) reasons.push({ k: 'good', t: '利益額を十分確保できる' });
+      else reasons.push({ k: 'warn', t: '利益額が薄い（推奨ライン未満）' });
+
+      if (v.margin < v.marginNg) reasons.push({ k: 'bad', t: '利益率が下限を下回る' });
+      else if (v.margin >= v.marginOk) reasons.push({ k: 'good', t: '利益率が高い' });
+      else reasons.push({ k: 'warn', t: '利益率が低い' });
+
+      if (v.revenue > 0 && v.ship / v.revenue >= 0.25) reasons.push({ k: 'warn', t: '送料負担が大きい' });
+      if (v.revenue > 0 && v.cost > 0 && v.cost / v.revenue >= 0.5) reasons.push({ k: 'warn', t: '原価比率が高い' });
+      if (v.condition === '難あり' || v.condition === 'ジャンク') reasons.push({ k: 'info', t: '状態が悪く需要・相場の確認が必要' });
+      if (level === 3) reasons.push({ k: 'info', t: '需要・相場を確認のうえ判断' });
+
+      var L = LEVELS[level];
+      return { level: level, label: L.label, cls: L.cls, reasons: reasons };
+    }
+
+    function calc() {
+      var m = MARKETPLACES[activeMarket];
+      var price = num('price');
+      var rate = num('rate');
+      var feeRate = num('feeRate');
+      var cost = num('cost');
+      var ship = num('shipping');
+      var shipSel = $('shipping');
+      var shipName = shipSel.options.length ? shipSel.options[shipSel.selectedIndex].text : '';
+
+      $('feeRateLabel').textContent = feeRate;
+
+      if (price <= 0 || rate <= 0) {
+        $('verdict').className = 'verdict v-none';
+        $('verdict').textContent = '想定売価を入力してください';
+        $('reasons').innerHTML = '';
+        $('breakdown').style.display = 'none';
+        lastResult = null;
+        $('saveBtn').disabled = true;
+        return;
+      }
+
+      var revenue = price * rate;
+      var fee = revenue * (feeRate / 100);
+      var profit = revenue - fee - cost - ship;
+      var margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+      $('revenue').textContent = yen(revenue) + '（' + m.symbol + price + '）';
+      $('fee').textContent = '-' + yen(fee);
+      $('shipCost').textContent = '-' + yen(ship);
+      $('costOut').textContent = '-' + yen(cost);
+      var p = $('profit');
+      p.textContent = yen(profit);
+      p.className = profit >= 0 ? 'pos' : 'neg';
+      $('margin').textContent = margin.toFixed(1) + '%';
+      $('breakdown').style.display = 'block';
+
+      var thOk = num('thOk');
+      var thNg = num('thNg');
+      var marginOk = num('marginOk');
+      var marginNg = num('marginNg');
+      var condition = $('condition').value;
+
+      var j = judge({
+        profit: profit, margin: margin, revenue: revenue, ship: ship, cost: cost,
+        thOk: thOk, thNg: thNg, marginOk: marginOk, marginNg: marginNg, condition: condition
+      });
+
+      var v = $('verdict');
+      v.className = 'verdict v-' + j.cls;
+      v.textContent = stars(j.level) + ' ' + j.label;
+      renderReasons(j.reasons, $('reasons'));
+
+      // 利益率が見送り下限割れのときは赤
+      $('margin').className = margin < marginNg ? 'neg' : '';
+
+      lastResult = {
+        market: activeMarket,
+        marketName: m.name,
+        currency: m.currency,
+        symbol: m.symbol,
+        condition: condition,
+        price: price,
+        cost: cost,
+        ship: ship,
+        shipName: shipName,
+        profit: Math.round(profit),
+        margin: Math.round(margin * 10) / 10,
+        level: j.level,
+        verdict: j.label,
+        vClass: j.cls,
+        reasons: j.reasons,
+        // 再計算用パラメータ（編集時に正確に再判定するため保存）
+        rate: rate,
+        feeRate: feeRate,
+        thOk: thOk,
+        thNg: thNg,
+        marginOk: marginOk,
+        marginNg: marginNg
+      };
+      $('saveBtn').disabled = false;
+    }
+
+    // 販路変更
+    $('market').addEventListener('change', function () { applyMarketplace(this.value); });
+
+    // 入力（商品ごと）→ 再計算のみ
+    ['price', 'cost', 'shipping', 'condition'].forEach(function (id) {
+      $(id).addEventListener('input', function () { calc(); });
+      $(id).addEventListener('change', function () { calc(); });
+    });
+    // 設定（販路ごと）→ 再計算＋保存
+    SETTING_IDS.forEach(function (id) {
+      $(id).addEventListener('input', function () { calc(); saveMarketSettings(); });
+      $(id).addEventListener('change', function () { calc(); saveMarketSettings(); });
+    });
+
+    // --- 履歴 ---
+    var HIST_KEY = 'judgeHistory';
+
+    function getHistory() {
+      try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); }
+      catch (e) { return []; }
+    }
+    function setHistory(list) {
+      localStorage.setItem(HIST_KEY, JSON.stringify(list));
+    }
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function nowLabel() {
+      var d = new Date();
+      return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate()) +
+        ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function saveCurrent() {
+      if (!lastResult) return;
+      var entry = {
+        id: String(new Date().getTime()) + Math.round(Math.random() * 1000),
+        date: nowLabel(),
+        photo: currentPhoto || '',
+        memo: ($('memo').value || '').trim(),
+        market: lastResult.market,
+        marketName: lastResult.marketName,
+        currency: lastResult.currency,
+        symbol: lastResult.symbol,
+        condition: lastResult.condition,
+        price: lastResult.price,
+        cost: lastResult.cost,
+        ship: lastResult.ship,
+        shipName: lastResult.shipName,
+        profit: lastResult.profit,
+        margin: lastResult.margin,
+        level: lastResult.level,
+        verdict: lastResult.verdict,
+        vClass: lastResult.vClass,
+        reasons: lastResult.reasons || [],
+        rate: lastResult.rate,
+        feeRate: lastResult.feeRate,
+        thOk: lastResult.thOk,
+        thNg: lastResult.thNg,
+        marginOk: lastResult.marginOk,
+        marginNg: lastResult.marginNg
+      };
+      var list = getHistory();
+      list.unshift(entry); // 新しい順
+      try {
+        setHistory(list);
+      } catch (e) {
+        alert('保存容量が上限に達しました。古い履歴を削除してください。');
+        return;
+      }
+      renderHistory();
+    }
+
+    function deleteEntry(id) {
+      setHistory(getHistory().filter(function (e) { return e.id !== id; }));
+      renderHistory();
+    }
+
+    function clearAll() {
+      if (!getHistory().length) return;
+      if (!confirm('全ての履歴を削除しますか？')) return;
+      localStorage.removeItem(HIST_KEY);
+      renderHistory();
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    function renderHistory() {
+      var list = getHistory();
+      $('histCount').textContent = '(' + list.length + ')';
+      $('histEmpty').style.display = list.length ? 'none' : 'block';
+      var html = list.map(function (e) {
+        var profitClass = e.profit >= 0 ? 'pos' : 'neg';
+        var sym = e.symbol || '$';                 // 旧データ互換
+        var mname = e.marketName || 'eBay';        // 旧データ互換
+        var img = e.photo
+          ? '<img src="' + e.photo + '" alt="">'
+          : '<img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22%3E%3C/svg%3E" alt="">';
+        var levelBadge = e.level ? '<span class="badge b-' + e.vClass + '">' + stars(e.level) + ' ' + esc(e.verdict) + '</span>'
+                                 : '<span class="badge b-' + e.vClass + '">' + esc(e.verdict) + '</span>';
+        return '' +
+          '<div class="hist-item" data-id="' + e.id + '">' +
+            img +
+            '<div class="hist-info">' +
+              (e.memo ? '<div style="font-weight:600;margin-bottom:3px;word-break:break-word;">' + esc(e.memo) + '</div>' : '') +
+              '<div class="top">' +
+                '<span class="market-tag">' + esc(mname) + '</span>' +
+                levelBadge +
+                '<span class="hist-profit ' + profitClass + '">' + e.profit.toLocaleString('ja-JP') + '円</span>' +
+              '</div>' +
+              '<div class="hist-meta">' +
+                esc(sym) + esc(e.price) + ' / ' + esc(e.condition) + ' / 利益率' + esc(e.margin) + '%<br>' +
+                '原価' + e.cost.toLocaleString('ja-JP') + '円 / ' + esc(e.shipName) + '<br>' +
+                esc(e.date) +
+              '</div>' +
+              '<div class="tap-hint">タップで詳細 ›</div>' +
+            '</div>' +
+            '<button class="hist-del" data-id="' + e.id + '">削除</button>' +
+          '</div>';
+      }).join('');
+      $('histList').innerHTML = html;
+      // 削除ボタン配線
+      var dels = $('histList').querySelectorAll('.hist-del');
+      for (var i = 0; i < dels.length; i++) {
+        dels[i].addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          deleteEntry(this.getAttribute('data-id'));
+        });
+      }
+      // 履歴カードのタップ → 詳細モーダル
+      var items = $('histList').querySelectorAll('.hist-item');
+      for (var k = 0; k < items.length; k++) {
+        items[k].addEventListener('click', function () { openDetail(this.getAttribute('data-id')); });
+      }
+    }
+
+    // --- 履歴詳細モーダル ---
+    var currentDetailId = null;   // 詳細表示中のエントリID
+    var currentEditMarket = 'ebay'; // 編集中エントリの販路（送料選択肢用）
+
+    function detailRow(label, value, valClass) {
+      return '<div class="line"><span>' + esc(label) + '</span>' +
+        '<span class="v ' + (valClass || '') + '">' + value + '</span></div>';
+    }
+
+    // エントリの保存値から利益・利益率・判定・理由を再計算（破壊的に更新）
+    function recompute(e) {
+      var s = getSettings(e.market || 'ebay');
+      var rate     = e.rate     != null ? +e.rate     : s.rate;
+      var feeRate  = e.feeRate  != null ? +e.feeRate  : s.feeRate;
+      var thOk     = e.thOk     != null ? +e.thOk     : s.thOk;
+      var thNg     = e.thNg     != null ? +e.thNg     : s.thNg;
+      var marginOk = e.marginOk != null ? +e.marginOk : s.marginOk;
+      var marginNg = e.marginNg != null ? +e.marginNg : s.marginNg;
+
+      var price = +e.price || 0, cost = +e.cost || 0, ship = +e.ship || 0;
+      var revenue = price * rate;
+      var fee = revenue * (feeRate / 100);
+      var profit = revenue - fee - cost - ship;
+      var margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+      var j = judge({
+        profit: profit, margin: margin, revenue: revenue, ship: ship, cost: cost,
+        thOk: thOk, thNg: thNg, marginOk: marginOk, marginNg: marginNg, condition: e.condition
+      });
+
+      e.profit = Math.round(profit);
+      e.margin = Math.round(margin * 10) / 10;
+      e.level = j.level;
+      e.verdict = j.label;
+      e.vClass = j.cls;
+      e.reasons = j.reasons;
+      // 今後の編集でも正確に再計算できるようパラメータを確定保存
+      e.rate = rate; e.feeRate = feeRate;
+      e.thOk = thOk; e.thNg = thNg; e.marginOk = marginOk; e.marginNg = marginNg;
+      return e;
+    }
+
+    function openDetail(id) {
+      var e = getHistory().filter(function (x) { return x.id === id; })[0];
+      if (!e) return;
+      currentDetailId = id;
+      var sym = e.symbol || '$';
+      var mname = e.marketName || 'eBay';
+
+      var ph = $('dPhoto');
+      if (e.photo) { ph.src = e.photo; ph.style.display = 'block'; }
+      else { ph.removeAttribute('src'); ph.style.display = 'none'; }
+
+      var dv = $('dVerdict');
+      dv.className = 'modal-verdict v-' + (e.vClass || 'warn');
+      dv.textContent = (e.level ? stars(e.level) + ' ' : '') + (e.verdict || '');
+
+      var rows = '';
+      if (e.memo) rows += detailRow('商品名 / メモ', esc(e.memo));
+      rows += detailRow('販路', esc(mname));
+      rows += detailRow('商品状態', esc(e.condition));
+      rows += detailRow('売価', esc(sym) + esc(e.price) + '（' + esc(e.currency || '') + '）');
+      rows += detailRow('利益', e.profit.toLocaleString('ja-JP') + '円', e.profit >= 0 ? 'pos' : 'neg');
+      rows += detailRow('利益率', esc(e.margin) + '%');
+      rows += detailRow('原価 / 送料', e.cost.toLocaleString('ja-JP') + '円 / ' + e.ship.toLocaleString('ja-JP') + '円');
+      rows += detailRow('日時', esc(e.date));
+      $('dRows').innerHTML = rows;
+
+      if (e.reasons && e.reasons.length) {
+        renderReasons(e.reasons, $('dReasonList'));
+        $('dReasons').style.display = 'block';
+      } else {
+        $('dReasons').style.display = 'none';
+      }
+
+      // 常に表示モードで開く
+      $('dView').style.display = 'block';
+      $('dEdit').style.display = 'none';
+      $('detailModal').style.display = 'flex';
+    }
+
+    function closeDetail() { $('detailModal').style.display = 'none'; }
+
+    // --- 履歴編集 ---
+    function enterEdit() {
+      var e = getHistory().filter(function (x) { return x.id === currentDetailId; })[0];
+      if (!e) return;
+      currentEditMarket = e.market || 'ebay';
+
+      $('eMemo').value = e.memo || '';
+      $('eCondition').value = e.condition;
+      $('ePriceLabel').textContent = '売価（' + (e.currency || '') + '）';
+      $('ePrice').value = e.price;
+      $('eCost').value = e.cost;
+
+      // 発送方法（エントリの販路の実効送料）＋「カスタム」
+      var list = effectiveShipping(currentEditMarket);
+      $('eShipping').innerHTML = list.map(function (s, i) {
+        return '<option value="' + i + '">' + esc(s.label) + '（' + s.cost.toLocaleString('ja-JP') + '円）</option>';
+      }).join('') + '<option value="custom">（送料を手入力）</option>';
+
+      // 既存の発送方法に一致する選択肢を選ぶ。送料が一致しなければカスタム扱い
+      var matchIdx = -1;
+      for (var i = 0; i < list.length; i++) {
+        if (e.shipName && e.shipName.indexOf(list[i].label) === 0 && list[i].cost === e.ship) { matchIdx = i; break; }
+      }
+      $('eShipping').value = (matchIdx >= 0) ? String(matchIdx) : 'custom';
+      $('eShip').value = e.ship;
+
+      $('dView').style.display = 'none';
+      $('dEdit').style.display = 'block';
+    }
+
+    function cancelEdit() {
+      // エントリは未変更なので表示モードで開き直すだけ
+      openDetail(currentDetailId);
+    }
+
+    function saveEdit() {
+      var list = getHistory();
+      var e = list.filter(function (x) { return x.id === currentDetailId; })[0];
+      if (!e) return;
+
+      e.memo = ($('eMemo').value || '').trim();
+      e.condition = $('eCondition').value;
+      e.price = num('ePrice');
+      e.cost = num('eCost');
+
+      var shipSel = $('eShipping');
+      if (shipSel.value === 'custom') {
+        e.shipName = '送料 手入力';
+      } else {
+        var sl = effectiveShipping(currentEditMarket);
+        var s = sl[+shipSel.value];
+        e.shipName = s ? s.label : e.shipName;
+      }
+      e.ship = num('eShip');
+
+      recompute(e); // 利益・利益率・判定・理由を再計算
+
+      try {
+        setHistory(list);
+      } catch (err) {
+        alert('保存できませんでした（容量上限の可能性）。');
+        return;
+      }
+      renderHistory();
+      openDetail(currentDetailId); // 更新後の内容を表示モードで再表示
+    }
+
+    // 発送方法を選ぶと送料を自動反映 / 送料を手入力したら「カスタム」に切替
+    function onEditShippingChange() {
+      if ($('eShipping').value === 'custom') return;
+      var s = effectiveShipping(currentEditMarket)[+$('eShipping').value];
+      if (s) $('eShip').value = s.cost;
+    }
+    function onEditShipInput() {
+      var sel = $('eShipping');
+      if (sel.value === 'custom') return;
+      var s = effectiveShipping(currentEditMarket)[+sel.value];
+      if (s && num('eShip') !== s.cost) sel.value = 'custom';
+    }
+
+    $('detailClose').addEventListener('click', closeDetail);
+    $('detailModal').addEventListener('click', function (ev) { if (ev.target === this) closeDetail(); });
+    $('dEditBtn').addEventListener('click', enterEdit);
+    $('eCancel').addEventListener('click', cancelEdit);
+    $('eSave').addEventListener('click', saveEdit);
+    $('eShipping').addEventListener('change', onEditShippingChange);
+    $('eShip').addEventListener('input', onEditShipInput);
+
+    // --- CSV 出力（UTF-8 BOM付き・CRLF改行、Excel/Numbers向け） ---
+    function csvEscape(v) {
+      v = (v == null) ? '' : String(v);
+      // 改行・カンマ・ダブルクォートを含む場合は "" で囲み、内部の " を二重化
+      if (/[",\n\r]/.test(v)) { v = '"' + v.replace(/"/g, '""') + '"'; }
+      return v;
+    }
+
+    function fileStamp() {
+      var d = new Date();
+      return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' +
+        pad(d.getHours()) + pad(d.getMinutes());
+    }
+
+    function exportCsv() {
+      var list = getHistory();
+      if (!list.length) { alert('履歴がありません。'); return; }
+      var headers = ['日時', '販路', '商品名/メモ', '商品状態', '売価(通貨)', '通貨',
+        '原価(円)', '送料(円)', '利益(円)', '利益率(%)', '判定'];
+      var rows = list.map(function (e) {
+        return [
+          e.date,
+          e.marketName || '',
+          e.memo || '',
+          e.condition,
+          e.price,
+          e.currency || '',
+          e.cost,
+          e.ship,
+          e.profit,
+          e.margin,
+          e.verdict
+        ].map(csvEscape).join(',');
+      });
+      var csv = '﻿' + headers.join(',') + '\r\n' + rows.join('\r\n') + '\r\n';
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = '判定履歴_' + fileStamp() + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    $('saveBtn').addEventListener('click', saveCurrent);
+    $('clearAllBtn').addEventListener('click', clearAll);
+    $('resetShipBtn').addEventListener('click', resetShipping);
+    $('csvBtn').addEventListener('click', exportCsv);
+
+    // --- 初期化 ---
+    buildMarketSelect();
+    activeMarket = localStorage.getItem('judgeActiveMarket') || 'ebay';
+    if (!MARKETPLACES[activeMarket]) activeMarket = 'ebay';
+    $('market').value = activeMarket;
+    applyMarketplace(activeMarket);
+    renderHistory();
+  </script>
+</body>
+</html>
