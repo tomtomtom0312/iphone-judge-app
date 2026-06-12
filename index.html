@@ -383,10 +383,10 @@
     <div class="field">
       <label>商品状態</label>
       <select id="condition">
-        <option value="新品">新品</option>
+        <option value="新品" selected>新品</option>
         <option value="未使用品">未使用品</option>
         <option value="新品同様">新品同様</option>
-        <option value="美品" selected>美品</option>
+        <option value="美品">美品</option>
         <option value="良品">良品</option>
         <option value="難あり">難あり</option>
         <option value="ジャンク">ジャンク</option>
@@ -395,7 +395,7 @@
 
     <div class="field">
       <label>原価（円）</label>
-      <input id="cost" type="number" inputmode="numeric" value="0" />
+      <input id="cost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
     </div>
 
     <div class="field" style="margin-bottom:0;">
@@ -966,7 +966,7 @@
         marketName: m.name,
         currency: m.currency,
         symbol: m.symbol,
-        condition: RANK_TO_CONDITION[rank] || '美品',
+        condition: RANK_TO_CONDITION[rank] || '新品', // AIランクがあれば優先、無ければ既定「新品」
         price: 0,
         cost: 0,
         ship: 0,
