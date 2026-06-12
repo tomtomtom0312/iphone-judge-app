@@ -312,6 +312,37 @@
       background: #0d1117; color: var(--text); border: 1px solid var(--line);
     }
     .crop-controls button:active { background: #11161d; }
+
+    /* 相場メモ・売価候補・カテゴリ別補助 */
+    textarea {
+      width: 100%; font-size: 15px; padding: 12px; border-radius: 10px;
+      border: 1px solid var(--line); background: #0d1117; color: var(--text);
+      resize: vertical; line-height: 1.5; font-family: inherit;
+    }
+    textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .cand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .cand-row:last-child { margin-bottom: 0; }
+    .cand-tag {
+      flex-shrink: 0; width: 48px; text-align: center; font-size: 12px; font-weight: 700;
+      padding: 8px 0; border-radius: 8px; background: rgba(59,130,246,.14); color: #93c5fd;
+    }
+    .cand-row input { flex: 1; }
+    .cand-apply {
+      flex-shrink: 0; padding: 0 14px; height: 44px; border-radius: 8px;
+      background: var(--accent); color: #fff; border: none; font-size: 14px; font-weight: 700;
+    }
+    .cand-apply:active { opacity: .85; }
+    .attrs-box { margin-top: 14px; }
+    .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+    .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+    .memo-tag {
+      font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+      background: rgba(16,185,129,.16); color: #6ee7b7;
+    }
+    .edit-preview {
+      margin-top: 14px; padding: 12px; border-radius: 10px;
+      background: #0d1117; border: 1px solid var(--line); font-size: 14px; text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -376,6 +407,19 @@
       <input id="price" class="price-input" type="number" inputmode="decimal" placeholder="例: 120" />
     </div>
     <p class="hint" id="aiHint">💡 将来（Phase 2）：写真から商品名・想定売価を自動入力予定。手入力で上書きも可。</p>
+  </div>
+
+  <!-- 相場・想定売価（AI認識後に相場を確認 → 候補を反映） -->
+  <div class="card single-only">
+    <div class="field">
+      <label>相場メモ（自分で調べた相場を貼り付け）</label>
+      <textarea id="marketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円&#10;カードショップ買取: 2,800円"></textarea>
+    </div>
+    <p class="section-label">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で上の想定売価へ</p>
+    <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="number" inputmode="decimal" placeholder="安め" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
+    <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="number" inputmode="decimal" placeholder="標準" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
+    <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="number" inputmode="decimal" placeholder="強気" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
+    <div id="attrsBox" class="attrs-box"></div>
   </div>
 
   <!-- 詳細入力 -->
@@ -539,12 +583,21 @@
           </select>
         </div>
         <div class="field">
+          <label>相場メモ</label>
+          <textarea id="eMarketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円"></textarea>
+        </div>
+        <div id="eAttrsBox" class="attrs-box"></div>
+        <p class="section-label" style="margin-top:14px;">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で売価へ</p>
+        <div class="cand-row"><span class="cand-tag">安め</span><input id="eCandLow" type="number" inputmode="decimal" placeholder="安め" /><button type="button" class="cand-apply" data-cand="eCandLow" data-target="ePrice">反映</button></div>
+        <div class="cand-row"><span class="cand-tag">標準</span><input id="eCandStd" type="number" inputmode="decimal" placeholder="標準" /><button type="button" class="cand-apply" data-cand="eCandStd" data-target="ePrice">反映</button></div>
+        <div class="cand-row" style="margin-bottom:14px;"><span class="cand-tag">強気</span><input id="eCandHigh" type="number" inputmode="decimal" placeholder="強気" /><button type="button" class="cand-apply" data-cand="eCandHigh" data-target="ePrice">反映</button></div>
+        <div class="field">
           <label id="ePriceLabel">売価</label>
           <input id="ePrice" type="number" inputmode="decimal" />
         </div>
         <div class="field">
           <label>原価（円）</label>
-          <input id="eCost" type="number" inputmode="numeric" />
+          <input id="eCost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
         </div>
         <div class="field">
           <label>発送方法</label>
@@ -554,6 +607,7 @@
           <label>送料（円）</label>
           <input id="eShip" type="number" inputmode="numeric" />
         </div>
+        <div class="edit-preview" id="eProfitPreview"></div>
         <div class="edit-actions">
           <button class="cancel-btn" id="eCancel">キャンセル</button>
           <button class="savee-btn" id="eSave">保存</button>
@@ -659,6 +713,88 @@
       return name.trim();
     }
 
+    /* ============================================================
+       カテゴリ別の補助項目（編集・補助表示で使う）
+       from: AI認識(pickAi)のキー、または 'productName' を初期値に流用。
+       商品の「状態」は既存の商品状態セレクト、価格は売価候補で管理するため重複させない。
+       ============================================================ */
+    var CATEGORY_FIELDS = {
+      iPhone: [
+        { key: 'model',   label: '機種',   from: 'productName' },
+        { key: 'storage', label: '容量',   from: 'storage' },
+        { key: 'color',   label: '色',     from: 'color' },
+        { key: 'simNote', label: 'SIM/ネットワーク制限メモ' }
+      ],
+      trading_card_single: [
+        { key: 'cardName', label: 'カード名', from: 'cardName' },
+        { key: 'modelNo',  label: '型番' },
+        { key: 'rarity',   label: 'レアリティ' }
+      ],
+      trading_card_box: [
+        { key: 'boxName', label: 'BOX名',      from: 'boxName' },
+        { key: 'series',  label: 'シリーズ名',  from: 'series' },
+        { key: 'sealed',  label: '未開封BOX',   type: 'select', options: ['不明', '未開封', '開封済み'] },
+        { key: 'shrink',  label: 'シュリンク',   type: 'select', options: ['不明', 'あり', 'なし'] }
+      ],
+      figure: [
+        { key: 'series',    label: '作品/シリーズ', from: 'series' },
+        { key: 'character', label: 'キャラ/型番' }
+      ],
+      other: []
+    };
+
+    // 認識結果 j からカテゴリ別補助項目の初期値を組み立て
+    function attrsFromRecognition(category, j) {
+      var ai = pickAi(j);
+      var out = {};
+      (CATEGORY_FIELDS[normCategory(category)] || []).forEach(function (f) {
+        if (f.from === 'productName') out[f.key] = j.productName || '';
+        else if (f.from) out[f.key] = ai[f.from] || '';
+        else out[f.key] = '';
+      });
+      return out;
+    }
+
+    // カテゴリ別補助項目を container に描画（select/text）
+    function renderAttrs(container, category, attrs) {
+      category = normCategory(category);
+      var fields = CATEGORY_FIELDS[category] || [];
+      attrs = attrs || {};
+      if (!fields.length) {
+        container.innerHTML = '<p class="hint">このカテゴリの補助項目はありません。</p>';
+        return;
+      }
+      container.innerHTML = '<div class="attrs-head">カテゴリ別の補助項目（' + esc(categoryLabel(category)) + '）</div>' +
+        fields.map(function (f) {
+          var v = attrs[f.key] != null ? String(attrs[f.key]) : '';
+          var inp;
+          if (f.type === 'select') {
+            inp = '<select data-attr="' + esc(f.key) + '">' + f.options.map(function (o) {
+              var val = (o === '不明') ? '' : o;
+              return '<option value="' + esc(val) + '"' + (v === val ? ' selected' : '') + '>' + esc(o) + '</option>';
+            }).join('') + '</select>';
+          } else {
+            inp = '<input type="text" data-attr="' + esc(f.key) + '" value="' + esc(v) + '" />';
+          }
+          return '<div class="field"><label>' + esc(f.label) + '</label>' + inp + '</div>';
+        }).join('');
+    }
+
+    // container 内の補助項目入力値を { key: value } で回収
+    function readAttrs(container) {
+      var out = {}, nodes = container.querySelectorAll('[data-attr]');
+      for (var i = 0; i < nodes.length; i++) out[nodes[i].getAttribute('data-attr')] = nodes[i].value;
+      return out;
+    }
+
+    // 候補入力の値を売価欄へ反映（数値のときのみ）。after は反映後のコールバック
+    function applyCandidate(candId, targetId, after) {
+      var n = parseFloat($(candId).value);
+      if (isNaN(n)) return;
+      $(targetId).value = n;
+      if (after) after();
+    }
+
     // --- 写真（撮影後の静止画をクロップ調整 → AI認識。ライブカメラは使わない） ---
     var currentPhoto = null;   // 履歴保存用サムネ(400px) — クロップ枠から生成
     var currentAiImage = null; // AI認識用(768px) — クロップ枠から生成
@@ -666,6 +802,7 @@
     var currentCategory = 'other';
     var currentRank = '';
     var currentAi = null;
+    var currentAttrs = {};      // 単品モードのカテゴリ別補助項目
     var captureMode = 'single'; // 'single' = 単品判定 / 'burst' = 連続撮影
 
     var CROP_INSET = 0.08;  // ガイド枠のインセット（CSS .crop-frame の inset:8% と一致させる）
@@ -746,7 +883,8 @@
 
     // ファイル → 作業用に縮小した画像をクロップ台に読み込む
     function loadForCrop(file) {
-      currentCategory = 'other'; currentRank = ''; currentAi = null;
+      currentCategory = 'other'; currentRank = ''; currentAi = null; currentAttrs = {};
+      renderAttrs($('attrsBox'), 'other', {});
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
       var reader = new FileReader();
@@ -897,6 +1035,8 @@
           currentCategory = normCategory(j.category);
           currentRank = j.estimatedRank || '';
           currentAi = pickAi(j);
+          currentAttrs = attrsFromRecognition(currentCategory, j);
+          renderAttrs($('attrsBox'), currentCategory, currentAttrs); // カテゴリ別補助を反映
 
           // 商品名（＋容量・色）を自動入力（人が上書き可能）
           $('memo').value = composeName(j);
@@ -967,6 +1107,9 @@
         currency: m.currency,
         symbol: m.symbol,
         condition: RANK_TO_CONDITION[rank] || '新品', // AIランクがあれば優先、無ければ既定「新品」
+        marketMemo: '',
+        cand: { low: '', std: '', high: '' },
+        attrs: attrsFromRecognition(normCategory(j.category), j),
         price: 0,
         cost: 0,
         ship: 0,
@@ -1156,6 +1299,8 @@
       $('curLabel').textContent = m.currency;
       $('rateLabel').textContent = '為替（円/' + m.currency + '）';
       $('settingMarketName').textContent = m.name;
+      var curEls = document.querySelectorAll('.candCur');
+      for (var ci = 0; ci < curEls.length; ci++) curEls[ci].textContent = m.currency;
 
       // 発送方法（販路ごと・編集された送料を反映）。販路切替時は先頭を選択
       buildShippingSelect(marketId, 0);
@@ -1351,6 +1496,9 @@
         category: currentCategory || 'other',
         estimatedRank: currentRank || '',
         ai: currentAi || null,
+        marketMemo: ($('marketMemo').value || '').trim(),
+        cand: { low: $('candLow').value, std: $('candStd').value, high: $('candHigh').value },
+        attrs: readAttrs($('attrsBox')),
         market: lastResult.market,
         marketName: lastResult.marketName,
         currency: lastResult.currency,
@@ -1413,9 +1561,10 @@
           ? '<img src="' + e.photo + '" alt="">'
           : '<img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22%3E%3C/svg%3E" alt="">';
 
-        // カテゴリタグ＋状態ランクバッジ
+        // カテゴリタグ＋状態ランクバッジ＋相場メモ有無
         var catTag = '<span class="cat-tag">' + esc(categoryLabel(e.category)) + '</span>';
         var rankBadge = e.estimatedRank ? '<span class="rank-badge rank-' + esc(e.estimatedRank) + '">ランク' + esc(e.estimatedRank) + '</span>' : '';
+        var memoTag = (e.marketMemo && String(e.marketMemo).trim()) ? '<span class="memo-tag">相場メモあり</span>' : '';
 
         // 利益（ドラフトは未入力表示）
         var profitHtml = draft
@@ -1440,6 +1589,7 @@
               '<div class="top">' +
                 catTag +
                 rankBadge +
+                memoTag +
                 profitHtml +
               '</div>' +
               '<div class="hist-meta">' + meta + '</div>' +
@@ -1479,6 +1629,7 @@
     // --- 履歴詳細モーダル ---
     var currentDetailId = null;   // 詳細表示中のエントリID
     var currentEditMarket = 'ebay'; // 編集中エントリの販路（送料選択肢用）
+    var editingEntry = null;      // 編集中エントリ（利益プレビューの再計算用）
 
     function detailRow(label, value, valClass) {
       return '<div class="line"><span>' + esc(label) + '</span>' +
@@ -1555,11 +1706,13 @@
       if (e.estimatedRank) rows += detailRow('状態ランク（AI）', esc(e.estimatedRank));
       rows += detailRow('販路', esc(mname));
       rows += detailRow('商品状態', esc(e.condition));
-      // AIが読み取った識別情報（あるものだけ）
+      // カテゴリ別の補助情報（編集で調整可能。あるものだけ表示）
       var ai = e.ai || {};
-      [['ブランド', ai.brand], ['シリーズ', ai.series], ['セット/弾', ai.setName],
-       ['カード名', ai.cardName], ['BOX名', ai.boxName], ['容量', ai.storage], ['色', ai.color]
-      ].forEach(function (r) { if (r[1]) rows += detailRow(r[0], esc(r[1])); });
+      var fields = CATEGORY_FIELDS[normCategory(e.category)] || [];
+      var attrs = e.attrs || {};
+      if (ai.brand) rows += detailRow('ブランド', esc(ai.brand));
+      fields.forEach(function (f) { if (attrs[f.key]) rows += detailRow(f.label, esc(attrs[f.key])); });
+      if (!fields.length && ai.series) rows += detailRow('シリーズ', esc(ai.series));
       if (draft) {
         rows += detailRow('売価', '<span class="muted">未入力</span>');
         rows += detailRow('利益', '<span class="muted">— （売価を入力すると計算）</span>');
@@ -1569,6 +1722,9 @@
         rows += detailRow('利益', e.profit.toLocaleString('ja-JP') + '円', e.profit >= 0 ? 'pos' : 'neg');
         rows += detailRow('利益率', esc(e.margin) + '%');
         rows += detailRow('原価 / 送料', (+e.cost || 0).toLocaleString('ja-JP') + '円 / ' + (+e.ship || 0).toLocaleString('ja-JP') + '円');
+      }
+      if (e.marketMemo && String(e.marketMemo).trim()) {
+        rows += detailRow('相場メモ', esc(e.marketMemo).replace(/\n/g, '<br>'));
       }
       if (ai.notes) rows += detailRow('AIメモ', '⚠️ ' + esc(ai.notes));
       rows += detailRow('日時', esc(e.date));
@@ -1594,12 +1750,23 @@
       var e = getHistory().filter(function (x) { return x.id === currentDetailId; })[0];
       if (!e) return;
       currentEditMarket = e.market || 'ebay';
+      editingEntry = e;
 
       $('eMemo').value = e.memo || '';
       $('eCategory').value = normCategory(e.category);
       $('eCondition').value = e.condition;
       $('eRank').value = e.estimatedRank || '';
-      $('ePriceLabel').textContent = '売価（' + (e.currency || '') + '）';
+      $('eMarketMemo').value = e.marketMemo || '';
+      // カテゴリ別補助項目（保存値をフォールバックでAI生値からも補完）
+      renderAttrs($('eAttrsBox'), e.category, e.attrs || (e.ai ? attrsFromRecognition(e.category, e.ai) : {}));
+      // 売価候補
+      var cand = e.cand || {};
+      $('eCandLow').value = cand.low || '';
+      $('eCandStd').value = cand.std || '';
+      $('eCandHigh').value = cand.high || '';
+      // 通貨ラベル（候補・売価）
+      var cur = e.currency || '';
+      $('ePriceLabel').textContent = '売価（' + cur + '）';
       // ドラフト（売価0）のときは空欄にして入力を促す
       $('ePrice').value = (+e.price > 0) ? e.price : '';
       $('eCost').value = (+e.cost > 0) ? e.cost : '';
@@ -1618,8 +1785,40 @@
       $('eShipping').value = (matchIdx >= 0) ? String(matchIdx) : 'custom';
       $('eShip').value = e.ship;
 
+      updateEditPreview(); // 利益プレビュー初期表示
       $('dView').style.display = 'none';
       $('dEdit').style.display = 'block';
+    }
+
+    // 編集中の入力値から利益をその場で再計算してプレビュー表示（保存はしない）
+    function updateEditPreview() {
+      if (!editingEntry) return;
+      var tmp = {
+        market: editingEntry.market,
+        rate: editingEntry.rate, feeRate: editingEntry.feeRate,
+        thOk: editingEntry.thOk, thNg: editingEntry.thNg,
+        marginOk: editingEntry.marginOk, marginNg: editingEntry.marginNg,
+        condition: $('eCondition').value,
+        price: num('ePrice'), cost: num('eCost'), ship: num('eShip')
+      };
+      recompute(tmp);
+      var el = $('eProfitPreview');
+      if (tmp.draft) {
+        el.innerHTML = '<span class="muted">売価を入れると利益を計算します</span>';
+      } else {
+        el.innerHTML = '想定利益 <b class="' + (tmp.profit >= 0 ? 'pos' : 'neg') + '">' +
+          tmp.profit.toLocaleString('ja-JP') + '円</b> ／ 利益率 ' + tmp.margin + '% ／ ' +
+          (tmp.level ? stars(tmp.level) + ' ' : '') + esc(tmp.verdict);
+      }
+    }
+
+    // カテゴリ変更時：補助項目を新カテゴリで再描画（既存入力＞AI生値の順で初期化）
+    function onEditCategoryChange() {
+      var cat = normCategory($('eCategory').value);
+      var cur = readAttrs($('eAttrsBox'));
+      var base = (editingEntry && editingEntry.ai) ? attrsFromRecognition(cat, editingEntry.ai) : {};
+      Object.keys(cur).forEach(function (k) { if (cur[k]) base[k] = cur[k]; });
+      renderAttrs($('eAttrsBox'), cat, base);
     }
 
     function cancelEdit() {
@@ -1636,6 +1835,9 @@
       e.category = normCategory($('eCategory').value);
       e.condition = $('eCondition').value;
       e.estimatedRank = $('eRank').value || '';
+      e.marketMemo = ($('eMarketMemo').value || '').trim();
+      e.cand = { low: $('eCandLow').value, std: $('eCandStd').value, high: $('eCandHigh').value };
+      e.attrs = readAttrs($('eAttrsBox'));
       e.price = num('ePrice');
       e.cost = num('eCost');
 
@@ -1679,8 +1881,26 @@
     $('dEditBtn').addEventListener('click', enterEdit);
     $('eCancel').addEventListener('click', cancelEdit);
     $('eSave').addEventListener('click', saveEdit);
-    $('eShipping').addEventListener('change', onEditShippingChange);
-    $('eShip').addEventListener('input', onEditShipInput);
+    $('eShipping').addEventListener('change', function () { onEditShippingChange(); updateEditPreview(); });
+    $('eShip').addEventListener('input', function () { onEditShipInput(); updateEditPreview(); });
+    $('eCategory').addEventListener('change', onEditCategoryChange);
+    // 編集中の入力に応じて利益プレビューを即時更新
+    ['ePrice', 'eCost', 'eCondition'].forEach(function (id) {
+      $(id).addEventListener('input', updateEditPreview);
+      $(id).addEventListener('change', updateEditPreview);
+    });
+
+    // 売価候補「反映」ボタン（単品フォーム・編集モーダル共通）。data-cand→data-target へ反映
+    (function () {
+      var btns = document.querySelectorAll('.cand-apply');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function () {
+          var target = this.getAttribute('data-target');
+          applyCandidate(this.getAttribute('data-cand'), target,
+            target === 'price' ? calc : updateEditPreview);
+        });
+      }
+    })();
 
     // --- CSV 出力（UTF-8 BOM付き・CRLF改行、Excel/Numbers向け） ---
     function csvEscape(v) {
@@ -1738,6 +1958,7 @@
 
     // --- 初期化 ---
     buildMarketSelect();
+    renderAttrs($('attrsBox'), 'other', {}); // 単品フォームの補助項目の初期表示
     activeMarket = localStorage.getItem('judgeActiveMarket') || 'ebay';
     if (!MARKETPLACES[activeMarket]) activeMarket = 'ebay';
     $('market').value = activeMarket;
