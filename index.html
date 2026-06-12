@@ -173,10 +173,11 @@
       font-size: 13px; padding: 6px 12px;
     }
     .hist-item {
-      display: flex; gap: 12px; align-items: center;
+      display: flex; flex-direction: column; gap: 10px;
       background: #0d1117; border: 1px solid var(--line);
       border-radius: 12px; padding: 10px; margin-bottom: 10px;
     }
+    .hist-top-row { display: flex; gap: 12px; align-items: flex-start; }
     .hist-item img {
       width: 48px; height: 48px; object-fit: cover;
       border-radius: 8px; flex-shrink: 0; background: #000;
@@ -198,7 +199,11 @@
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
       background: rgba(59,130,246,.18); color: #93c5fd;
     }
-    .hist-profit { font-size: 16px; font-weight: 700; }
+    .hist-profit-row { margin-top: 2px; }
+    .hist-profit { font-size: 18px; font-weight: 700; }
+    .hist-profit .lbl { font-size: 12px; font-weight: 600; color: var(--muted); margin-right: 4px; }
+    /* 判定バッジ（色は b-l5..b-l1 / b-draft を流用） */
+    .vbadge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
     .hist-meta { color: var(--muted); font-size: 12px; line-height: 1.5; }
     .hist-del {
       background: transparent; color: var(--muted);
@@ -281,10 +286,10 @@
     .v-none.modal-verdict { font-size: 18px; font-weight: 700; }
 
     /* 履歴アイテムの名称・操作ボタン */
-    .hist-name { font-weight: 600; margin-bottom: 4px; word-break: break-word; }
+    .hist-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; word-break: break-word; }
     .hist-name.empty { color: var(--muted); font-weight: 500; }
-    .hist-btns { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; align-self: stretch; }
-    .hist-edit, .hist-del { border-radius: 8px; font-size: 12px; padding: 8px 10px; flex: 1; }
+    .hist-btns { display: flex; flex-direction: row; gap: 8px; }
+    .hist-edit, .hist-del { border-radius: 8px; font-size: 13px; padding: 9px 10px; flex: 1; }
     .hist-edit { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
     .hist-del { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
@@ -1653,21 +1658,25 @@
           ? '<img src="' + e.photo + '" alt="">'
           : '<img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22%3E%3C/svg%3E" alt="">';
 
-        // カテゴリタグ＋状態ランクバッジ＋相場メモ有無
+        // カテゴリタグ＋状態ランクバッジ＋判定バッジ＋相場メモ有無
         var catTag = '<span class="cat-tag">' + esc(categoryLabel(e.category)) + '</span>';
         var rankBadge = e.estimatedRank ? '<span class="rank-badge rank-' + esc(e.estimatedRank) + '">ランク' + esc(e.estimatedRank) + '</span>' : '';
+        // 判定バッジ：ドラフトは淡色「売価未入力」、それ以外は level の色で verdict を表示
+        var vBadge = draft
+          ? '<span class="vbadge b-draft">売価未入力</span>'
+          : (e.verdict ? '<span class="vbadge b-l' + (+e.level || 3) + '">' + esc(e.verdict) + '</span>' : '');
         var memoTag = (e.marketMemo && String(e.marketMemo).trim()) ? '<span class="memo-tag">相場メモあり</span>' : '';
 
-        // 利益（ドラフトは未入力表示）
+        // 利益（独立行で目立たせる。ドラフトは未入力表示）
         var profitHtml = draft
-          ? '<span class="hist-profit muted">利益 —</span>'
-          : '<span class="hist-profit ' + (e.profit >= 0 ? 'pos' : 'neg') + '">' + e.profit.toLocaleString('ja-JP') + '円</span>';
+          ? '<span class="hist-profit muted"><span class="lbl">利益</span>—</span>'
+          : '<span class="hist-profit ' + (e.profit >= 0 ? 'pos' : 'neg') + '"><span class="lbl">利益</span>' + e.profit.toLocaleString('ja-JP') + '円</span>';
 
-        // メタ行（売価・状態・日時）。ドラフトは売価/利益率を伏せる
+        // メタ行（売価USD・状態・利益率／原価円・発送）。ドラフトは伏せる
         var meta = draft
-          ? '<span class="muted">売価・原価・送料は未入力（編集で入力）</span><br>🕒 ' + esc(e.date)
-          : esc(sym) + esc(e.price) + ' / ' + esc(e.condition) + ' / 利益率' + esc(e.margin) + '%<br>' +
-            '原価' + (+e.cost || 0).toLocaleString('ja-JP') + '円 / ' + esc(e.shipName || '') + '<br>🕒 ' + esc(e.date);
+          ? '<span class="muted">売価・原価・送料は未入力（編集で入力）</span>'
+          : esc(sym) + esc(e.price) + ' ・ ' + esc(e.condition) + ' ・ 利益率' + esc(e.margin) + '%<br>' +
+            '原価' + (+e.cost || 0).toLocaleString('ja-JP') + '円 ・ ' + esc(e.shipName || '');
 
         var nameHtml = e.memo
           ? '<div class="hist-name">' + esc(e.memo) + '</div>'
@@ -1675,17 +1684,20 @@
 
         return '' +
           '<div class="hist-item" data-id="' + e.id + '">' +
-            img +
-            '<div class="hist-info">' +
-              nameHtml +
-              '<div class="top">' +
-                catTag +
-                rankBadge +
-                memoTag +
-                profitHtml +
+            '<div class="hist-top-row">' +
+              img +
+              '<div class="hist-info">' +
+                nameHtml +
+                '<div class="top">' +
+                  catTag +
+                  rankBadge +
+                  vBadge +
+                  memoTag +
+                '</div>' +
+                '<div class="hist-meta">' + meta + '</div>' +
+                '<div class="hist-profit-row">' + profitHtml + '</div>' +
+                '<div class="tap-hint">🕒 ' + esc(e.date) + ' ・ タップで詳細 ›</div>' +
               '</div>' +
-              '<div class="hist-meta">' + meta + '</div>' +
-              '<div class="tap-hint">タップで詳細 ›</div>' +
             '</div>' +
             '<div class="hist-btns">' +
               '<button class="hist-edit" data-id="' + e.id + '">編集</button>' +
