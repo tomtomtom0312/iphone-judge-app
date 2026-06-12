@@ -428,6 +428,16 @@
   <!-- 主要入力（写真直下・現場で最初に入力。将来は写真からAI自動入力） -->
   <div class="card primary-card single-only">
     <div class="field">
+      <label>カテゴリ（手動選択・写真なしでも可）</label>
+      <select id="category">
+        <option value="iPhone">iPhone</option>
+        <option value="trading_card_box">トレカBOX</option>
+        <option value="trading_card_single">トレカ単品</option>
+        <option value="figure">フィギュア</option>
+        <option value="other" selected>その他</option>
+      </select>
+    </div>
+    <div class="field">
       <label>商品名 / メモ</label>
       <input id="memo" class="primary-input" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
     </div>
@@ -465,16 +475,6 @@
     <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
     <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
     <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
-    <div class="field">
-      <label>カテゴリ（手動選択・写真なしでも可）</label>
-      <select id="category">
-        <option value="iPhone">iPhone</option>
-        <option value="trading_card_box">トレカBOX</option>
-        <option value="trading_card_single">トレカ単品</option>
-        <option value="figure">フィギュア</option>
-        <option value="other" selected>その他</option>
-      </select>
-    </div>
     <div id="attrsBox" class="attrs-box"></div>
   </div>
 
