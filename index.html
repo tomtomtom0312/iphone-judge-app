@@ -322,6 +322,13 @@
       resize: vertical; line-height: 1.5; font-family: inherit;
     }
     textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .search-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .search-link {
+      flex: 1; height: 44px; border-radius: 8px; background: #0d1117;
+      color: var(--text); border: 1px solid var(--line); font-size: 13px; font-weight: 600;
+    }
+    .search-link:active { background: #11161d; }
+    .search-msg { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
     .cand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .cand-row:last-child { margin-bottom: 0; }
     .cand-tag {
@@ -427,6 +434,13 @@
 
   <!-- 相場・想定売価（AI認識後に相場を確認 → 候補を反映） -->
   <div class="card single-only">
+    <p class="section-label">相場検索（商品名で各サイトを開く）</p>
+    <div class="search-row">
+      <button type="button" class="search-link" data-site="ebay">eBay Sold</button>
+      <button type="button" class="search-link" data-site="mercari">メルカリ</button>
+      <button type="button" class="search-link" data-site="google">Google</button>
+    </div>
+    <div class="search-msg" id="searchMsg"></div>
     <div class="field">
       <label>相場メモ（自分で調べた相場を貼り付け）</label>
       <textarea id="marketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円&#10;カードショップ買取: 2,800円"></textarea>
@@ -1933,6 +1947,31 @@
       $(id).addEventListener('input', updateEditPreview);
       $(id).addEventListener('change', updateEditPreview);
     });
+
+    // 相場検索リンク：商品名/メモ欄の値で eBay Sold / メルカリ / Google を新タブで開く（自動取得はしない）
+    (function () {
+      function buildUrl(site, q) {
+        var k = encodeURIComponent(q);
+        if (site === 'ebay') {
+          // sold/completed に絞り込んだ検索
+          return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1';
+        }
+        if (site === 'mercari') {
+          return 'https://jp.mercari.com/search?keyword=' + k;
+        }
+        return 'https://www.google.com/search?q=' + k;
+      }
+      var btns = document.querySelectorAll('.search-link');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function () {
+          var q = $('memo').value.trim();
+          var msg = $('searchMsg');
+          if (!q) { msg.textContent = '商品名を入力してください'; return; }
+          msg.textContent = '';
+          window.open(buildUrl(this.getAttribute('data-site'), q), '_blank');
+        });
+      }
+    })();
 
     // 売価候補「反映」ボタン（単品フォーム・編集モーダル共通）。data-cand→data-target へ反映
     (function () {
