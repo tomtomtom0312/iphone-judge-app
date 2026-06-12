@@ -757,7 +757,10 @@
         { key: 'model',   label: '機種',   from: 'productName' },
         { key: 'storage', label: '容量',   from: 'storage' },
         { key: 'color',   label: '色',     from: 'color' },
-        { key: 'simNote', label: 'SIM/ネットワーク制限メモ' }
+        { key: 'simType', label: 'SIMフリー / キャリア', type: 'select', options: ['不明', 'SIMフリー', 'キャリア'] },
+        { key: 'netLock', label: 'ネットワーク利用制限', type: 'select', options: ['不明', '○', '△', '×', '-'] },
+        { key: 'battery', label: 'バッテリー最大容量(%)' },
+        { key: 'hasBox',  label: '箱あり / なし', type: 'select', options: ['不明', 'あり', 'なし'] }
       ],
       trading_card_single: [
         { key: 'cardName', label: 'カード名', from: 'cardName' },
