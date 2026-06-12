@@ -420,6 +420,10 @@
       <input id="memo" class="primary-input" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
     </div>
     <div class="field">
+      <label>検索キーワード（相場検索用・空欄なら商品名/メモを使用）</label>
+      <input id="searchKw" type="text" placeholder="例: iPhone 13 128GB SIMフリー" />
+    </div>
+    <div class="field">
       <label id="priceLabel">想定売価</label>
       <input id="price" class="price-input" type="number" inputmode="decimal" placeholder="例: 120" />
     </div>
@@ -1964,9 +1968,10 @@
       var btns = document.querySelectorAll('.search-link');
       for (var i = 0; i < btns.length; i++) {
         btns[i].addEventListener('click', function () {
-          var q = $('memo').value.trim();
+          // 検索キーワード欄を優先、空なら商品名/メモを使用
+          var q = ($('searchKw').value.trim() || $('memo').value.trim());
           var msg = $('searchMsg');
-          if (!q) { msg.textContent = '商品名を入力してください'; return; }
+          if (!q) { msg.textContent = '商品名または検索キーワードを入力してください'; return; }
           msg.textContent = '';
           window.open(buildUrl(this.getAttribute('data-site'), q), '_blank');
         });
