@@ -737,14 +737,20 @@
       };
     }
 
-    // 認識結果から出品名（メモ欄）を組み立て（iPhoneは容量・色を付与）
+    // iPhoneは背面写真だけだと機種を誤りやすいため、AI認識結果を安全寄りに上書きする。
+    // 注意文を notes 先頭へ付与（ステータス表示・履歴詳細・CSVメモ列へ反映）。色などはそのまま。
+    var IPHONE_WARN = '背面写真のみでは機種特定不可。設定アプリ・箱・型番で確認してください。';
+    function sanitizeIphoneRecognition(j) {
+      if (normCategory(j.category) !== 'iPhone') return;
+      j.notes = IPHONE_WARN + (j.notes ? ' / ' + j.notes : '');
+    }
+
+    // 認識結果から出品名（メモ欄）を組み立て。iPhoneは機種を断定せず安全表記にする（色は付けない）
     function composeName(j) {
-      var name = j.productName || '';
       if (normCategory(j.category) === 'iPhone') {
-        if (j.storage) name += ' ' + j.storage;
-        if (j.color) name += ' ' + j.color;
+        return 'iPhone 本体（機種未確認）';
       }
-      return name.trim();
+      return (j.productName || '').trim();
     }
 
     /* ============================================================
@@ -782,13 +788,16 @@
 
     // 認識結果 j からカテゴリ別補助項目の初期値を組み立て
     function attrsFromRecognition(category, j) {
+      category = normCategory(category);
       var ai = pickAi(j);
       var out = {};
-      (CATEGORY_FIELDS[normCategory(category)] || []).forEach(function (f) {
+      (CATEGORY_FIELDS[category] || []).forEach(function (f) {
         if (f.from === 'productName') out[f.key] = j.productName || '';
         else if (f.from) out[f.key] = ai[f.from] || '';
         else out[f.key] = '';
       });
+      // iPhoneは機種を断定しない：modelは「未確認」を初期値に（ユーザーが手入力で確定）
+      if (category === 'iPhone') out.model = '未確認';
       return out;
     }
 
@@ -1094,6 +1103,7 @@
               + esc(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'));
             return;
           }
+          sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           // 認識結果を保持（保存時に履歴へ載せる）
           currentCategory = normCategory(j.category);
           currentRank = j.estimatedRank || '';
@@ -1234,6 +1244,7 @@
             renderBurstStatus(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'), 'ai-lo');
             return;
           }
+          sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           var entry = entryFromRecognition(j, thumb);
           var list = getHistory();
           list.unshift(entry);
