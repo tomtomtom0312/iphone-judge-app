@@ -62,6 +62,10 @@
       background: var(--accent); color: #fff; border: none;
       border-radius: 12px; font-size: 17px; font-weight: 600;
     }
+    .photo-btn-sub {
+      margin-top: 10px; background: transparent; color: var(--accent);
+      border: 1px solid var(--accent);
+    }
     .photo-input { display: none; }
     .preview-wrap { position: relative; margin-top: 12px; display: none; }
     .preview { border-radius: 12px; width: 100%; display: block; }
@@ -382,9 +386,11 @@
       <button data-mode="single" class="active">単品判定</button>
       <button data-mode="burst">連続撮影</button>
     </div>
-    <button class="photo-btn" id="cameraBtn">📷 写真を撮る / 選ぶ</button>
+    <button class="photo-btn" id="cameraBtn">📷 写真を撮る</button>
+    <button class="photo-btn photo-btn-sub" id="albumBtn">🖼 アルバムから選ぶ</button>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
+    <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
     <div class="crop-stage" id="cropStage" style="display:none;">
       <img id="cropImg" alt="プレビュー" />
       <div class="crop-frame"></div>
@@ -984,13 +990,17 @@
       reader.readAsDataURL(file);
     }
 
-    $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });
-    $('photoInput').addEventListener('change', function (e) {
+    // 写真の取得元（カメラ=capture付き / アルバム=capture無し）が違うだけで、処理は共通
+    function handlePhotoFile(e) {
       var file = e.target.files[0];
       if (!file) return;
       loadForCrop(file);
-      $('photoInput').value = ''; // 同じ写真を選び直しても change が発火するように
-    });
+      e.target.value = ''; // 同じ写真を選び直しても change が発火するように
+    }
+    $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });    // カメラ起動優先
+    $('albumBtn').addEventListener('click', function () { $('photoInputLib').click(); });  // フォトライブラリ/ファイル選択
+    $('photoInput').addEventListener('change', handlePhotoFile);
+    $('photoInputLib').addEventListener('change', handlePhotoFile);
 
     // ドラッグで位置調整 / ＋−リセットでズーム（ポインタイベント＝タッチ・マウス両対応）
     (function () {
@@ -1033,8 +1043,9 @@
       var singles = document.querySelectorAll('.single-only');
       for (var s = 0; s < singles.length; s++) singles[s].style.display = burst ? 'none' : '';
       $('burstCard').style.display = burst ? '' : 'none';
-      // 写真カード内の見た目
-      $('cameraBtn').textContent = burst ? '📷 連続撮影：1枚撮る' : '📷 写真を撮る / 選ぶ';
+      // 写真カード内の見た目（アルバムボタンは両モード共通。撮影ボタンのみラベルを切替）
+      $('cameraBtn').textContent = burst ? '📷 連続撮影：1枚撮る' : '📷 写真を撮る';
+      $('albumBtn').textContent = burst ? '🖼 連続撮影：アルバムから1枚' : '🖼 アルバムから選ぶ';
       $('aiStatus').textContent = '';
       resetCrop(); // モード切替時はクロップ台を片付ける
       if (burst) renderBurstStatus();
