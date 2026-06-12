@@ -178,7 +178,7 @@
       border-radius: 12px; padding: 10px; margin-bottom: 10px;
     }
     .hist-item img {
-      width: 64px; height: 64px; object-fit: cover;
+      width: 48px; height: 48px; object-fit: cover;
       border-radius: 8px; flex-shrink: 0; background: #000;
     }
     .hist-info { flex: 1; min-width: 0; font-size: 13px; }
@@ -825,7 +825,8 @@
     }
 
     // --- 写真（撮影後の静止画をクロップ調整 → AI認識。ライブカメラは使わない） ---
-    var currentPhoto = null;   // 履歴保存用サムネ(400px) — クロップ枠から生成
+    var THUMB_PX = 120;        // 履歴サムネの保存サイズ（localStorage節約）。AI送信は別途768px
+    var currentPhoto = null;   // 履歴保存用サムネ(THUMB_PX) — クロップ枠から生成
     var currentAiImage = null; // AI認識用(768px) — クロップ枠から生成
     // 単品モードでAI認識した結果（保存時に履歴へ載せる）
     var currentCategory = 'other';
@@ -931,6 +932,7 @@
     // ファイル → 作業用に縮小した画像をクロップ台に読み込む
     function loadForCrop(file) {
       currentCategory = 'other'; currentRank = ''; currentAi = null; currentAttrs = {};
+      currentEntryId = null; // 新しい写真＝新しい商品。次の保存は新規行になる
       renderAttrs($('attrsBox'), 'other', {});
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
@@ -954,7 +956,7 @@
             crop.z = 1; crop.tx = 0; crop.ty = 0; crop.active = true; crop.locked = false; crop.collapsed = false;
             showCropUI(true);
             cropLayout();
-            currentPhoto = cropRender(400); // 初期（中央）サムネ。未AIの手動保存でも写真が残る
+            currentPhoto = cropRender(THUMB_PX); // 初期（中央）サムネ。未AIの手動保存でも写真が残る
           };
           cimg.src = work;
         };
@@ -1032,7 +1034,7 @@
     function onAiConfirm() {
       if (!crop.active || crop.locked) { if (!crop.active) $('aiStatus').textContent = '先に写真を撮ってください。'; return; }
       // 枠の画像を先に確定 → この位置でロック（以降スクロールで動かない。再調整ボタンで解除）
-      var thumb = cropRender(400), ai = cropRender(768);
+      var thumb = cropRender(THUMB_PX), ai = cropRender(768);
       setCropLocked(true);
       if (captureMode === 'burst') {
         burstRecognize(thumb, ai);
@@ -1109,6 +1111,11 @@
             '<span class="ai-badge ' + cls + '">AI提案 ' + Math.round(c * 100) + '%</span>' +
             detail.join(' / ') + ' / 内容を確認・修正してください';
           if (j.notes) html += '<br>⚠️ ' + esc(j.notes);
+          // AI認識成功＝この時点で履歴へ自動保存（売価未入力ならドラフト。以降は同じ行を更新）
+          if (upsertCurrent()) {
+            renderHistory();
+            html += '<br><span class="ai-badge ai-hi">自動保存済み</span>売価・原価は後から入力できます（履歴へ反映）';
+          }
           $('aiStatus').innerHTML = html;
           setCropCollapsed(true); // 認識できたら画像を畳んで判定結果を近づける（トグルで再表示可）
         })
@@ -1369,6 +1376,7 @@
     function num(id) { var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
 
     var lastResult = null; // 直近の有効な判定（保存用）
+    var currentEntryId = null; // 単品フォームで扱い中の履歴行ID（自動保存＝upsert用。新写真でnull）
 
     // --- 5段階評価 ---
     var LEVELS = {
@@ -1522,6 +1530,15 @@
       $(id).addEventListener('input', function () { calc(); });
       $(id).addEventListener('change', function () { calc(); });
     });
+    // 後からの変更を「自動保存済みの現在行」へ反映（change=確定時のみ。入力中の全再描画は避けてちらつき回避）
+    function syncCurrent() {
+      if (!currentEntryId) return; // AI未認識など未保存なら何もしない（手動は保存ボタンで作成）
+      if (upsertCurrent()) renderHistory();
+    }
+    ['price', 'cost', 'condition', 'shipping', 'memo', 'searchKw',
+      'marketMemo', 'candLow', 'candStd', 'candHigh'].forEach(function (id) {
+      $(id).addEventListener('change', syncCurrent);
+    });
     // 設定（販路ごと）→ 再計算＋保存
     SETTING_IDS.forEach(function (id) {
       $(id).addEventListener('input', function () { calc(); saveMarketSettings(); });
@@ -1530,13 +1547,15 @@
 
     // --- 履歴 ---
     var HIST_KEY = 'judgeHistory';
+    var MAX_HIST = 20; // 履歴の最大保存件数。超過分は古い順（末尾）から自動削除
 
     function getHistory() {
       try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); }
       catch (e) { return []; }
     }
     function setHistory(list) {
-      localStorage.setItem(HIST_KEY, JSON.stringify(list));
+      // 新しい順（先頭が最新）なので、先頭から MAX_HIST 件だけ残す
+      localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, MAX_HIST)));
     }
 
     function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -1546,52 +1565,63 @@
         ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
 
-    function saveCurrent() {
-      if (!lastResult) return;
+    // 単品フォームの現在状態から履歴エントリを組み立てる。recompute で利益・判定を確定（売価0ならドラフト）
+    function buildCurrentEntry() {
       // 直近のクロップ位置をサムネへ反映（調整したのにAI未実行で保存した場合も枠どおりに残す）
-      if (crop.active) { var t = cropRender(400); if (t) currentPhoto = t; }
-      var entry = {
-        id: String(new Date().getTime()) + Math.round(Math.random() * 1000),
+      if (crop.active) { var t = cropRender(THUMB_PX); if (t) currentPhoto = t; }
+      var market = activeMarket;
+      var m = MARKETPLACES[market] || MARKETPLACES.ebay;
+      var shipSel = $('shipping');
+      var e = {
+        id: currentEntryId || (String(new Date().getTime()) + Math.round(Math.random() * 1000)),
         date: nowLabel(),
         photo: currentPhoto || '',
         memo: ($('memo').value || '').trim(),
+        searchKw: ($('searchKw').value || '').trim(),
         category: currentCategory || 'other',
         estimatedRank: currentRank || '',
         ai: currentAi || null,
         marketMemo: ($('marketMemo').value || '').trim(),
         cand: { low: $('candLow').value, std: $('candStd').value, high: $('candHigh').value },
         attrs: readAttrs($('attrsBox')),
-        market: lastResult.market,
-        marketName: lastResult.marketName,
-        currency: lastResult.currency,
-        symbol: lastResult.symbol,
-        condition: lastResult.condition,
-        price: lastResult.price,
-        cost: lastResult.cost,
-        ship: lastResult.ship,
-        shipName: lastResult.shipName,
-        profit: lastResult.profit,
-        margin: lastResult.margin,
-        level: lastResult.level,
-        verdict: lastResult.verdict,
-        vClass: lastResult.vClass,
-        reasons: lastResult.reasons || [],
-        rate: lastResult.rate,
-        feeRate: lastResult.feeRate,
-        thOk: lastResult.thOk,
-        thNg: lastResult.thNg,
-        marginOk: lastResult.marginOk,
-        marginNg: lastResult.marginNg
+        market: market,
+        marketName: m.name,
+        currency: m.currency,
+        symbol: m.symbol,
+        condition: $('condition').value,
+        price: num('price'),
+        cost: num('cost'),
+        ship: num('shipping'),
+        shipName: shipSel.options.length ? shipSel.options[shipSel.selectedIndex].text : ''
       };
+      recompute(e); // profit/margin/level/verdict/draft ＋ 再計算パラメータを確定
+      return e;
+    }
+
+    // 現在のエントリを履歴へ upsert（currentEntryId があれば上書き＝重複防止、無ければ新規）
+    function upsertCurrent() {
+      var e = buildCurrentEntry();
       var list = getHistory();
-      list.unshift(entry); // 新しい順
-      try {
-        setHistory(list);
-      } catch (e) {
-        alert('保存容量が上限に達しました。古い履歴を削除してください。');
-        return;
+      var idx = -1;
+      if (currentEntryId) {
+        for (var i = 0; i < list.length; i++) { if (list[i].id === currentEntryId) { idx = i; break; } }
       }
-      renderHistory();
+      if (idx >= 0) {
+        e.date = list[idx].date; // 既存行は登録日時を保持（並びも維持）
+        list[idx] = e;
+      } else {
+        list.unshift(e); // 新規（または20件丸めで脱落していた場合）は先頭へ
+      }
+      try { setHistory(list); }
+      catch (err) { alert('保存できませんでした（容量上限の可能性）。古い履歴を削除してください。'); return false; }
+      currentEntryId = e.id; // 以降は同じ行を更新（重複保存しない）
+      return true;
+    }
+
+    // 💾保存ボタン：upsert（自動保存済みなら同じ行を更新するので重複しない）
+    function saveCurrent() {
+      if (!lastResult) return; // 売価未入力時はボタン無効なので通常ここには来ない
+      if (upsertCurrent()) renderHistory();
     }
 
     function deleteEntry(id) {
@@ -1614,7 +1644,7 @@
 
     function renderHistory() {
       var list = getHistory();
-      $('histCount').textContent = '(' + list.length + ')';
+      $('histCount').textContent = '(' + list.length + ' / ' + MAX_HIST + ')';
       $('histEmpty').style.display = list.length ? 'none' : 'block';
       var html = list.map(function (e) {
         var draft = e.draft || e.profit == null;   // 売価未入力のドラフト
