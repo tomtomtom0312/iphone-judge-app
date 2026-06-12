@@ -412,11 +412,15 @@
       <label>商品名 / メモ</label>
       <input id="memo" class="primary-input" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
     </div>
-    <div class="field" style="margin-bottom:0;">
+    <div class="field">
       <label id="priceLabel">想定売価</label>
       <input id="price" class="price-input" type="number" inputmode="decimal" placeholder="例: 120" />
     </div>
-    <!-- ミニ判定バー：売価を入れて計算できると即表示（詳細な内訳は下部に残す） -->
+    <div class="field" style="margin-bottom:0;">
+      <label>原価（円）</label>
+      <input id="cost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
+    </div>
+    <!-- ミニ判定バー：売価・原価を入れると即表示（詳細な内訳は下部に残す） -->
     <div id="miniVerdict" class="mini-verdict" style="display:none;"></div>
     <p class="hint" id="aiHint">💡 将来（Phase 2）：写真から商品名・想定売価を自動入力予定。手入力で上書きも可。</p>
   </div>
@@ -447,11 +451,6 @@
         <option value="難あり">難あり</option>
         <option value="ジャンク">ジャンク</option>
       </select>
-    </div>
-
-    <div class="field">
-      <label>原価（円）</label>
-      <input id="cost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
     </div>
 
     <div class="field" style="margin-bottom:0;">
