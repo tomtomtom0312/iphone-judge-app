@@ -465,6 +465,16 @@
     <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
     <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
     <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
+    <div class="field">
+      <label>カテゴリ（手動選択・写真なしでも可）</label>
+      <select id="category">
+        <option value="iPhone">iPhone</option>
+        <option value="trading_card_box">トレカBOX</option>
+        <option value="trading_card_single">トレカ単品</option>
+        <option value="figure">フィギュア</option>
+        <option value="other" selected>その他</option>
+      </select>
+    </div>
     <div id="attrsBox" class="attrs-box"></div>
   </div>
 
@@ -966,6 +976,7 @@
     function loadForCrop(file) {
       currentCategory = 'other'; currentRank = ''; currentAi = null; currentAttrs = {};
       currentEntryId = null; // 新しい写真＝新しい商品。次の保存は新規行になる
+      $('category').value = 'other'; // 手動カテゴリ選択UIも初期化
       renderAttrs($('attrsBox'), 'other', {});
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
@@ -1127,6 +1138,7 @@
           sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           // 認識結果を保持（保存時に履歴へ載せる）
           currentCategory = normCategory(j.category);
+          $('category').value = currentCategory; // 手動カテゴリ選択UIにもAI結果を反映
           currentRank = j.estimatedRank || '';
           currentAi = pickAi(j);
           currentAttrs = attrsFromRecognition(currentCategory, j);
@@ -1579,6 +1591,19 @@
       'marketMemo', 'candLow', 'candStd', 'candHigh'].forEach(function (id) {
       $(id).addEventListener('change', syncCurrent);
     });
+    // 手動カテゴリ選択（写真なしでも可）：補助項目を切替（既存入力＞AI生値で初期化）。編集モーダルの onEditCategoryChange と同作法
+    function onCategoryChange() {
+      currentCategory = normCategory($('category').value);
+      var cur = readAttrs($('attrsBox'));
+      var base = currentAi ? attrsFromRecognition(currentCategory, currentAi) : {};
+      // iPhoneは機種を断定しない：AI未使用でも model 初期値は「未確認」（安全寄り）
+      if (currentCategory === 'iPhone' && !base.model) base.model = '未確認';
+      Object.keys(cur).forEach(function (k) { if (cur[k]) base[k] = cur[k]; }); // 既存入力を優先保持
+      currentAttrs = base;
+      renderAttrs($('attrsBox'), currentCategory, currentAttrs);
+      syncCurrent(); // 自動保存済みなら現在行へ反映（未保存なら何もしない）
+    }
+    $('category').addEventListener('change', onCategoryChange);
     // 設定（販路ごと）→ 再計算＋保存
     SETTING_IDS.forEach(function (id) {
       $(id).addEventListener('input', function () { calc(); saveMarketSettings(); });
