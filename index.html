@@ -514,6 +514,28 @@
     <button class="save-btn" id="saveBtn" disabled>💾 この判定を履歴に保存</button>
   </div>
 
+  <!-- 販路比較（国内 vs eBay）：手入力ベースで利益を比較。Phase1は画面表示のみ・履歴/CSVへは保存しない -->
+  <div class="card single-only">
+    <p class="section-label">🆚 販路比較（国内 vs eBay）</p>
+    <div class="row">
+      <div class="field" style="margin-bottom:0;">
+        <label>国内売価（円）</label>
+        <input id="domPrice" type="number" inputmode="numeric" placeholder="例: 30000" />
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>国内送料（円）</label>
+        <input id="domShip" type="number" inputmode="numeric" placeholder="空欄＝0円" />
+      </div>
+    </div>
+    <div class="breakdown" id="cmpBlock">
+      <div class="line"><span>国内利益</span><span id="cmpDom">—</span></div>
+      <div class="line"><span>eBay利益</span><span id="cmpEbay">—</span></div>
+      <div class="line profit"><span>差額（eBay − 国内）</span><span id="cmpDiff">—</span></div>
+    </div>
+    <div id="cmpVerdict" class="mini-verdict b-l3">売価を入力すると判定します</div>
+    <p class="hint">eBay側（売価・為替・手数料・国際送料）と原価は上の入力・⚙️設定の値を使用します。表示のみで履歴・CSVには保存しません。</p>
+  </div>
+
   <!-- 設定（為替・手数料・しきい値）販路ごとに保存 -->
   <div class="card">
     <details>
@@ -1503,6 +1525,7 @@
         $('miniVerdict').style.display = 'none';
         lastResult = null;
         $('saveBtn').disabled = true;
+        compareCalc(); // eBay未入力でも国内側の比較は更新する
         return;
       }
 
@@ -1572,7 +1595,65 @@
         marginNg: marginNg
       };
       $('saveBtn').disabled = false;
+      compareCalc(); // eBay側の利益が更新されたら比較も更新（既存の判定エンジンは不変）
     }
+
+    // --- 販路比較（国内 vs eBay）：Phase1は手入力ベース・画面表示のみ（履歴/CSV保存なし） ---
+    // しきい値（おすすめ判定用の定数）
+    var CMP_DIFF_MIN = 1000; // 円：差額がこの幅未満なら「要確認」（拮抗）
+    var CMP_THIN = 500;      // 円：両販路とも利益がこの額未満なら「要確認」（薄利）
+    function compareCalc() {
+      var domPrice = num('domPrice');
+      var domShip = num('domShip');
+      var cost = num('cost');           // 原価は同一商品＝既存入力を共有
+      var price = num('price');         // eBay売価（USD）
+      var rate = num('rate');
+      var feeRate = num('feeRate');
+      var ship = num('shipping');       // 国際送料（eBayの発送方法送料）
+
+      var cv = $('cmpVerdict');
+
+      // 結果エリア（cmpBlock / cmpVerdict）は常時表示。売価が両方未入力のときだけダッシュ表示にする
+      if (domPrice <= 0 && price <= 0) {
+        $('cmpDom').textContent = '—'; $('cmpDom').className = '';
+        $('cmpEbay').textContent = '—'; $('cmpEbay').className = '';
+        $('cmpDiff').textContent = '—'; $('cmpDiff').className = '';
+        cv.className = 'mini-verdict b-l3';
+        cv.textContent = '売価を入力すると判定します';
+        return;
+      }
+
+      var domProfit = domPrice - cost - domShip;            // 国内利益
+      var ebayRevenue = price * rate;                       // eBay売上円
+      var ebayFee = ebayRevenue * (feeRate / 100);          // eBay手数料
+      var ebayProfit = ebayRevenue - ebayFee - cost - ship; // eBay利益（既存 calc と同一式）
+      var diff = ebayProfit - domProfit;                    // 差額（eBay − 国内）
+
+      $('cmpDom').textContent = yen(domProfit);
+      $('cmpDom').className = domProfit >= 0 ? 'pos' : 'neg';
+      $('cmpEbay').textContent = yen(ebayProfit);
+      $('cmpEbay').className = ebayProfit >= 0 ? 'pos' : 'neg';
+      $('cmpDiff').textContent = (diff >= 0 ? '+' : '') + yen(diff);
+      $('cmpDiff').className = diff >= 0 ? 'pos' : 'neg';
+
+      // おすすめ販路（既存 judge とは独立した簡易ロジック）
+      var best = Math.max(domProfit, ebayProfit);
+      var label, cls;
+      if (best < CMP_THIN || Math.abs(diff) < CMP_DIFF_MIN) {
+        label = '🤔 要確認（差が小さい／利益が薄い）'; cls = 'l3';
+      } else if (ebayProfit > domProfit) {
+        label = '🌏 おすすめ：eBay'; cls = 'l5';
+      } else {
+        label = '🏠 おすすめ：国内'; cls = 'l5';
+      }
+      cv.className = 'mini-verdict b-' + cls;
+      cv.textContent = label;
+    }
+    // 比較用リスナー：国内側＋eBay側の全入力に直接バインド（calc() 経由に依存せず確実に発火）
+    ['domPrice', 'domShip', 'price', 'cost', 'shipping', 'rate', 'feeRate'].forEach(function (id) {
+      $(id).addEventListener('input', compareCalc);
+      $(id).addEventListener('change', compareCalc);
+    });
 
     // 販路変更
     $('market').addEventListener('change', function () { applyMarketplace(this.value); });
@@ -2170,6 +2251,7 @@
     $('market').value = activeMarket;
     applyMarketplace(activeMarket);
     renderHistory();
+    compareCalc(); // 初期表示（売価が事前入力済みなら比較も表示）
   </script>
 </body>
 </html>
