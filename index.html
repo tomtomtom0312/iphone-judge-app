@@ -773,7 +773,16 @@
         { key: 'simType', label: 'SIMフリー / キャリア', type: 'select', options: ['不明', 'SIMフリー', 'キャリア'] },
         { key: 'netLock', label: 'ネットワーク利用制限', type: 'select', options: ['不明', '○', '△', '×', '-'] },
         { key: 'battery', label: 'バッテリー最大容量(%)' },
-        { key: 'hasBox',  label: '箱あり / なし', type: 'select', options: ['不明', 'あり', 'なし'] }
+        { key: 'hasBox',  label: '箱あり / なし', type: 'select', options: ['不明', 'あり', 'なし'] },
+        // 現場チェックリスト（第1バッチ）。状態確認系は select、識別/記録系は素のテキスト
+        { key: 'imei',        label: 'IMEI' },
+        { key: 'modelNumber', label: 'モデル番号' },
+        { key: 'screenCrack', label: '画面割れ',   type: 'select', options: ['なし', 'あり', '不明'] },
+        { key: 'backCrack',   label: '背面割れ',   type: 'select', options: ['なし', 'あり', '不明'] },
+        { key: 'cameraCrack', label: 'カメラ割れ', type: 'select', options: ['なし', 'あり', '不明'] },
+        { key: 'faceId',      label: 'Face ID可否', type: 'select', options: ['OK', 'NG', '不明'] },
+        { key: 'water',       label: '水没反応',   type: 'select', options: ['なし', 'あり', '不明'] },
+        { key: 'accessories', label: '付属品' }
       ],
       trading_card_single: [
         { key: 'cardName', label: 'カード名', from: 'cardName' },
