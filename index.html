@@ -2049,24 +2049,40 @@
     function exportCsv() {
       var list = getHistory();
       if (!list.length) { alert('履歴がありません。'); return; }
-      var headers = ['日時', 'カテゴリ', '状態ランク', '販路', '商品名/メモ', '商品状態', '売価(通貨)', '通貨',
-        '原価(円)', '送料(円)', '利益(円)', '利益率(%)', '判定'];
+      var headers = ['保存日時', '販路', 'カテゴリ', '商品名', '検索キーワード', '商品状態', '状態ランク', '判定結果',
+        '想定売価USD', '通貨', '為替レート', '売上円', '原価円', '送料円', '手数料円', '利益円', '利益率(%)',
+        '相場メモ', '売価候補_安めUSD', '売価候補_標準USD', '売価候補_強気USD', '発送方法', 'メモ/注意点'];
       var rows = list.map(function (e) {
         var draft = e.draft || e.profit == null;
+        var price = +e.price || 0, rate = +e.rate || 0, feeRate = +e.feeRate || 0;
+        var revenue = Math.round(price * rate);              // 売上円 = 想定売価 × 為替レート
+        var fee = Math.round(revenue * (feeRate / 100));     // 手数料円 = 売上 × 手数料率
+        var cand = e.cand || {};
+        var notes = (e.ai && e.ai.notes) || '';
         return [
           e.date,
-          categoryLabel(e.category),
-          e.estimatedRank || '',
           e.marketName || '',
+          categoryLabel(e.category),
           e.memo || '',
-          e.condition,
+          e.searchKw || '',
+          e.condition || '',
+          e.estimatedRank || '',
+          draft ? '売価未入力' : (e.verdict || ''),
           draft ? '' : e.price,
           e.currency || '',
+          e.rate != null ? e.rate : '',
+          draft ? '' : revenue,
           draft ? '' : e.cost,
           draft ? '' : e.ship,
+          draft ? '' : fee,
           draft ? '' : e.profit,
           draft ? '' : e.margin,
-          draft ? '売価未入力' : e.verdict
+          e.marketMemo || '',
+          cand.low || '',
+          cand.std || '',
+          cand.high || '',
+          e.shipName || '',
+          notes
         ].map(csvEscape).join(',');
       });
       var csv = '﻿' + headers.join(',') + '\r\n' + rows.join('\r\n') + '\r\n';
