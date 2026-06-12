@@ -81,6 +81,14 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 - ドラフト行は 売価/売上/手数料/利益/利益率 を空欄、判定結果は「売価未入力」
 - 検証: node --check＋サンプル生成（通常/カンマ・改行エスケープ/ドラフトの各行が23列・BOM/CRLFあり）
 
+## iPhoneカテゴリ入力テンプレ拡張（2026-06-12）— コード実装済み・未デプロイ
+- ✅ `CATEGORY_FIELDS.iPhone` を拡張。項目: 機種 / 容量 / 色 / SIMフリー・キャリア(select) / ネットワーク利用制限(select ○△×-) / バッテリー最大容量(%) / 箱あり・なし(select)
+- 変更はUI表示＋入力保存のみ（既存 `renderAttrs`/`readAttrs`/保存/詳細表示を流用。`entry.attrs` に非破壊保存）
+- CSVには未追加
+- 旧 `simNote` は廃止。旧データ（simNote/旧値）は localStorage 上に残り、新テンプレでは非表示になるだけ（消えない）
+- 表示箇所: 編集モーダル(カテゴリ=iPhone)は即利用可。単品フォームはAIがiPhoneを認識した後に表示（AIは未デプロイ）。AI未使用で単品手入力したい場合は別途「単品フォームに手動カテゴリセレクタ追加」が必要
+- 検証: node --check＋テンプレ項目数/AI初期化の単体シミュレーション
+
 ### 次にやること（デプロイ＝ユーザー作業）
 1. Anthropic APIキー取得＋**Spend limit 設定**
 2. GitHub に push → Vercel 連携 → 環境変数 `ANTHROPIC_API_KEY` 登録 → デプロイ
