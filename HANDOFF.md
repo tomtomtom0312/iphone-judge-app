@@ -106,6 +106,14 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 - 詳細モーダルは**値が入った項目のみ表示**（空＝不明は非表示）。
 - **CSV列にはまだ追加していない**（attrsはCSV未出力）。利益計算・AI認識・履歴保存構造は無変更（`renderAttrs` 共通処理も不変）。
 
+## 手動カテゴリ選択（2026-06-12, 74a075c）— デプロイ済み
+- 単品フォームの補助項目欄（`attrsBox`）直上に**手動カテゴリ選択 `<select id="category">`** を追加。**写真なしでもカテゴリを選択可能**。
+- 選択肢: iPhone / トレカBOX / トレカ単品 / フィギュア / その他（初期=その他）。`single-only` カード内＝単品モードのみ表示（連続撮影の `burstCategoryHint` とは独立・無干渉）。
+- **iPhoneを手動選択すると既存のiPhone現場チェックリストが表示**され手入力できる。手動iPhone選択時の **model 初期値は「未確認」**（AI未使用でも安全寄り）。`onCategoryChange`（編集モーダルの `onEditCategoryChange` と同作法。既存入力＞AI生値で初期化）。
+- **AI認識後はセレクタにAIカテゴリが反映**（`$('category').value = currentCategory`）。新写真（`loadForCrop`）でセレクタは `other` にリセット。
+- **手動でカテゴリを変更した場合はそのカテゴリが保存される**（`buildCurrentEntry` の `category: currentCategory` 経由。保存ロジック変更なし。last-write-wins）。
+- 既存の利益計算・AI認識・履歴保存構造・CSV列は無変更。CSVは既存の「カテゴリ」列に手動カテゴリが入るのみ（列追加なし）。実装ファイルは index.html のみ。
+
 ## 画像入力をカメラ/アルバムに分割（2026-06-12, 46a6160）— デプロイ済み
 - 画像入力ボタンを **「📷 写真を撮る」** と **「🖼 アルバムから選ぶ」** の2つに分割（縦2段。撮る=主ボタン、アルバム=副ボタン アウトライン）。
 - 「写真を撮る」= `capture="environment"` 付き input（`#photoInput`）でカメラ起動を優先。「アルバムから選ぶ」= `capture` 無し input（`#photoInputLib`）でフォトライブラリ/ファイル選択を開く。PCは両方ともファイル選択。
