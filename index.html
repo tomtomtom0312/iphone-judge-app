@@ -312,6 +312,8 @@
       background: #0d1117; color: var(--text); border: 1px solid var(--line);
     }
     .crop-controls button:active { background: #11161d; }
+    /* ロック中：枠の上でもページがスクロールできる（画像は動かさない） */
+    .crop-stage.locked { touch-action: auto; }
 
     /* 相場メモ・売価候補・カテゴリ別補助 */
     textarea {
@@ -342,6 +344,12 @@
     .edit-preview {
       margin-top: 14px; padding: 12px; border-radius: 10px;
       background: #0d1117; border: 1px solid var(--line); font-size: 14px; text-align: center;
+    }
+
+    /* ミニ判定バー（想定売価の直下・色は判定バッジ b-* を流用） */
+    .mini-verdict {
+      margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+      font-size: 15px; font-weight: 700; text-align: center; line-height: 1.5;
     }
   </style>
 </head>
@@ -376,6 +384,8 @@
       <button type="button" id="zoomIn">＋</button>
     </div>
     <button class="ai-btn" id="aiBtn" style="display:none;" disabled>🤖 この位置でAI認識</button>
+    <button class="ai-btn" id="cropReadjust" style="display:none;">🔓 画像位置を再調整</button>
+    <button class="ai-btn" id="cropToggle" style="display:none;">🖼 画像を隠す</button>
     <div class="ai-status" id="aiStatus"></div>
   </div>
 
@@ -406,6 +416,8 @@
       <label id="priceLabel">想定売価</label>
       <input id="price" class="price-input" type="number" inputmode="decimal" placeholder="例: 120" />
     </div>
+    <!-- ミニ判定バー：売価を入れて計算できると即表示（詳細な内訳は下部に残す） -->
+    <div id="miniVerdict" class="mini-verdict" style="display:none;"></div>
     <p class="hint" id="aiHint">💡 将来（Phase 2）：写真から商品名・想定売価を自動入力予定。手入力で上書きも可。</p>
   </div>
 
@@ -809,18 +821,36 @@
     var WORK_MAX = 2000;    // 作業用に読み込む画像の最大辺（メモリ・処理を軽く保つ）
     // クロップ状態（ガイド枠＝表示VW×VH、image は base*z で拡大し tx,ty で平行移動）
     var crop = {
-      active: false, NW: 0, NH: 0, VW: 0, VH: 0, base: 1, z: 1, tx: 0, ty: 0,
+      active: false, locked: false, collapsed: false, NW: 0, NH: 0, VW: 0, VH: 0, base: 1, z: 1, tx: 0, ty: 0,
       dragging: false, px: 0, py: 0, stx: 0, sty: 0
     };
 
-    function showCropUI(show) {
-      $('cropStage').style.display = show ? 'block' : 'none';
-      $('cropControls').style.display = show ? 'flex' : 'none';
-      $('cropHint').style.display = show ? 'block' : 'none';
-      $('aiBtn').style.display = show ? '' : 'none';
-      $('aiBtn').disabled = !show;
+    // クロップUIの一元描画（active=画像あり / locked=位置ロック / collapsed=折りたたみ）
+    function renderCropUI() {
+      var on = crop.active, locked = crop.locked, collapsed = crop.collapsed, st = $('cropStage');
+      var showImg = on && !collapsed;       // 枠・操作系を見せるか
+      // 折りたたみトグル：画像があるときだけ表示
+      $('cropToggle').style.display = on ? '' : 'none';
+      $('cropToggle').textContent = collapsed ? '🖼 画像を表示' : '🖼 画像を隠す';
+      // クロップ枠・案内
+      st.style.display = showImg ? 'block' : 'none';
+      $('cropHint').style.display = showImg ? 'block' : 'none';
+      if (st.classList) { locked ? st.classList.add('locked') : st.classList.remove('locked'); }
+      // 操作ボタン（調整可能なときだけ）/ 再調整（ロック中だけ）
+      $('cropControls').style.display = (showImg && !locked) ? 'flex' : 'none';
+      $('aiBtn').style.display = (showImg && !locked) ? '' : 'none';
+      $('aiBtn').disabled = !(showImg && !locked);
+      $('cropReadjust').style.display = (showImg && locked) ? '' : 'none';
+      $('cropHint').textContent = locked
+        ? '🔒 位置をロックしました。スクロールしても画像は動きません。動かすときは「画像位置を再調整」。'
+        : '点線枠の中だけがAIに送られます。写真を指でドラッグして位置を合わせ、＋ / − で拡大・縮小できます。';
     }
-    function resetCrop() { crop.active = false; showCropUI(false); }
+    function showCropUI(show) { crop.active = !!show; renderCropUI(); }
+    // 画像位置のロック/解除（ロック中はドラッグ不可・touch-action:auto でページがスクロールできる）
+    function setCropLocked(locked) { crop.locked = !!locked; renderCropUI(); }
+    // 画像エリアの折りたたみ/展開（AI認識後に自動で折りたたむ。トグルで再表示）
+    function setCropCollapsed(collapsed) { crop.collapsed = !!collapsed; renderCropUI(); }
+    function resetCrop() { crop.active = false; crop.locked = false; crop.collapsed = false; renderCropUI(); }
 
     // クロップ枠を画像へ反映（transform。translateは画面px・scaleは中心基準）
     function cropApply() {
@@ -904,7 +934,7 @@
           cimg.onload = function () {
             crop.NW = cimg.naturalWidth || ww;
             crop.NH = cimg.naturalHeight || hh;
-            crop.z = 1; crop.tx = 0; crop.ty = 0; crop.active = true;
+            crop.z = 1; crop.tx = 0; crop.ty = 0; crop.active = true; crop.locked = false; crop.collapsed = false;
             showCropUI(true);
             cropLayout();
             currentPhoto = cropRender(400); // 初期（中央）サムネ。未AIの手動保存でも写真が残る
@@ -930,7 +960,7 @@
     (function () {
       var stage = $('cropStage');
       stage.addEventListener('pointerdown', function (e) {
-        if (!crop.active) return;
+        if (!crop.active || crop.locked) return; // ロック中はドラッグしない（スクロール優先）
         crop.dragging = true;
         crop.px = e.clientX; crop.py = e.clientY;
         crop.stx = crop.tx; crop.sty = crop.ty;
@@ -951,6 +981,8 @@
       $('zoomIn').addEventListener('click', function () { cropZoom(1.25); });
       $('zoomOut').addEventListener('click', function () { cropZoom(1 / 1.25); });
       $('zoomReset').addEventListener('click', cropResetView);
+      $('cropReadjust').addEventListener('click', function () { setCropLocked(false); });
+      $('cropToggle').addEventListener('click', function () { setCropCollapsed(!crop.collapsed); });
     })();
 
     // --- 撮影モード切替 ---
@@ -981,12 +1013,15 @@
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
     // 「この位置でAI認識」：クロップ枠の画像を生成し、モードに応じて認識へ回す
     function onAiConfirm() {
-      if (!crop.active) { $('aiStatus').textContent = '先に写真を撮ってください。'; return; }
+      if (!crop.active || crop.locked) { if (!crop.active) $('aiStatus').textContent = '先に写真を撮ってください。'; return; }
+      // 枠の画像を先に確定 → この位置でロック（以降スクロールで動かない。再調整ボタンで解除）
+      var thumb = cropRender(400), ai = cropRender(768);
+      setCropLocked(true);
       if (captureMode === 'burst') {
-        burstRecognize(cropRender(400), cropRender(768));
+        burstRecognize(thumb, ai);
       } else {
-        currentPhoto = cropRender(400);
-        currentAiImage = cropRender(768);
+        currentPhoto = thumb;
+        currentAiImage = ai;
         recognize();
       }
     }
@@ -998,7 +1033,8 @@
       var orig = btn.textContent;
       btn.disabled = true;
       btn.textContent = '🤖 認識中...';
-      $('aiStatus').textContent = '';
+      // ロックでボタンが隠れても進捗が分かるよう、ステータスにも表示
+      $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🤖 認識中…</span>';
 
       // タイムアウト：30秒で中断（fetchには既定のタイムアウトが無いため明示的に止める）
       var controller = new AbortController();
@@ -1057,6 +1093,7 @@
             detail.join(' / ') + ' / 内容を確認・修正してください';
           if (j.notes) html += '<br>⚠️ ' + esc(j.notes);
           $('aiStatus').innerHTML = html;
+          setCropCollapsed(true); // 認識できたら画像を畳んで判定結果を近づける（トグルで再表示可）
         })
         .catch(function () {
           if (timedOut) {
@@ -1386,6 +1423,7 @@
         $('verdict').textContent = '想定売価を入力してください';
         $('reasons').innerHTML = '';
         $('breakdown').style.display = 'none';
+        $('miniVerdict').style.display = 'none';
         lastResult = null;
         $('saveBtn').disabled = true;
         return;
@@ -1421,6 +1459,13 @@
       v.className = 'verdict v-' + j.cls;
       v.textContent = stars(j.level) + ' ' + j.label;
       renderReasons(j.reasons, $('reasons'));
+
+      // ミニ判定バー（想定売価の直下）：判定＋利益＋利益率を1行で
+      var mv = $('miniVerdict');
+      mv.className = 'mini-verdict b-' + j.cls;
+      mv.innerHTML = stars(j.level) + ' ' + esc(j.label) +
+        '　利益 ' + yen(profit) + '　利益率 ' + margin.toFixed(1) + '%';
+      mv.style.display = 'block';
 
       // 利益率が見送り下限割れのときは赤
       $('margin').className = margin < marginNg ? 'neg' : '';
