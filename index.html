@@ -150,7 +150,21 @@
     .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
     .muted { color: var(--muted); }
 
-    /* 送料編集 */
+    .manual-badge{
+    display:inline-block;
+    margin-left:6px;
+    padding:2px 6px;
+    border-radius:999px;
+    background:rgba(245,158,11,.18);
+    color:#fbbf24;
+    border:1px solid rgba(245,158,11,.45);
+    font-size:11px;
+    font-weight:800;
+    vertical-align:middle;
+    white-space:nowrap;
+  }
+
+  /* 送料編集 */
     .ship-section { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
     .ship-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .reset-btn {
@@ -466,7 +480,7 @@
       <input id="price" class="price-input" type="number" inputmode="decimal" placeholder="例: 120" />
     </div>
     <div class="field" style="margin-bottom:0;">
-      <label>原価（円）</label>
+      <label>原価（円）<span class="manual-badge">手入力</span></label>
       <input id="cost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
     </div>
     <!-- ミニ判定バー：売価・原価を入れると即表示（詳細な内訳は下部に残す） -->
@@ -506,7 +520,7 @@
     </div>
 
     <div class="field" style="margin-bottom:0;">
-      <label>発送方法</label>
+      <label>発送方法（eBay送料）<span class="manual-badge">手入力</span></label>
       <select id="shipping"><!-- JSが販路ごとに生成 --></select>
     </div>
   </div>
@@ -531,11 +545,11 @@
     <p class="section-label">🆚 販路比較（国内 vs eBay）</p>
     <div class="row">
       <div class="field" style="margin-bottom:0;">
-        <label>国内売価（円）</label>
+        <label>国内売価（円）<span class="manual-badge">手入力</span></label>
         <input id="domPrice" type="number" inputmode="numeric" placeholder="例: 30000" />
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label>国内送料（円）</label>
+        <label>国内送料（円）<span class="manual-badge">手入力</span></label>
         <input id="domShip" type="number" inputmode="numeric" placeholder="空欄＝0円" />
       </div>
     </div>
@@ -681,15 +695,15 @@
           <input id="ePrice" type="number" inputmode="decimal" />
         </div>
         <div class="field">
-          <label>原価（円）</label>
+          <label>原価（円）<span class="manual-badge">手入力</span></label>
           <input id="eCost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
         </div>
         <div class="field">
-          <label>発送方法</label>
+          <label>発送方法（eBay送料）<span class="manual-badge">手入力</span></label>
           <select id="eShipping"></select>
         </div>
         <div class="field">
-          <label>送料（円）</label>
+          <label>送料（円）<span class="manual-badge">手入力</span></label>
           <input id="eShip" type="number" inputmode="numeric" />
         </div>
         <div class="edit-preview" id="eProfitPreview"></div>
