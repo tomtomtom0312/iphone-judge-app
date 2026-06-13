@@ -893,9 +893,21 @@
       return out;
     }
 
-    // 候補入力の値を売価欄へ反映（数値のときのみ）。after は反映後のコールバック
+    function parseInputNumber(value) {
+    var s = String(value == null ? '' : value)
+      .replace(/[０-９]/g, function(ch) {
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      })
+      .replace(/．/g, '.')
+      .replace(/[，、]/g, ',')
+      .replace(/[￥¥円,%％\s　]/g, '');
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // 候補入力の値を売価欄へ反映（数値のときのみ）。after は反映後のコールバック
     function applyCandidate(candId, targetId, after) {
-      var n = parseFloat($(candId).value);
+      var n = parseInputNumber($(candId).value);
       if (isNaN(n)) return;
       $(targetId).value = n;
       if (after) after();
@@ -1459,7 +1471,7 @@
     }
 
     // --- 計算 ---
-    function num(id) { var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
+    function num(id) { return parseInputNumber($(id).value); }
 
     var lastResult = null; // 直近の有効な判定（保存用）
     var currentEntryId = null; // 単品フォームで扱い中の履歴行ID（自動保存＝upsert用。新写真でnull）
