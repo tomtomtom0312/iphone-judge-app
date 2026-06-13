@@ -297,6 +297,14 @@
     .hist-edit { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
     .hist-del { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
+    /* 履歴カード内の相場確認リンク（eBay Sold / メルカリ / Google） */
+    .hist-search { display: flex; gap: 6px; margin-top: 8px; }
+    .hist-search-link {
+      flex: 1; padding: 7px 4px; border-radius: 8px; background: #0d1117;
+      color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600;
+      cursor: pointer; text-align: center;
+    }
+
     /* 撮影後クロップ（静止画調整・ライブカメラは使わない） */
     .crop-stage {
       position: relative; width: 100%; aspect-ratio: 1 / 1;
@@ -461,11 +469,7 @@
   <!-- 相場・想定売価（AI認識後に相場を確認 → 候補を反映） -->
   <div class="card single-only">
     <p class="section-label">相場検索（商品名で各サイトを開く）</p>
-    <div class="search-row">
-      <button type="button" class="search-link" data-site="ebay">eBay Sold</button>
-      <button type="button" class="search-link" data-site="mercari">メルカリ</button>
-      <button type="button" class="search-link" data-site="google">Google</button>
-    </div>
+    <div class="search-row" id="searchRow"><!-- ボタンは searchSites から JS で描画 --></div>
     <div class="search-msg" id="searchMsg"></div>
     <div class="field">
       <label>相場メモ（自分で調べた相場を貼り付け）</label>
@@ -1823,6 +1827,14 @@
           ? '<div class="hist-name">' + esc(e.memo) + '</div>'
           : '<div class="hist-name empty">(名称未設定)</div>';
 
+        // 相場確認リンク：既存データ（検索KW優先、無ければ商品名メモ）からキーワードを作って生成。両方空なら非表示
+        var kw = (e.searchKw || e.memo || '').trim();
+        var searchHtml = kw
+          ? '<div class="hist-search" data-kw="' + esc(kw) + '">' +
+              searchButtonsHtml('hist-search-link') +
+            '</div>'
+          : '';
+
         return '' +
           '<div class="hist-item" data-id="' + e.id + '">' +
             '<div class="hist-top-row">' +
@@ -1840,6 +1852,7 @@
                 '<div class="tap-hint">🕒 ' + esc(e.date) + ' ・ タップで詳細 ›</div>' +
               '</div>' +
             '</div>' +
+            searchHtml +
             '<div class="hist-btns">' +
               '<button class="hist-edit" data-id="' + e.id + '">編集</button>' +
               '<button class="hist-del" data-id="' + e.id + '">削除</button>' +
@@ -1864,6 +1877,12 @@
           enterEdit();
         });
       }
+      // 相場確認リンク配線：共通ハンドラ onSearchClick（preventDefault/stopPropagation/window.open を内包）
+      var slinks = $('histList').querySelectorAll('.hist-search-link');
+      for (var s = 0; s < slinks.length; s++) {
+        slinks[s].addEventListener('click', onSearchClick);
+      }
+
       // 履歴カードのタップ → 詳細モーダル
       var items = $('histList').querySelectorAll('.hist-item');
       for (var k = 0; k < items.length; k++) {
@@ -2135,30 +2154,69 @@
       $(id).addEventListener('change', updateEditPreview);
     });
 
-    // 相場検索リンク：商品名/メモ欄の値で eBay Sold / メルカリ / Google を新タブで開く（自動取得はしない）
+    // 相場検索サイトの定義リスト。フォーム・履歴のボタン描画とクリック処理はすべてこの配列から導出する。
+    // 検索先を増やす場合（例: Shopee）は、この配列に1件追加するだけでフォーム・履歴の両方にボタンが増える。
+    // 各サイトに windowName（固定ウィンドウ名）を持たせ、同じサイトは常に同じタブを再利用 → タブ増殖を防ぐ。
+    // ※既存のURL仕様は変更しない（eBayはSold/Completed、メルカリはkeyword、Googleはq）。url(k) は encodeURIComponent 済みの文字列を受け取る。
+    var searchSites = [
+      { key: 'ebay', label: 'eBay Sold', windowName: 'shumi_ebay',
+        url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } },
+      { key: 'mercari', label: 'メルカリ', windowName: 'shumi_mercari',
+        url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
+      // Google は COOP: same-origin-allow-popups のため、別タブだとタブ名再利用が効かず押すたびにタブが増える。
+      // 回避策として sameTab=true → 現在のタブで開く（タブは増えない／ブラウザの「戻る」でアプリへ復帰）。
+      { key: 'google', label: 'Google', windowName: 'shumi_google', sameTab: true,
+        url: function (k) { return 'https://www.google.com/search?q=' + k; } }
+    ];
+    function findSearchSite(key) {
+      for (var i = 0; i < searchSites.length; i++) { if (searchSites[i].key === key) return searchSites[i]; }
+      return null;
+    }
+    // 定義リストからボタンHTMLを生成（フォーム・履歴カードで共通。cls でクラス名だけ切り替える）
+    function searchButtonsHtml(cls) {
+      return searchSites.map(function (s) {
+        return '<button type="button" class="' + cls + '" data-site="' + s.key + '">' + esc(s.label) + '</button>';
+      }).join('');
+    }
+    // 開いたタブの参照を windowName ごとに保持。2回目以降は新規に開かず同じタブを更新する。
+    // （Google の /search はクロスオリジンのリダイレクトでウィンドウ名再利用が切れるため、名前任せにせず参照で再利用する）
+    var searchWindows = {};
+    // クリック処理の共通化：preventDefault / stopPropagation / window.open をここで1回だけ実行する。
+    // 履歴カード内は保存済みキーワード（.hist-search の data-kw）、フォームは検索KW優先・空なら商品名メモを使う。
+    function onSearchClick(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      var btn = ev.currentTarget;
+      var site = findSearchSite(btn.getAttribute('data-site'));
+      if (!site) return;
+      var row = btn.closest('.hist-search');
+      var q, msgEl = null;
+      if (row) {
+        q = (row.getAttribute('data-kw') || '').trim();
+      } else {
+        q = ($('searchKw').value.trim() || $('memo').value.trim());
+        msgEl = $('searchMsg');
+      }
+      if (!q) { if (msgEl) msgEl.textContent = '商品名または検索キーワードを入力してください'; return; }
+      if (msgEl) msgEl.textContent = '';
+      var url = site.url(encodeURIComponent(q));
+      // sameTab のサイト（Google）は別タブだと COOP でタブが増えるため、現在のタブで開く（戻るでアプリへ復帰）。
+      if (site.sameTab) { window.location.href = url; return; }
+      // 別タブ系（eBay/メルカリ）：既存タブが生きていれば location 更新で再利用（クロスオリジンでも href 代入＝ナビゲーションは許可）。
+      // 参照が無効化されていれば catch して下で開き直す（退行しない）。
+      var existing = searchWindows[site.windowName];
+      if (existing && !existing.closed) {
+        try { existing.location.href = url; existing.focus(); return; } catch (e) {}
+      }
+      searchWindows[site.windowName] = window.open(url, site.windowName);
+    }
+
+    // 単品フォームの相場検索ボタン：定義リストから描画し、共通ハンドラを配線
     (function () {
-      function buildUrl(site, q) {
-        var k = encodeURIComponent(q);
-        if (site === 'ebay') {
-          // sold/completed に絞り込んだ検索
-          return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1';
-        }
-        if (site === 'mercari') {
-          return 'https://jp.mercari.com/search?keyword=' + k;
-        }
-        return 'https://www.google.com/search?q=' + k;
-      }
-      var btns = document.querySelectorAll('.search-link');
-      for (var i = 0; i < btns.length; i++) {
-        btns[i].addEventListener('click', function () {
-          // 検索キーワード欄を優先、空なら商品名/メモを使用
-          var q = ($('searchKw').value.trim() || $('memo').value.trim());
-          var msg = $('searchMsg');
-          if (!q) { msg.textContent = '商品名または検索キーワードを入力してください'; return; }
-          msg.textContent = '';
-          window.open(buildUrl(this.getAttribute('data-site'), q), '_blank');
-        });
-      }
+      var rowEl = $('searchRow');
+      if (rowEl) rowEl.innerHTML = searchButtonsHtml('search-link');
+      var btns = document.querySelectorAll('#searchRow .search-link');
+      for (var i = 0; i < btns.length; i++) { btns[i].addEventListener('click', onSearchClick); }
     })();
 
     // 売価候補「反映」ボタン（単品フォーム・編集モーダル共通）。data-cand→data-target へ反映
