@@ -142,6 +142,30 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 3. iPhone（モバイル回線）で撮影→提案→上書きを実機確認
 （ローカル `python3 -m http.server` では `/api` が無く AI は動かない。UIのみ確認可）
 
+## 相場検索リンク改善 + PWA化（2026-06-13, 7b93f16 / 7d1698f）— デプロイ済み・本番＆iPhone確認済み
+
+### 相場検索リンク改善（7b93f16 fix: improve market search links）
+- eBay / メルカリ / Google のリンクを **`searchSites` 定義リスト方式に統一**（各サイト key/label/windowName/url を保持）。ボタン描画もクリック処理もこの配列から導出。
+- **eBay / メルカリは別タブ再利用**（固定ウィンドウ名 `shumi_<key>` ＋開いたタブ参照の保持で同じタブを更新）。
+- **Google は COOP `same-origin-allow-popups` のため別タブのタブ名再利用がブラウザ仕様上不可能** → `sameTab:true` で**同一タブ遷移**（現在タブで開く／戻るでアプリ復帰）。
+- クリックは共通関数 `onSearchClick` に統一（preventDefault / stopPropagation / window.open を1回だけ実行）。
+- **履歴カードにも eBay Sold / メルカリ / Google リンクを追加**。既存データの `searchKw || memo` から描画時にキーワード生成（両方空の行はリンク非表示）。
+- **localStorage 保存構造は変更なし**。AI認識・画像処理・履歴保存・CSV・利益計算も変更なし。実装ファイルは index.html のみ。
+
+### PWA化（7d1698f feat: add PWA metadata and app icon）
+- **アプリ名を「セトリーナ」に統一**: 画面見出し(h1) / ブラウザ title / manifest `name` / `short_name` / iOS表示名(`apple-mobile-web-app-title`)。
+- `manifest.webmanifest` 追加（standalone・background/theme `#0f1419`）。
+- `icons/` 配下に **icon-192.png / icon-512.png / apple-touch-icon.png(180)** を追加（仮アイコン＝緑背景＋白カメラ＋$、文字なし、Pillow生成）。
+- `<head>` に PWAメタ追記のみ（manifest / theme-color / mobile-web-app-capable / apple-mobile-web-app-* / apple-touch-icon）。body・style・script・JSロジックは無変更。
+- **Service Worker なし／オフライン非対応**（方針どおり）。
+- **iPhone 実機でホーム画面追加 → 単体アプリ風（アドレスバーなし standalone）起動を確認済み**。名称「セトリーナ」・アイコン表示も確認。
+- **仮アイコンは後で差し替え可能**（同名ファイルを `icons/` に上書きするだけ。manifest/head 変更不要）。
+
+### 未対応の小修正候補（次回以降）
+- **数値入力の全角・カンマ対応**（`num()` の正規化。全角数字/カンマ入りで `parseFloat` が崩れる可能性）。
+- **本番アイコンへの差し替え**（現状は仮アイコン）。
+- **`searchSites` に Shopee など相場検索先を将来追加可能**（配列に1件追加するだけでフォーム・履歴の両方にボタンが増える）。
+
 ## 動作確認
 `python3 -m http.server 8000` → iPhone Safari で `http://192.168.1.2:8000`（AI以外）
 
