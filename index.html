@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>越境販売 判断アプリ</title>
+  <title>セトリーナ</title>
+  <!-- PWA: ホーム画面から単体アプリ風に起動（Service Workerなし・オフライン非対応） -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0f1419" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="セトリーナ" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <style>
     :root {
       --bg: #0f1419;
@@ -378,7 +386,7 @@
   </style>
 </head>
 <body>
-  <h1>🌏 越境販売 判断アプリ <span style="color:var(--muted);font-weight:400;font-size:13px;">MVP</span></h1>
+  <h1>🌏 セトリーナ <span style="color:var(--muted);font-weight:400;font-size:13px;">MVP</span></h1>
 
   <!-- 販路 -->
   <div class="card">
