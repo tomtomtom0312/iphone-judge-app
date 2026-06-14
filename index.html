@@ -231,6 +231,10 @@
     /* 判定バッジ（色は b-l5..b-l1 / b-draft を流用） */
     .vbadge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
     .hist-meta { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    /* 国内/eBay比較（履歴カード内・小さめ。バッジ色は b-l5/b-l3/b-draft を流用） */
+    .hist-cmp { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .cmp-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+    .cmp-nums { font-size: 11px; color: var(--muted); }
     .hist-del {
       background: transparent; color: var(--muted);
       border: 1px solid var(--line); border-radius: 8px;
@@ -477,11 +481,11 @@
     </div>
     <div class="field">
       <label id="priceLabel">想定売価</label>
-      <input id="price" class="price-input" type="number" inputmode="decimal" placeholder="例: 120" />
+      <input id="price" class="price-input" type="text" inputmode="decimal" placeholder="例: 120" />
     </div>
     <div class="field" style="margin-bottom:0;">
       <label>原価（円）<span class="manual-badge">手入力</span></label>
-      <input id="cost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
+      <input id="cost" type="text" inputmode="numeric" placeholder="空欄＝0円" />
     </div>
     <!-- ミニ判定バー：売価・原価を入れると即表示（詳細な内訳は下部に残す） -->
     <div id="miniVerdict" class="mini-verdict" style="display:none;"></div>
@@ -498,9 +502,9 @@
       <textarea id="marketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円&#10;カードショップ買取: 2,800円"></textarea>
     </div>
     <p class="section-label">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で上の想定売価へ</p>
-    <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
-    <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
-    <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
+    <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
+    <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
+    <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
     <div id="attrsBox" class="attrs-box"></div>
   </div>
 
@@ -546,20 +550,46 @@
     <div class="row">
       <div class="field" style="margin-bottom:0;">
         <label>国内売価（円）<span class="manual-badge">手入力</span></label>
-        <input id="domPrice" type="number" inputmode="numeric" placeholder="例: 30000" />
+        <input id="domPrice" type="text" inputmode="numeric" placeholder="例: 30000" />
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>国内送料（円）<span class="manual-badge">手入力</span></label>
-        <input id="domShip" type="number" inputmode="numeric" placeholder="空欄＝0円" />
+        <input id="domShip" type="text" inputmode="numeric" placeholder="空欄＝0円" />
       </div>
     </div>
+    <div class="row">
+      <div class="field" style="margin-bottom:0;">
+        <label>国内販路<span class="manual-badge">手入力</span></label>
+        <select id="domChannel">
+          <option value="mercari">メルカリ</option>
+          <option value="amazon">Amazon</option>
+          <option value="other">その他</option>
+        </select>
+      </div>
+      <div class="field" id="domAmzCatField" style="margin-bottom:0;display:none;">
+        <label>Amazonカテゴリ</label>
+        <select id="domAmzCat">
+          <option value="book">本</option>
+          <option value="toy">おもちゃ</option>
+          <option value="hobby">ホビー</option>
+          <option value="game_console">ゲーム機本体</option>
+          <option value="game_software">ゲームソフト</option>
+          <option value="other">その他</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:0;">
+      <label>国内手数料率（%）<span class="manual-badge">手入力</span></label>
+      <input id="domFeeRate" type="text" inputmode="decimal" placeholder="例: 10" />
+    </div>
     <div class="breakdown" id="cmpBlock">
+      <div class="line"><span>国内手数料</span><span id="cmpDomFee">—</span></div>
       <div class="line"><span>国内利益</span><span id="cmpDom">—</span></div>
       <div class="line"><span>eBay利益</span><span id="cmpEbay">—</span></div>
       <div class="line profit"><span>差額（eBay − 国内）</span><span id="cmpDiff">—</span></div>
     </div>
     <div id="cmpVerdict" class="mini-verdict b-l3">売価を入力すると判定します</div>
-    <p class="hint">eBay側（売価・為替・手数料・国際送料）と原価は上の入力・⚙️設定の値を使用します。表示のみで履歴・CSVには保存しません。</p>
+    <p class="hint">⚠️ Amazon手数料は概算・自己発送向けの目安（手入力で上書き可）。eBay側（売価・為替・手数料・国際送料）と原価は上の入力・⚙️設定の値を使用します。</p>
   </div>
 
   <!-- 設定（為替・手数料・しきい値）販路ごとに保存 -->
@@ -570,11 +600,11 @@
         <div class="row">
           <div class="field">
             <label id="rateLabel">為替（円/USD）</label>
-            <input id="rate" type="number" inputmode="decimal" />
+            <input id="rate" type="text" inputmode="decimal" />
           </div>
           <div class="field">
             <label>手数料（%）</label>
-            <input id="feeRate" type="number" inputmode="decimal" />
+            <input id="feeRate" type="text" inputmode="decimal" />
           </div>
         </div>
         <div class="row">
@@ -687,16 +717,16 @@
         </div>
         <div id="eAttrsBox" class="attrs-box"></div>
         <p class="section-label" style="margin-top:14px;">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で売価へ</p>
-        <div class="cand-row"><span class="cand-tag">安め</span><input id="eCandLow" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="eCandLow" data-target="ePrice">反映</button></div>
-        <div class="cand-row"><span class="cand-tag">標準</span><input id="eCandStd" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="eCandStd" data-target="ePrice">反映</button></div>
-        <div class="cand-row" style="margin-bottom:14px;"><span class="cand-tag">強気</span><input id="eCandHigh" type="number" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="eCandHigh" data-target="ePrice">反映</button></div>
+        <div class="cand-row"><span class="cand-tag">安め</span><input id="eCandLow" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="eCandLow" data-target="ePrice">反映</button></div>
+        <div class="cand-row"><span class="cand-tag">標準</span><input id="eCandStd" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="eCandStd" data-target="ePrice">反映</button></div>
+        <div class="cand-row" style="margin-bottom:14px;"><span class="cand-tag">強気</span><input id="eCandHigh" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="eCandHigh" data-target="ePrice">反映</button></div>
         <div class="field">
           <label id="ePriceLabel">売価</label>
-          <input id="ePrice" type="number" inputmode="decimal" />
+          <input id="ePrice" type="text" inputmode="decimal" />
         </div>
         <div class="field">
           <label>原価（円）<span class="manual-badge">手入力</span></label>
-          <input id="eCost" type="number" inputmode="numeric" placeholder="空欄＝0円" />
+          <input id="eCost" type="text" inputmode="numeric" placeholder="空欄＝0円" />
         </div>
         <div class="field">
           <label>発送方法（eBay送料）<span class="manual-badge">手入力</span></label>
@@ -704,7 +734,7 @@
         </div>
         <div class="field">
           <label>送料（円）<span class="manual-badge">手入力</span></label>
-          <input id="eShip" type="number" inputmode="numeric" />
+          <input id="eShip" type="text" inputmode="numeric" />
         </div>
         <div class="edit-preview" id="eProfitPreview"></div>
         <div class="edit-actions">
@@ -1643,6 +1673,7 @@
     function compareCalc() {
       var domPrice = num('domPrice');
       var domShip = num('domShip');
+      var domFeeRate = num('domFeeRate'); // 国内手数料率（%）。販路/カテゴリで自動セット・手入力で上書き可
       var cost = num('cost');           // 原価は同一商品＝既存入力を共有
       var price = num('price');         // eBay売価（USD）
       var rate = num('rate');
@@ -1653,6 +1684,7 @@
 
       // 結果エリア（cmpBlock / cmpVerdict）は常時表示。売価が両方未入力のときだけダッシュ表示にする
       if (domPrice <= 0 && price <= 0) {
+        $('cmpDomFee').textContent = '—'; $('cmpDomFee').className = '';
         $('cmpDom').textContent = '—'; $('cmpDom').className = '';
         $('cmpEbay').textContent = '—'; $('cmpEbay').className = '';
         $('cmpDiff').textContent = '—'; $('cmpDiff').className = '';
@@ -1661,12 +1693,15 @@
         return;
       }
 
-      var domProfit = domPrice - cost - domShip;            // 国内利益
+      var domFee = domPrice * (domFeeRate / 100);           // 国内販売手数料 = 国内売価 × 率/100
+      var domProfit = domPrice - domFee - domShip - cost;   // 国内利益 = 売価 − 手数料 − 送料 − 原価
       var ebayRevenue = price * rate;                       // eBay売上円
       var ebayFee = ebayRevenue * (feeRate / 100);          // eBay手数料
       var ebayProfit = ebayRevenue - ebayFee - cost - ship; // eBay利益（既存 calc と同一式）
       var diff = ebayProfit - domProfit;                    // 差額（eBay − 国内）
 
+      $('cmpDomFee').textContent = (domPrice > 0 ? '-' + yen(domFee) + '（' + domFeeRate + '%）' : '—');
+      $('cmpDomFee').className = '';
       $('cmpDom').textContent = yen(domProfit);
       $('cmpDom').className = domProfit >= 0 ? 'pos' : 'neg';
       $('cmpEbay').textContent = yen(ebayProfit);
@@ -1688,10 +1723,83 @@
       cv.textContent = label;
     }
     // 比較用リスナー：国内側＋eBay側の全入力に直接バインド（calc() 経由に依存せず確実に発火）
-    ['domPrice', 'domShip', 'price', 'cost', 'shipping', 'rate', 'feeRate'].forEach(function (id) {
+    ['domPrice', 'domShip', 'domFeeRate', 'price', 'cost', 'shipping', 'rate', 'feeRate'].forEach(function (id) {
       $(id).addEventListener('input', compareCalc);
       $(id).addEventListener('change', compareCalc);
     });
+
+    // 国内手数料率の仮テーブル（Amazonは自己発送向けの概算。手入力で上書き可）
+    var DOM_FEE_RATES = {
+      mercari: 10,
+      other: 10,
+      amazon: { book: 15.4, game_software: 15.4, toy: 10, hobby: 10, game_console: 10, other: 10 }
+    };
+    function domDefaultFeeRate(channel, amzCat) {
+      if (channel === 'amazon') {
+        var t = DOM_FEE_RATES.amazon;
+        return t[amzCat] != null ? t[amzCat] : t.other;
+      }
+      return DOM_FEE_RATES[channel] != null ? DOM_FEE_RATES[channel] : 10;
+    }
+    // 商品名・検索キーワードからAmazonカテゴリを簡易推定（AI不使用・文字列ベース）。該当なしは null
+    function guessAmzCat(text) {
+      var s = String(text || '');
+      // 本は最優先（コミック/漫画/マンガ/文庫/単行本/書籍/ISBN、および「1巻」等の巻数表記）
+      if (/コミック|漫画|マンガ|まんが|文庫|単行本|書籍|ISBN|巻/i.test(s)) return 'book';
+      if (/ソフト/i.test(s)) return 'game_software';
+      if (/本体|ゲーム機/i.test(s)) return 'game_console';
+      if (/フィギュア|プラモデル|ガンプラ|一番くじ|ホビー/i.test(s)) return 'hobby';
+      if (/おもちゃ|玩具|トミカ|レゴ|LEGO/i.test(s)) return 'toy';
+      return null;
+    }
+    // 販路/カテゴリの変更に応じて：Amazonカテゴリ欄の表示切替＋手数料率の既定値セット。
+    // guessFromText=true（販路変更時）かつAmazonなら商品名/検索KWからカテゴリを推定して反映。手入力率はこの操作時のみ更新。
+    function applyDomDefaults(guessFromText) {
+      var channel = $('domChannel').value;
+      $('domAmzCatField').style.display = channel === 'amazon' ? '' : 'none';
+      if (channel === 'amazon' && guessFromText) {
+        var g = guessAmzCat($('memo').value + ' ' + $('searchKw').value);
+        if (g) $('domAmzCat').value = g;
+      }
+      $('domFeeRate').value = domDefaultFeeRate(channel, $('domAmzCat').value);
+      compareCalc();
+    }
+    $('domChannel').addEventListener('change', function () { applyDomDefaults(true); syncCurrent(); });
+    $('domAmzCat').addEventListener('change', function () { applyDomDefaults(false); syncCurrent(); });
+    // 商品名/検索KWの入力に応じてAmazonカテゴリを再推定（Amazon選択時のみ）。
+    // 推定できた時だけ反映し、該当キーワードが無ければ現状維持＝手動選択や手入力率を壊さない。
+    function onItemTextChangeForAmz() {
+      if ($('domChannel').value !== 'amazon') return;
+      var g = guessAmzCat($('memo').value + ' ' + $('searchKw').value);
+      if (g && g !== $('domAmzCat').value) {
+        $('domAmzCat').value = g;
+        $('domFeeRate').value = domDefaultFeeRate('amazon', g);
+        compareCalc();
+        syncCurrent();
+      }
+    }
+    ['memo', 'searchKw'].forEach(function (id) {
+      $(id).addEventListener('input', onItemTextChangeForAmz);
+    });
+
+    // 履歴カード用：保存済みエントリから国内/eBay比較を算出（compareCalc と同一式・同一しきい値）。
+    // eBay利益は保存済み e.profit を流用（カードの利益表示と一致）。国内データ無し/ドラフトは null＝未計算。
+    function compareEntry(e) {
+      if (!e || e.draft || e.profit == null) return null;   // eBay利益が無い（ドラフト）→ 比較不可
+      var domPrice = +e.domPrice || 0;
+      if (domPrice <= 0) return null;                        // 国内データ無し（既存履歴等）→ 未計算
+      var domShip = +e.domShip || 0;
+      var domFeeRate = +e.domFeeRate || 0;                   // 旧データ（率なし）は0＝手数料0
+      var cost = +e.cost || 0;
+      var domFee = domPrice * (domFeeRate / 100);            // 国内販売手数料
+      var domProfit = Math.round(domPrice - domFee - domShip - cost); // 国内利益（compareCalc と同式）
+      var ebayProfit = e.profit;                             // 保存済みeBay利益
+      var diff = ebayProfit - domProfit;                     // 差額（eBay − 国内）
+      var best = Math.max(domProfit, ebayProfit);
+      var rec = (best < CMP_THIN || Math.abs(diff) < CMP_DIFF_MIN) ? 'tie'
+              : (ebayProfit > domProfit ? 'ebay' : 'dom');   // おすすめ判定（同一しきい値）
+      return { domProfit: domProfit, ebayProfit: ebayProfit, diff: diff, rec: rec };
+    }
 
     // 販路変更
     $('market').addEventListener('change', function () { applyMarketplace(this.value); });
@@ -1707,7 +1815,8 @@
       if (upsertCurrent()) renderHistory();
     }
     ['price', 'cost', 'condition', 'shipping', 'memo', 'searchKw',
-      'marketMemo', 'candLow', 'candStd', 'candHigh'].forEach(function (id) {
+      'marketMemo', 'candLow', 'candStd', 'candHigh',
+      'domPrice', 'domShip', 'domFeeRate'].forEach(function (id) {
       $(id).addEventListener('change', syncCurrent);
     });
     // 手動カテゴリ選択（写真なしでも可）：補助項目を切替（既存入力＞AI生値で初期化）。編集モーダルの onEditCategoryChange と同作法
@@ -1776,7 +1885,13 @@
         price: num('price'),
         cost: num('cost'),
         ship: num('shipping'),
-        shipName: shipSel.options.length ? shipSel.options[shipSel.selectedIndex].text : ''
+        shipName: shipSel.options.length ? shipSel.options[shipSel.selectedIndex].text : '',
+        // 国内/eBay比較用の国内データ（非破壊追加・任意）。未入力は0＝比較は「未計算」扱い
+        domPrice: num('domPrice'),
+        domShip: num('domShip'),
+        domChannel: $('domChannel').value,   // 国内販路（mercari/amazon/other）
+        domAmzCat: $('domAmzCat').value,      // Amazonカテゴリ（Amazon時のみ意味を持つ）
+        domFeeRate: num('domFeeRate')         // 国内手数料率（%）
       };
       recompute(e); // profit/margin/level/verdict/draft ＋ 再計算パラメータを確定
       return e;
@@ -1861,6 +1976,24 @@
           ? '<div class="hist-name">' + esc(e.memo) + '</div>'
           : '<div class="hist-name empty">(名称未設定)</div>';
 
+        // 国内/eBay比較（小さくバッジ表示）。国内データ無し/旧履歴は「未計算」、ドラフトは非表示
+        var cmpHtml = '';
+        if (!draft) {
+          var cmp = compareEntry(e);
+          if (cmp) {
+            var recLabel = cmp.rec === 'ebay' ? '🌏 eBay' : (cmp.rec === 'dom' ? '🏠 国内' : '🤔 要確認');
+            var recCls = cmp.rec === 'tie' ? 'b-l3' : 'b-l5';
+            cmpHtml = '<div class="hist-cmp">' +
+              '<span class="cmp-badge ' + recCls + '">おすすめ：' + recLabel + '</span>' +
+              '<span class="cmp-nums">国内 ' + cmp.domProfit.toLocaleString('ja-JP') +
+                '円 ・ eBay ' + cmp.ebayProfit.toLocaleString('ja-JP') +
+                '円 ・ 差額 ' + (cmp.diff >= 0 ? '+' : '') + cmp.diff.toLocaleString('ja-JP') + '円</span>' +
+            '</div>';
+          } else {
+            cmpHtml = '<div class="hist-cmp"><span class="cmp-badge b-draft">比較：未計算</span></div>';
+          }
+        }
+
         // 相場確認リンク：既存データ（検索KW優先、無ければ商品名メモ）からキーワードを作って生成。両方空なら非表示
         var kw = (e.searchKw || e.memo || '').trim();
         var searchHtml = kw
@@ -1883,6 +2016,7 @@
                 '</div>' +
                 '<div class="hist-meta">' + meta + '</div>' +
                 '<div class="hist-profit-row">' + profitHtml + '</div>' +
+                cmpHtml +
                 '<div class="tap-hint">🕒 ' + esc(e.date) + ' ・ タップで詳細 ›</div>' +
               '</div>' +
             '</div>' +
@@ -2343,7 +2477,7 @@
     $('market').value = activeMarket;
     applyMarketplace(activeMarket);
     renderHistory();
-    compareCalc(); // 初期表示（売価が事前入力済みなら比較も表示）
+    applyDomDefaults(false); // 国内手数料率の初期値セット＋Amazonカテゴリ欄の表示初期化（compareCalc も内部で実行）
   </script>
 </body>
 </html>
