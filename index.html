@@ -1065,6 +1065,7 @@
     // ファイル → 作業用に縮小した画像をクロップ台に読み込む
     function loadForCrop(file) {
       currentCategory = 'other'; currentRank = ''; currentAi = null; currentAttrs = {};
+      domAmzCatTouched = false; // 新しい商品＝Amazonカテゴリの自動推定を再開（手動上書き保護をリセット）
       currentEntryId = null; // 新しい写真＝新しい商品。次の保存は新規行になる
       $('category').value = 'other'; // 手動カテゴリ選択UIも初期化
       renderAttrs($('attrsBox'), 'other', {});
@@ -1241,6 +1242,7 @@
           var mapped = RANK_TO_CONDITION[currentRank];
           if (mapped) $('condition').value = mapped;
           calc();
+          refreshAmzCatGuess(); // AI認識後も商品名/上の商品カテゴリからAmazonカテゴリを推定
 
           // ステータス表示：確信度バッジ＋カテゴリ／ランク／状態説明／懸念点
           var c = Number(j.confidence) || 0;
@@ -1752,25 +1754,38 @@
       if (/おもちゃ|玩具|トミカ|レゴ|LEGO/i.test(s)) return 'toy';
       return null;
     }
+    // 上の商品カテゴリ（手動選択/AI認識）からAmazonカテゴリを推定。該当なしは null（＝商品名/検索KW優先 or 現状維持）
+    function amzCatFromCategory(cat) {
+      if (cat === 'figure') return 'hobby';
+      if (cat === 'trading_card_box' || cat === 'trading_card_single') return 'hobby'; // 安全側（手数料10%）
+      if (cat === 'iPhone') return 'other';
+      return null; // その他 → カテゴリからは推定しない
+    }
+    // 総合推定：商品名/検索KWを最優先 → 無ければ上の商品カテゴリから
+    function guessAmzCatCombined() {
+      return guessAmzCat($('memo').value + ' ' + $('searchKw').value) || amzCatFromCategory(currentCategory);
+    }
+    var domAmzCatTouched = false; // ユーザーがAmazonカテゴリを手動変更したら true（以降は自動推定で上書きしない）
     // 販路/カテゴリの変更に応じて：Amazonカテゴリ欄の表示切替＋手数料率の既定値セット。
-    // guessFromText=true（販路変更時）かつAmazonなら商品名/検索KWからカテゴリを推定して反映。手入力率はこの操作時のみ更新。
+    // guessFromText=true（販路変更時）かつAmazon・未手動なら総合推定で反映。手入力率はこの操作時のみ更新。
     function applyDomDefaults(guessFromText) {
       var channel = $('domChannel').value;
       $('domAmzCatField').style.display = channel === 'amazon' ? '' : 'none';
-      if (channel === 'amazon' && guessFromText) {
-        var g = guessAmzCat($('memo').value + ' ' + $('searchKw').value);
+      if (channel === 'amazon' && guessFromText && !domAmzCatTouched) {
+        var g = guessAmzCatCombined();
         if (g) $('domAmzCat').value = g;
       }
       $('domFeeRate').value = domDefaultFeeRate(channel, $('domAmzCat').value);
       compareCalc();
     }
     $('domChannel').addEventListener('change', function () { applyDomDefaults(true); syncCurrent(); });
-    $('domAmzCat').addEventListener('change', function () { applyDomDefaults(false); syncCurrent(); });
-    // 商品名/検索KWの入力に応じてAmazonカテゴリを再推定（Amazon選択時のみ）。
-    // 推定できた時だけ反映し、該当キーワードが無ければ現状維持＝手動選択や手入力率を壊さない。
-    function onItemTextChangeForAmz() {
-      if ($('domChannel').value !== 'amazon') return;
-      var g = guessAmzCat($('memo').value + ' ' + $('searchKw').value);
+    // Amazonカテゴリの手動変更：以降は自動推定で上書きしない（率は選択カテゴリの既定へ）
+    $('domAmzCat').addEventListener('change', function () { domAmzCatTouched = true; applyDomDefaults(false); syncCurrent(); });
+    // 商品名/検索KW/上の商品カテゴリの変更に応じてAmazonカテゴリを再推定（Amazon選択時・未手動時のみ）。
+    // 推定できた時だけ反映し、該当が無ければ現状維持＝手動選択や手入力率を壊さない。
+    function refreshAmzCatGuess() {
+      if ($('domChannel').value !== 'amazon' || domAmzCatTouched) return;
+      var g = guessAmzCatCombined();
       if (g && g !== $('domAmzCat').value) {
         $('domAmzCat').value = g;
         $('domFeeRate').value = domDefaultFeeRate('amazon', g);
@@ -1779,7 +1794,7 @@
       }
     }
     ['memo', 'searchKw'].forEach(function (id) {
-      $(id).addEventListener('input', onItemTextChangeForAmz);
+      $(id).addEventListener('input', refreshAmzCatGuess);
     });
 
     // 履歴カード用：保存済みエントリから国内/eBay比較を算出（compareCalc と同一式・同一しきい値）。
@@ -1830,6 +1845,7 @@
       currentAttrs = base;
       renderAttrs($('attrsBox'), currentCategory, currentAttrs);
       syncCurrent(); // 自動保存済みなら現在行へ反映（未保存なら何もしない）
+      refreshAmzCatGuess(); // 上の商品カテゴリの変更をAmazonカテゴリ推定へ連動
     }
     $('category').addEventListener('change', onCategoryChange);
     // 設定（販路ごと）→ 再計算＋保存
