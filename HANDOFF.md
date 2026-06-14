@@ -239,3 +239,16 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 - カメラカテゴリ対応。
 - Shopee対応は、仕入れ判断アプリとして必要になった段階で別枠検討。
 
+
+## Amazonカテゴリ推定の再実行修正（2026-06-15, 91348b1）
+
+- AI認識後や商品名自動入力後にも、Amazonカテゴリ推定が再実行されるように修正
+- 国内販路が Amazon の時だけ自動推定
+- ユーザーが Amazonカテゴリを手動変更した後は勝手に上書きしない
+- 新しい写真を読み込んだ時は手動変更フラグをリセット
+- 実機確認：
+  - フィギュア ワンピース → Amazonカテゴリ：ホビー / 手数料率10%
+  - ONE PIECE 66巻 → Amazonカテゴリ：本 / 手数料率15.4%
+- AI認識API、画像処理、CSV列、eBay計算式、既存履歴は変更なし
+- commit：91348b1 fix: refresh amazon category guess after image recognition
+
