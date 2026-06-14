@@ -166,6 +166,28 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 - **本番アイコンへの差し替え**（現状は仮アイコン）。
 - **`searchSites` に Shopee など相場検索先を将来追加可能**（配列に1件追加するだけでフォーム・履歴の両方にボタンが増える）。
 
+## 国内/eBay比較に国内販売手数料を追加（2026-06-14, 3863de5 feat: add domestic marketplace fees to comparison）— デプロイ済み・本番確認済み
+- **国内/eBay比較カードに国内販売手数料を追加**。国内販路として **メルカリ / Amazon / その他** を選択可能（`#domChannel`）。
+- **Amazon選択時のみ Amazonカテゴリ欄を表示**（`#domAmzCat`：本 / おもちゃ / ホビー / ゲーム機本体 / ゲームソフト / その他）。
+- **Amazonカテゴリ別に概算手数料率を自動セット**（`DOM_FEE_RATES` / `domDefaultFeeRate()`）:
+  - 本：15.4% / ゲームソフト：15.4% / おもちゃ：10% / ホビー：10% / ゲーム機本体：10% / その他：10%
+  - メルカリ：10% / その他：10%
+- **国内手数料率は手入力で上書き可能**（`#domFeeRate`＝`type="text" inputmode="decimal"`。全角数字・％・カンマ対応＝`parseInputNumber` 経由）。
+- **国内利益の式を変更**: `国内利益 = 国内売価 − 国内販売手数料 − 国内送料 − 原価`（国内販売手数料 = 国内売価 × 手数料率 / 100）。**eBay側の利益計算式は変更なし**。
+- **商品名／検索キーワードから文字列ベースで Amazonカテゴリを簡易自動推定**（`guessAmzCat()`。AI認識APIは不使用）:
+  - コミック / 漫画 / マンガ / 文庫 / 単行本 / 書籍 / ISBN / 巻 → 本（本判定を最優先）
+  - Switchソフト / PS5ソフト / PS4ソフト / ソフト → ゲームソフト
+  - Switch本体 / PS5本体 / Xbox本体 / ゲーム機 → ゲーム機本体
+  - フィギュア / プラモデル / ガンプラ / 一番くじ → ホビー
+  - おもちゃ / 玩具 / トミカ / レゴ → おもちゃ
+  - **「ワンピース」単体ではカテゴリを誤判定しない**ように調整済み（該当キーワードが無ければ現状維持＝手動選択・手入力率を壊さない）。販路Amazon選択時＋商品名/検索KW入力時の双方で再推定。
+- **履歴カードに おすすめ販路 / 国内利益 / eBay利益 / 差額 を表示**（`compareEntry()` / `.hist-cmp`）。おすすめは 国内 / eBay / 要確認 / 未計算。
+- **既存履歴は国内データ不足の場合「比較：未計算」**（`domPrice` 不在 → null）。eBay利益は保存済み `e.profit` を流用しカード表示と一致。
+- 履歴エントリに **非破壊で新フィールド追加**: `domPrice / domShip / domChannel / domAmzCat / domFeeRate`（`buildCurrentEntry` / `syncCurrent`）。
+- **数値入力の全角対応**: `type="number"` だと全角入力が `.value` で空になり0扱いになる不具合を修正 → 対象数値欄を `type="text"`（inputmodeは維持）に変更し `parseInputNumber` で正規化（price/cost/domPrice/domShip/rate/feeRate/cand系/編集モーダルのePrice・eCost・eShip・eCand系）。しきい値(thOk/thNg/marginOk/marginNg)・送料編集欄(.ship-input)は対象外で潜在のまま。
+- Amazon手数料は概算・自己発送向けの目安である旨を比較カードに小さく注記。
+- **AI認識API・画像処理・CSV列・既存CSV出力・既存フィールド名・既存履歴移行は変更なし**。実装ファイルは index.html のみ。
+
 ## 動作確認
 `python3 -m http.server 8000` → iPhone Safari で `http://192.168.1.2:8000`（AI以外）
 
