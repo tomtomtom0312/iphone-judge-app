@@ -235,6 +235,13 @@
     .hist-cmp { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .cmp-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
     .cmp-nums { font-size: 11px; color: var(--muted); }
+    /* 一目で分かる比較結果フラグ（表示のみ。色は既存UIに合わせ軽め） */
+    .cmp-flag { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .cf-ebay { background: rgba(59,130,246,.20); color: #93c5fd; }   /* eBay有利：青系 */
+    .cf-dom  { background: rgba(22,163,74,.20); color: #4ade80; }    /* 国内有利：緑系 */
+    .cf-tie  { background: rgba(148,163,184,.18); color: #cbd5e1; }  /* 拮抗：ニュートラル（スレート） */
+    .cf-warn { background: rgba(217,119,6,.20); color: #fbbf24; }    /* 要確認：黄系 */
+    .cf-none { background: rgba(154,167,178,.18); color: var(--muted); } /* 比較：未計算：グレー系 */
     .hist-del {
       background: transparent; color: var(--muted);
       border: 1px solid var(--line); border-radius: 8px;
@@ -1997,16 +2004,24 @@
         if (!draft) {
           var cmp = compareEntry(e);
           if (cmp) {
+            // 一目で分かる結果フラグ（表示用。しきい値は compareEntry と同じものを読むだけ・計算式は不変）。
+            // tie を「拮抗（差が小さい）」と「要確認（薄利）」に表示上だけ分割。
+            var flagLabel, flagCls;
+            if (cmp.rec === 'ebay') { flagLabel = 'eBay有利'; flagCls = 'cf-ebay'; }
+            else if (cmp.rec === 'dom') { flagLabel = '国内有利'; flagCls = 'cf-dom'; }
+            else if (Math.abs(cmp.diff) < CMP_DIFF_MIN) { flagLabel = '拮抗'; flagCls = 'cf-tie'; }
+            else { flagLabel = '要確認'; flagCls = 'cf-warn'; }
             var recLabel = cmp.rec === 'ebay' ? '🌏 eBay' : (cmp.rec === 'dom' ? '🏠 国内' : '🤔 要確認');
             var recCls = cmp.rec === 'tie' ? 'b-l3' : 'b-l5';
             cmpHtml = '<div class="hist-cmp">' +
+              '<span class="cmp-flag ' + flagCls + '">' + flagLabel + '</span>' +
               '<span class="cmp-badge ' + recCls + '">おすすめ：' + recLabel + '</span>' +
               '<span class="cmp-nums">国内 ' + cmp.domProfit.toLocaleString('ja-JP') +
                 '円 ・ eBay ' + cmp.ebayProfit.toLocaleString('ja-JP') +
                 '円 ・ 差額 ' + (cmp.diff >= 0 ? '+' : '') + cmp.diff.toLocaleString('ja-JP') + '円</span>' +
             '</div>';
           } else {
-            cmpHtml = '<div class="hist-cmp"><span class="cmp-badge b-draft">比較：未計算</span></div>';
+            cmpHtml = '<div class="hist-cmp"><span class="cmp-flag cf-none">比較：未計算</span></div>';
           }
         }
 
