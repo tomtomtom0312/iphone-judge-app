@@ -231,6 +231,8 @@
     /* 判定バッジ（色は b-l5..b-l1 / b-draft を流用） */
     .vbadge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
     .hist-meta { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    /* トレカBOX/単品の補助項目要約（履歴カード内・小さめ・表示専用） */
+    .hist-attrs { font-size: 12px; line-height: 1.5; margin: 2px 0; word-break: break-word; }
     /* 国内/eBay比較（履歴カード内・小さめ。バッジ色は b-l5/b-l3/b-draft を流用） */
     .hist-cmp { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .cmp-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
@@ -2003,6 +2005,33 @@
       });
     }
 
+    // 履歴カード用：トレカBOX/単品の重要な補助項目を「ラベル：値」中黒区切りで1〜2行に要約。
+    // 表示専用（e.attrs/e.memo/e.searchKw を読むだけ）。空欄と「不明」はスキップ。BOX/単品以外は空文字。
+    function histAttrLine(e) {
+      var a = e.attrs || {};
+      function part(label, val) {
+        var v = (val == null) ? '' : String(val).trim();
+        if (!v || v === '不明') return '';
+        return label + '：' + esc(v);
+      }
+      function join(arr) { return arr.filter(Boolean).join('・'); }
+      var lines = [];
+      if (e.category === 'trading_card_box') {
+        var boxName = (a.boxName && String(a.boxName).trim()) || e.memo || '';
+        lines.push(join([part('BOX名', boxName), part('JAN', a.jan), part('箱状態', a.boxCondition)]));
+        lines.push(join([part('開封', a.sealed), part('シュリンク', a.shrink), part('箱傷み', a.boxDamage)]));
+      } else if (e.category === 'trading_card_single') {
+        var cardName = (a.cardName && String(a.cardName).trim()) || e.memo || '';
+        lines.push(join([part('カード名', cardName), part('型番', a.modelNo), part('レアリティ', a.rarity)]));
+        lines.push(join([part('鑑定', a.gradeCompany), part('グレード', a.grade), part('言語', a.language)]));
+      } else {
+        return '';
+      }
+      if (e.searchKw && String(e.searchKw).trim()) lines.push('検索KW：' + esc(String(e.searchKw).trim()));
+      var html = lines.filter(Boolean).map(function (l) { return '<div>' + l + '</div>'; }).join('');
+      return html ? '<div class="hist-attrs">' + html + '</div>' : '';
+    }
+
     function renderHistory() {
       var list = getHistory();
       $('histCount').textContent = '(' + list.length + ' / ' + MAX_HIST + ')';
@@ -2090,6 +2119,7 @@
                   vBadge +
                   memoTag +
                 '</div>' +
+                histAttrLine(e) +
                 '<div class="hist-meta">' + meta + '</div>' +
                 '<div class="hist-profit-row">' + profitHtml + '</div>' +
                 cmpHtml +
