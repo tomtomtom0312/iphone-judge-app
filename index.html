@@ -1612,12 +1612,20 @@
 
       if (price <= 0 || rate <= 0) {
         $('verdict').className = 'verdict v-none';
-        $('verdict').textContent = '想定売価を入力してください';
+        $('verdict').textContent = (price <= 0)
+          ? '想定売価なし（下書き保存できます）'
+          : '想定売価を入力してください';
         $('reasons').innerHTML = '';
         $('breakdown').style.display = 'none';
         $('miniVerdict').style.display = 'none';
         lastResult = null;
-        $('saveBtn').disabled = true;
+        if (price <= 0) {                 // 売価なし → 下書き保存を許可（利益・判定は未計算）
+          $('saveBtn').disabled = false;
+          $('saveBtn').textContent = '📝 下書き保存（売価なし）';
+        } else {                          // レート未設定など → 従来どおり保存不可
+          $('saveBtn').disabled = true;
+          $('saveBtn').textContent = '💾 この判定を履歴に保存';
+        }
         compareCalc(); // eBay未入力でも国内側の比較は更新する
         return;
       }
@@ -1689,6 +1697,7 @@
         marginNg: marginNg
       };
       $('saveBtn').disabled = false;
+      $('saveBtn').textContent = '💾 この判定を履歴に保存'; // 売価ありに戻ったら通常保存の文言へ
       compareCalc(); // eBay側の利益が更新されたら比較も更新（既存の判定エンジンは不変）
     }
 
@@ -1983,7 +1992,15 @@
 
     // 💾保存ボタン：upsert（自動保存済みなら同じ行を更新するので重複しない）
     function saveCurrent() {
-      if (!lastResult) return; // 売価未入力時はボタン無効なので通常ここには来ない
+      if (!lastResult) {
+        // 売価なし＝下書き保存。空エントリ乱発を防ぐため、最低限の中身がある場合のみ許可。
+        var a = readAttrs($('attrsBox'));
+        var hasContent = currentPhoto
+          || ($('memo').value || '').trim()
+          || ($('searchKw').value || '').trim()
+          || Object.keys(a).some(function (k) { return String(a[k] || '').trim(); });
+        if (!hasContent) { alert('下書き保存するには、写真・商品名/メモ・検索キーワード・補助項目のいずれかを入力してください。'); return; }
+      }
       if (upsertCurrent()) renderHistory();
     }
 
