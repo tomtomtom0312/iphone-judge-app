@@ -2021,8 +2021,9 @@
         lines.push(join([part('BOX名', boxName), part('JAN', a.jan), part('箱状態', a.boxCondition)]));
         lines.push(join([part('開封状態', a.sealed), part('シュリンク', a.shrink), part('箱傷み', a.boxDamage)]));
       } else if (e.category === 'trading_card_single') {
-        var cardName = (a.cardName && String(a.cardName).trim()) || e.memo || '';
-        lines.push(join([part('カード名', cardName), part('型番', a.modelNo), part('レアリティ', a.rarity)]));
+        var hasCardName = !!(a.cardName && String(a.cardName).trim());
+        var cardName = hasCardName ? String(a.cardName).trim() : (e.memo || '');
+        lines.push(join([part(hasCardName ? 'カード名' : '名称', cardName), part('型番', a.modelNo), part('レアリティ', a.rarity)]));
         lines.push(join([part('鑑定', a.gradeCompany), part('グレード', a.grade), part('言語', a.language)]));
       } else {
         return '';
