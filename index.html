@@ -883,7 +883,14 @@
       trading_card_single: [
         { key: 'cardName', label: 'カード名', from: 'cardName' },
         { key: 'modelNo',  label: '型番' },
-        { key: 'rarity',   label: 'レアリティ' }
+        { key: 'rarity',   label: 'レアリティ' },
+        // 鑑定カード（PSA/BGS/CGC/ARS等）・未鑑定・言語/状態の現場確認項目。非破壊・新規キーのみ追加。
+        // グレードは会社ごとに表記が異なる（BGS 9.5 / ARS 10+ 等）ため自由入力。
+        { key: 'gradeCompany',  label: '鑑定会社', type: 'select', options: ['未鑑定', 'PSA', 'BGS', 'CGC', 'ARS', 'その他'] },
+        { key: 'grade',         label: 'グレード' },
+        { key: 'certNo',        label: '鑑定番号' },
+        { key: 'language',      label: '言語', type: 'select', options: ['不明', '日本語', '英語', '中国語', '韓国語', 'その他'] },
+        { key: 'conditionMemo', label: '状態メモ' }
       ],
       trading_card_box: [
         { key: 'boxName', label: 'BOX名',      from: 'boxName' },
