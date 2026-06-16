@@ -517,17 +517,20 @@
 
   <!-- 相場・想定売価（AI認識後に相場を確認 → 候補を反映） -->
   <div class="card single-only">
-    <p class="section-label">相場検索（商品名で各サイトを開く）</p>
-    <div class="search-row" id="searchRow"><!-- ボタンは searchSites から JS で描画 --></div>
-    <div class="search-msg" id="searchMsg"></div>
-    <div class="field">
-      <label>相場メモ（自分で調べた相場を貼り付け）</label>
-      <textarea id="marketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円&#10;カードショップ買取: 2,800円"></textarea>
-    </div>
-    <p class="section-label">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で上の想定売価へ</p>
-    <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
-    <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
-    <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
+    <details>
+      <summary>相場検索・候補を開く</summary>
+      <p class="section-label">相場検索（商品名で各サイトを開く）</p>
+      <div class="search-row" id="searchRow"><!-- ボタンは searchSites から JS で描画 --></div>
+      <div class="search-msg" id="searchMsg"></div>
+      <div class="field">
+        <label>相場メモ（自分で調べた相場を貼り付け）</label>
+        <textarea id="marketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円&#10;カードショップ買取: 2,800円"></textarea>
+      </div>
+      <p class="section-label">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で上の想定売価へ</p>
+      <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
+      <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
+      <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
+    </details>
     <div id="attrsBox" class="attrs-box"></div>
   </div>
 
