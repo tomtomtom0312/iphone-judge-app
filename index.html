@@ -2069,6 +2069,8 @@
           ? '<span class="vbadge b-draft">売価未入力</span>'
           : (e.verdict ? '<span class="vbadge b-l' + (+e.level || 3) + '">' + esc(e.verdict) + '</span>' : '');
         var memoTag = (e.marketMemo && String(e.marketMemo).trim()) ? '<span class="memo-tag">相場メモあり</span>' : '';
+        // 下書き（売価未入力）を一目で分かるよう、既存の淡色バッジ b-draft を流用して付与
+        var draftTag = draft ? '<span class="vbadge b-draft">📝 下書き</span>' : '';
 
         // 利益（独立行で目立たせる。ドラフトは未入力表示）
         var profitHtml = draft
@@ -2134,6 +2136,7 @@
                 '<div class="top">' +
                   catTag +
                   rankBadge +
+                  draftTag +
                   vBadge +
                   memoTag +
                 '</div>' +
