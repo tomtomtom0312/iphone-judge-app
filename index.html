@@ -490,9 +490,25 @@
       <label id="priceLabel">想定売価</label>
       <input id="price" class="price-input" type="text" inputmode="decimal" placeholder="例: 120" />
     </div>
-    <div class="field" style="margin-bottom:0;">
+    <div class="field">
       <label>原価（円）<span class="manual-badge">手入力</span></label>
       <input id="cost" type="text" inputmode="numeric" placeholder="空欄＝0円" />
+    </div>
+    <div class="field">
+      <label>商品状態</label>
+      <select id="condition">
+        <option value="新品" selected>新品</option>
+        <option value="未使用品">未使用品</option>
+        <option value="新品同様">新品同様</option>
+        <option value="美品">美品</option>
+        <option value="良品">良品</option>
+        <option value="難あり">難あり</option>
+        <option value="ジャンク">ジャンク</option>
+      </select>
+    </div>
+    <div class="field" style="margin-bottom:0;">
+      <label>発送方法（eBay送料）<span class="manual-badge">手入力</span></label>
+      <select id="shipping"><!-- JSが販路ごとに生成 --></select>
     </div>
     <!-- ミニ判定バー：売価・原価を入れると即表示（詳細な内訳は下部に残す） -->
     <div id="miniVerdict" class="mini-verdict" style="display:none;"></div>
@@ -513,27 +529,6 @@
     <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
     <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
     <div id="attrsBox" class="attrs-box"></div>
-  </div>
-
-  <!-- 詳細入力 -->
-  <div class="card single-only">
-    <div class="field">
-      <label>商品状態</label>
-      <select id="condition">
-        <option value="新品" selected>新品</option>
-        <option value="未使用品">未使用品</option>
-        <option value="新品同様">新品同様</option>
-        <option value="美品">美品</option>
-        <option value="良品">良品</option>
-        <option value="難あり">難あり</option>
-        <option value="ジャンク">ジャンク</option>
-      </select>
-    </div>
-
-    <div class="field" style="margin-bottom:0;">
-      <label>発送方法（eBay送料）<span class="manual-badge">手入力</span></label>
-      <select id="shipping"><!-- JSが販路ごとに生成 --></select>
-    </div>
   </div>
 
   <!-- 結果 -->
