@@ -209,6 +209,18 @@ Phase 1「静的 eBay 版の仕上げ」を進行中。長期計画は **ROADMAP
 - **判定ロジックには未反映**（`judge()`・5段階判定は不変）。既存値を割って表示するだけ。
 - **無変更**: 既存の利益計算式（`profit`/`margin`）・国内/eBay比較計算式（`domProfit`/`ebayProfit`/`diff`/おすすめ）・保存構造・CSV・localStorage・既存履歴移行・PWA関連ファイル。実装ファイルは index.html のみ。本番確認済み。
 
+## 原価利益率の注意バッジを追加（2026-06-16, e17ccc2 feat: add cost-based profit rate badges）— デプロイ済み・本番確認済み
+- 前回追加の**原価利益率（利益÷原価×100）**をもとに、仕入れ判断の補助となる**5段階の注意バッジ**を表示で追加（表示のみ・判定ロジック未反映）。
+- 段階（しきい値→ラベル→色は既存トークン `b-l1..b-l5` を流用）:
+  - 0%未満 → **赤字**(b-l1) ／ 0〜20%未満 → **薄利注意**(b-l2) ／ 20〜50%未満 → **要確認**(b-l3) ／ 50〜100%未満 → **良好**(b-l4) ／ 100%以上 → **高利益率**(b-l5)
+  - 境界は「以上/未満」（20→要確認、50→良好、100→高利益率）。段階は画面表示の丸め後整数%で判定。
+- 表示専用ヘルパ `roiBadge(roi)` を追加（整数%→バッジHTML、null/NaN＝原価0や未入力は空文字＝バッジなし）。**新規CSSなし**（`.cmp-badge` ＋ `b-l1..b-l5` 流用）。
+- 表示は3か所:
+  - **ミニ判定バー**（`calc()`）: 「原価利益率 X%」の直後。
+  - **国内/eBay比較カード**（`compareCalc()` の `#cmpRoi`）: 国内側・eBay側に**それぞれ別バッジ**（例「国内 30%〔要確認〕 / eBay 80%〔良好〕」）。textContent→innerHTML 化。
+  - **履歴カード**（`renderHistory` の `costRoi`）: 保存済み `e.profit`/`e.cost` 由来。ドラフト/原価0は付けない。
+- **無変更**: 既存のおすすめ判定ロジック（`judge`/`compareCalc` のおすすめ）・既存利益計算式（`profit`/`margin`）・国内/eBay比較計算式（`domProfit`/`ebayProfit`/`diff`）・保存構造・CSV・localStorage・既存履歴移行・PWA関連ファイル。実装ファイルは index.html のみ。本番確認済み。
+
 ## 動作確認
 `python3 -m http.server 8000` → iPhone Safari で `http://192.168.1.2:8000`（AI以外）
 
