@@ -450,8 +450,8 @@
 
   <!-- 連続撮影パネル（連続モードのみ表示） -->
   <div class="card burst-only" id="burstCard" style="display:none;">
-    <p class="burst-note">📦 1枚ずつ撮影または選択し、AI判定結果を履歴に自動保存します。複数枚をまとめて選択する機能ではありません。</p>
-    <p class="burst-note">1枚撮るたびにAIが認識して<b>履歴へ自動保存</b>します。売価・原価・送料・メモは、あとで各履歴の「編集」から入力してください。</p>
+    <p class="burst-note">📦 1枚撮影／選択するたびにAIが判定し<b>履歴へ自動保存</b>（まとめ選択ではありません）。</p>
+    <p class="burst-note">売価・原価・送料・メモは、あとで各履歴の「編集」から入力。</p>
     <div class="field" style="margin-bottom:0;">
       <label>カテゴリのヒント（任意）</label>
       <select id="burstCategoryHint">
@@ -512,7 +512,7 @@
     </div>
     <!-- ミニ判定バー：売価・原価を入れると即表示（詳細な内訳は下部に残す） -->
     <div id="miniVerdict" class="mini-verdict" style="display:none;"></div>
-    <p class="hint" id="aiHint">💡 将来（Phase 2）：写真から商品名・想定売価を自動入力予定。手入力で上書きも可。</p>
+    <p class="hint" id="aiHint">💡 Phase 2予定：写真から商品名・売価を自動入力（手入力で上書き可）。</p>
   </div>
 
   <!-- 相場・想定売価（AI認識後に相場を確認 → 候補を反映） -->
