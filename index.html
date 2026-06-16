@@ -618,21 +618,21 @@
         <div class="row">
           <div class="field">
             <label>推奨ライン（円以上）</label>
-            <input id="thOk" type="number" inputmode="numeric" />
+            <input id="thOk" type="text" inputmode="numeric" />
           </div>
           <div class="field">
             <label>見送りライン（円未満）</label>
-            <input id="thNg" type="number" inputmode="numeric" />
+            <input id="thNg" type="text" inputmode="numeric" />
           </div>
         </div>
         <div class="row">
           <div class="field">
             <label>推奨利益率（%以上）</label>
-            <input id="marginOk" type="number" inputmode="decimal" />
+            <input id="marginOk" type="text" inputmode="decimal" />
           </div>
           <div class="field">
             <label>見送り利益率（%未満）</label>
-            <input id="marginNg" type="number" inputmode="decimal" />
+            <input id="marginNg" type="text" inputmode="decimal" />
           </div>
         </div>
         <p class="hint">推奨＝利益額・利益率の<b>両方</b>がライン以上。見送り＝利益額か利益率の<b>どちらか</b>が下限未満。設定は<b>販路ごと</b>に端末へ保存されます。</p>
@@ -966,7 +966,7 @@
       })
       .replace(/．/g, '.')
       .replace(/[，、]/g, ',')
-      .replace(/[￥¥円,%％\s　]/g, '');
+      .replace(/[$＄￥¥円,%％\s　]/g, ''); // 通貨記号($＄¥￥円)・%・カンマ・全半角スペースを除去
     var n = parseFloat(s);
     return isNaN(n) ? 0 : n;
   }
@@ -1442,7 +1442,8 @@
     }
     function saveMarketSettings() {
       var s = {};
-      SETTING_IDS.forEach(function (id) { s[id] = $(id).value; });
+      // 保存時に正規化（全角数字・カンマ・通貨記号・スペース）。キー名は不変、値は数値化（getSettings の +強制と互換）
+      SETTING_IDS.forEach(function (id) { s[id] = parseInputNumber($(id).value); });
       localStorage.setItem(settingsKey(activeMarket), JSON.stringify(s));
     }
 
@@ -1485,7 +1486,7 @@
       $('shipEditor').innerHTML = effectiveShipping(marketId).map(function (s) {
         return '<div class="field" style="margin-bottom:10px;">' +
           '<label>' + esc(s.label) + '</label>' +
-          '<input class="ship-input" type="number" inputmode="numeric" data-label="' + esc(s.label) + '" value="' + s.cost + '" />' +
+          '<input class="ship-input" type="text" inputmode="numeric" data-label="' + esc(s.label) + '" value="' + s.cost + '" />' +
           '</div>';
       }).join('');
       var inputs = $('shipEditor').querySelectorAll('.ship-input');
@@ -1499,8 +1500,8 @@
       var ov = {};
       var inputs = $('shipEditor').querySelectorAll('.ship-input');
       for (var i = 0; i < inputs.length; i++) {
-        var v = parseFloat(inputs[i].value);
-        ov[inputs[i].getAttribute('data-label')] = isNaN(v) ? 0 : v;
+        // 全角数字・カンマ・通貨記号・スペースを正規化（空欄/不正は0）
+        ov[inputs[i].getAttribute('data-label')] = parseInputNumber(inputs[i].value);
       }
       localStorage.setItem(shipKey(activeMarket), JSON.stringify(ov));
       buildShippingSelect(activeMarket); // 選択維持のまま送料を反映
