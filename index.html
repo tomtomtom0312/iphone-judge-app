@@ -1643,7 +1643,7 @@
       mv.className = 'mini-verdict b-' + j.cls;
       mv.innerHTML = stars(j.level) + ' ' + esc(j.label) +
         '　利益 ' + yen(profit) + '　利益率 ' + margin.toFixed(1) + '%' +
-        (cost > 0 ? '　原価利益率 ' + Math.round(profit / cost * 100) + '%' : '');
+        (cost > 0 ? '　原価利益率 ' + Math.round(profit / cost * 100) + '%' + roiBadge(Math.round(profit / cost * 100)) : '');
       mv.style.display = 'block';
 
       // 利益率が見送り下限割れのときは赤
@@ -1678,6 +1678,18 @@
     }
 
     // --- 販路比較（国内 vs eBay）：Phase1は手入力ベース・画面表示のみ（履歴/CSV保存なし） ---
+    // 原価利益率（整数%）→ 注意バッジHTML（表示専用。おすすめ判定・利益計算・比較計算には一切不使用）。
+    // 値が無い（null/NaN＝原価0や未入力）ときは空文字＝バッジなし。色は既存トークン b-l1..b-l5 を流用。
+    function roiBadge(roi) {
+      if (roi == null || isNaN(roi)) return '';
+      var label, cls;
+      if (roi < 0)        { label = '赤字';     cls = 'b-l1'; } // 0%未満
+      else if (roi < 20)  { label = '薄利注意'; cls = 'b-l2'; } // 0〜20%未満
+      else if (roi < 50)  { label = '要確認';   cls = 'b-l3'; } // 20〜50%未満
+      else if (roi < 100) { label = '良好';     cls = 'b-l4'; } // 50〜100%未満
+      else                { label = '高利益率'; cls = 'b-l5'; } // 100%以上
+      return ' <span class="cmp-badge ' + cls + '">' + label + '</span>';
+    }
     // しきい値（おすすめ判定用の定数）
     var CMP_DIFF_MIN = 1000; // 円：差額がこの幅未満なら「要確認」（拮抗）
     var CMP_THIN = 500;      // 円：両販路とも利益がこの額未満なら「要確認」（薄利）
@@ -1721,12 +1733,14 @@
       $('cmpDiff').textContent = (diff >= 0 ? '+' : '') + yen(diff);
       $('cmpDiff').className = diff >= 0 ? 'pos' : 'neg';
 
-      // 原価利益率（表示のみ・利益÷原価×100）。原価0/空欄は「—」。比較計算式（利益/差額/おすすめ）は不変
+      // 原価利益率（表示のみ・利益÷原価×100）＋国内/eBay各側の注意バッジ。原価0/空欄は「—」。比較計算式（利益/差額/おすすめ）は不変
       if (cost > 0) {
-        $('cmpRoi').textContent = '国内 ' + Math.round(domProfit / cost * 100) +
-          '% / eBay ' + Math.round(ebayProfit / cost * 100) + '%';
+        var domRoi = Math.round(domProfit / cost * 100);
+        var ebayRoi = Math.round(ebayProfit / cost * 100);
+        $('cmpRoi').innerHTML = '国内 ' + domRoi + '%' + roiBadge(domRoi) +
+          ' / eBay ' + ebayRoi + '%' + roiBadge(ebayRoi);
       } else {
-        $('cmpRoi').textContent = '—（原価未入力）';
+        $('cmpRoi').innerHTML = '—（原価未入力）';
       }
       $('cmpRoi').className = '';
 
@@ -2001,9 +2015,12 @@
           ? '<span class="hist-profit muted"><span class="lbl">利益</span>—</span>'
           : '<span class="hist-profit ' + (e.profit >= 0 ? 'pos' : 'neg') + '"><span class="lbl">利益</span>' + e.profit.toLocaleString('ja-JP') + '円</span>';
 
-        // 原価利益率（表示のみ・利益÷原価×100）。保存済み profit/cost から算出。原価0/欠落は付けない
-        var costRoi = (!draft && e.profit != null && (+e.cost) > 0)
-          ? ' ・ 原価利益率' + Math.round(e.profit / (+e.cost) * 100) + '%' : '';
+        // 原価利益率（表示のみ・利益÷原価×100）＋注意バッジ。保存済み profit/cost から算出。原価0/欠落は付けない
+        var costRoi = '';
+        if (!draft && e.profit != null && (+e.cost) > 0) {
+          var histRoi = Math.round(e.profit / (+e.cost) * 100);
+          costRoi = ' ・ 原価利益率' + histRoi + '%' + roiBadge(histRoi);
+        }
         // メタ行（売価USD・状態・利益率／原価円・原価利益率・発送）。ドラフトは伏せる
         var meta = draft
           ? '<span class="muted">売価・原価・送料は未入力（編集で入力）</span>'
