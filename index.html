@@ -340,6 +340,14 @@
       cursor: pointer; text-align: center;
     }
 
+    /* 履歴カード内のコピー用ボタン（商品名/検索KW/カード名/型番/言語） */
+    .hist-copy { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+    .hist-copy-btn {
+      padding: 7px 10px; border-radius: 8px; background: #0d1117;
+      color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .copy-msg { font-size: 11px; color: var(--muted); }
+
     /* 撮影後クロップ（静止画調整・ライブカメラは使わない） */
     .crop-stage {
       position: relative; width: 100%; aspect-ratio: 1 / 1;
@@ -2050,6 +2058,13 @@
       return html ? '<div class="hist-attrs">' + html + '</div>' : '';
     }
 
+    // 履歴カード用：コピー対象の値があるときだけコピーボタンを返す（表示専用・data-copy に生値を格納）
+    function copyBtnHtml(label, val) {
+      return (val && String(val).trim())
+        ? '<button type="button" class="hist-copy-btn" data-copy="' + esc(String(val).trim()) + '">' + label + 'コピー</button>'
+        : '';
+    }
+
     function renderHistory() {
       var list = getHistory();
       $('histCount').textContent = '(' + list.length + ' / ' + MAX_HIST + ')';
@@ -2127,6 +2142,19 @@
             '</div>'
           : '';
 
+        // コピー用ボタン：値があるものだけ。商品名/検索KWは全カテゴリ、カード名/型番/言語はトレカ単品のみ（言語は「不明」を除く）
+        var a = e.attrs || {};
+        var isSingle = (e.category === 'trading_card_single');
+        var copyBtns =
+          copyBtnHtml('商品名', e.memo) +
+          copyBtnHtml('検索KW', e.searchKw) +
+          (isSingle ? copyBtnHtml('カード名', a.cardName) : '') +
+          (isSingle ? copyBtnHtml('型番', a.modelNo) : '') +
+          (isSingle && a.language !== '不明' ? copyBtnHtml('言語', a.language) : '');
+        var copyHtml = copyBtns
+          ? '<div class="hist-copy">' + copyBtns + '<span class="copy-msg" aria-live="polite"></span></div>'
+          : '';
+
         return '' +
           '<div class="hist-item" data-id="' + e.id + '">' +
             '<div class="hist-top-row">' +
@@ -2148,6 +2176,7 @@
               '</div>' +
             '</div>' +
             searchHtml +
+            copyHtml +
             '<div class="hist-btns">' +
               '<button class="hist-edit" data-id="' + e.id + '">編集</button>' +
               '<button class="hist-del" data-id="' + e.id + '">削除</button>' +
@@ -2176,6 +2205,11 @@
       var slinks = $('histList').querySelectorAll('.hist-search-link');
       for (var s = 0; s < slinks.length; s++) {
         slinks[s].addEventListener('click', onSearchClick);
+      }
+      // コピー用ボタン配線（表示専用・stopPropagation で詳細モーダルを開かせない）
+      var copies = $('histList').querySelectorAll('.hist-copy-btn');
+      for (var cb = 0; cb < copies.length; cb++) {
+        copies[cb].addEventListener('click', onCopyClick);
       }
 
       // 履歴カードのタップ → 詳細モーダル
@@ -2504,6 +2538,36 @@
         try { existing.location.href = url; existing.focus(); return; } catch (e) {}
       }
       searchWindows[site.windowName] = window.open(url, site.windowName);
+    }
+
+    // 履歴カードのコピー用ボタン（表示専用）。クリップボードAPI→失敗時は execCommand フォールバック。
+    function legacyCopy(text) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (e) { return false; }
+    }
+    function onCopyClick(ev) {
+      ev.stopPropagation(); // 詳細モーダルを開かせない
+      var btn = ev.currentTarget;
+      var text = btn.getAttribute('data-copy') || '';
+      var row = btn.closest('.hist-copy');
+      var msg = row ? row.querySelector('.copy-msg') : null;
+      function ok() { if (msg) { msg.textContent = 'コピーしました'; setTimeout(function () { msg.textContent = ''; }, 1500); } }
+      function fail() { if (msg) { msg.textContent = 'コピーできませんでした。長押しで選択してください。'; } }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok, function () { if (legacyCopy(text)) ok(); else fail(); });
+      } else {
+        if (legacyCopy(text)) ok(); else fail();
+      }
     }
 
     // 単品フォームの相場検索ボタン：定義リストから描画し、共通ハンドラを配線
