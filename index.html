@@ -888,8 +888,15 @@
       trading_card_box: [
         { key: 'boxName', label: 'BOX名',      from: 'boxName' },
         { key: 'series',  label: 'シリーズ名',  from: 'series' },
-        { key: 'sealed',  label: '未開封BOX',   type: 'select', options: ['不明', '未開封', '開封済み'] },
-        { key: 'shrink',  label: 'シュリンク',   type: 'select', options: ['不明', 'あり', 'なし'] }
+        { key: 'sealed',  label: '未開封 / 開封済み', type: 'select', options: ['不明', '未開封', '開封済み'] },
+        { key: 'shrink',  label: 'シュリンク',   type: 'select', options: ['不明', 'あり', 'なし'] },
+        // 箱物（フィギュア箱あり/トレカBOX/ゲームソフト・周辺機器/未開封・JAN付き新品など）向けの現場確認項目。
+        // 非破壊・新規キーのみ追加（既存キー名は変更なし）。renderAttrs/readAttrs/詳細/編集モーダルは既存処理を流用。
+        { key: 'jan',          label: 'JAN' },
+        { key: 'boxCondition', label: '箱状態', type: 'select', options: ['不明', '良好', '傷あり', '潰れあり', '破れあり'] },
+        { key: 'boxDamage',    label: '箱傷みメモ' },
+        { key: 'accessories',  label: '付属品' },
+        { key: 'opCheck',      label: '動作確認メモ' }
       ],
       figure: [
         { key: 'series',    label: '作品/シリーズ', from: 'series' },
