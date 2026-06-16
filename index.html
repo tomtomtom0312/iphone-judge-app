@@ -593,6 +593,7 @@
       <div class="line"><span>国内手数料</span><span id="cmpDomFee">—</span></div>
       <div class="line"><span>国内利益</span><span id="cmpDom">—</span></div>
       <div class="line"><span>eBay利益</span><span id="cmpEbay">—</span></div>
+      <div class="line"><span>原価利益率（国内 / eBay）</span><span id="cmpRoi">—</span></div>
       <div class="line profit"><span>差額（eBay − 国内）</span><span id="cmpDiff">—</span></div>
     </div>
     <div id="cmpVerdict" class="mini-verdict b-l3">売価を入力すると判定します</div>
@@ -1641,7 +1642,8 @@
       var mv = $('miniVerdict');
       mv.className = 'mini-verdict b-' + j.cls;
       mv.innerHTML = stars(j.level) + ' ' + esc(j.label) +
-        '　利益 ' + yen(profit) + '　利益率 ' + margin.toFixed(1) + '%';
+        '　利益 ' + yen(profit) + '　利益率 ' + margin.toFixed(1) + '%' +
+        (cost > 0 ? '　原価利益率 ' + Math.round(profit / cost * 100) + '%' : '');
       mv.style.display = 'block';
 
       // 利益率が見送り下限割れのときは赤
@@ -1697,6 +1699,7 @@
         $('cmpDom').textContent = '—'; $('cmpDom').className = '';
         $('cmpEbay').textContent = '—'; $('cmpEbay').className = '';
         $('cmpDiff').textContent = '—'; $('cmpDiff').className = '';
+        $('cmpRoi').textContent = '—'; $('cmpRoi').className = '';
         cv.className = 'mini-verdict b-l3';
         cv.textContent = '売価を入力すると判定します';
         return;
@@ -1717,6 +1720,15 @@
       $('cmpEbay').className = ebayProfit >= 0 ? 'pos' : 'neg';
       $('cmpDiff').textContent = (diff >= 0 ? '+' : '') + yen(diff);
       $('cmpDiff').className = diff >= 0 ? 'pos' : 'neg';
+
+      // 原価利益率（表示のみ・利益÷原価×100）。原価0/空欄は「—」。比較計算式（利益/差額/おすすめ）は不変
+      if (cost > 0) {
+        $('cmpRoi').textContent = '国内 ' + Math.round(domProfit / cost * 100) +
+          '% / eBay ' + Math.round(ebayProfit / cost * 100) + '%';
+      } else {
+        $('cmpRoi').textContent = '—（原価未入力）';
+      }
+      $('cmpRoi').className = '';
 
       // おすすめ販路（既存 judge とは独立した簡易ロジック）
       var best = Math.max(domProfit, ebayProfit);
@@ -1989,11 +2001,14 @@
           ? '<span class="hist-profit muted"><span class="lbl">利益</span>—</span>'
           : '<span class="hist-profit ' + (e.profit >= 0 ? 'pos' : 'neg') + '"><span class="lbl">利益</span>' + e.profit.toLocaleString('ja-JP') + '円</span>';
 
-        // メタ行（売価USD・状態・利益率／原価円・発送）。ドラフトは伏せる
+        // 原価利益率（表示のみ・利益÷原価×100）。保存済み profit/cost から算出。原価0/欠落は付けない
+        var costRoi = (!draft && e.profit != null && (+e.cost) > 0)
+          ? ' ・ 原価利益率' + Math.round(e.profit / (+e.cost) * 100) + '%' : '';
+        // メタ行（売価USD・状態・利益率／原価円・原価利益率・発送）。ドラフトは伏せる
         var meta = draft
           ? '<span class="muted">売価・原価・送料は未入力（編集で入力）</span>'
           : esc(sym) + esc(e.price) + ' ・ ' + esc(e.condition) + ' ・ 利益率' + esc(e.margin) + '%<br>' +
-            '原価' + (+e.cost || 0).toLocaleString('ja-JP') + '円 ・ ' + esc(e.shipName || '');
+            '原価' + (+e.cost || 0).toLocaleString('ja-JP') + '円' + costRoi + ' ・ ' + esc(e.shipName || '');
 
         var nameHtml = e.memo
           ? '<div class="hist-name">' + esc(e.memo) + '</div>'
