@@ -453,6 +453,8 @@
     </div>
     <button class="photo-btn" id="cameraBtn">📷 写真を撮る</button>
     <button class="photo-btn photo-btn-sub" id="albumBtn">🖼 アルバムから選ぶ</button>
+    <!-- トレカBOX×単品モードのときだけ表示。既存のJANライブ読み取り(startJanLiveScan)を使い回す -->
+    <button class="photo-btn photo-btn-sub" id="topJanScanBtn" style="display:none;">📷 ライブでJANを読む</button>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
@@ -1277,6 +1279,7 @@
       currentEntryId = null; // 新しい写真＝新しい商品。次の保存は新規行になる
       $('category').value = 'other'; // 手動カテゴリ選択UIも初期化
       renderAttrs($('attrsBox'), 'other', {});
+      updateTopJanScanBtn(); // 新しい写真でカテゴリがリセットされたら上部JANボタンも非表示へ
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
       var reader = new FileReader();
@@ -1369,6 +1372,7 @@
       $('aiStatus').textContent = '';
       resetCrop(); // モード切替時はクロップ台を片付ける
       if (burst) renderBurstStatus();
+      updateTopJanScanBtn(); // モード切替に応じて上部JANボタンの表示を同期
     }
     (function () {
       var btns = $('modeSwitch').querySelectorAll('button');
@@ -1376,6 +1380,17 @@
         btns[i].addEventListener('click', function () { applyCaptureMode(this.getAttribute('data-mode')); });
       }
     })();
+
+    // 上部「ライブでJANを読む」：単品モード×トレカBOX のときだけ表示。既存 startJanLiveScan を使い回し、結果は attrsBox のJAN欄へ反映
+    function updateTopJanScanBtn() {
+      var show = (captureMode === 'single') && (currentCategory === 'trading_card_box');
+      $('topJanScanBtn').style.display = show ? '' : 'none';
+    }
+    $('topJanScanBtn').addEventListener('click', function () {
+      var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
+      var msg = document.querySelector('#attrsBox .jan-scan-msg');
+      if (janInput) startJanLiveScan(janInput, msg);
+    });
 
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
     // 「この位置でAI認識」：クロップ枠の画像を生成し、モードに応じて認識へ回す
@@ -1442,6 +1457,7 @@
           currentAi = pickAi(j);
           currentAttrs = attrsFromRecognition(currentCategory, j);
           renderAttrs($('attrsBox'), currentCategory, currentAttrs); // カテゴリ別補助を反映
+          updateTopJanScanBtn(); // AI認識でカテゴリが変わったら上部JANボタンの表示を同期
 
           // 商品名（＋容量・色）を自動入力（人が上書き可能）
           $('memo').value = composeName(j);
@@ -2089,6 +2105,7 @@
       renderAttrs($('attrsBox'), currentCategory, currentAttrs);
       syncCurrent(); // 自動保存済みなら現在行へ反映（未保存なら何もしない）
       refreshAmzCatGuess(); // 上の商品カテゴリの変更をAmazonカテゴリ推定へ連動
+      updateTopJanScanBtn(); // カテゴリ変更に応じて上部JANボタンの表示を同期
     }
     $('category').addEventListener('change', onCategoryChange);
     // 設定（販路ごと）→ 再計算＋保存
@@ -2845,6 +2862,7 @@
     // --- 初期化 ---
     buildMarketSelect();
     renderAttrs($('attrsBox'), 'other', {}); // 単品フォームの補助項目の初期表示
+    updateTopJanScanBtn(); // 起動時の上部JANボタン表示を確定（初期は other＝非表示）
     activeMarket = localStorage.getItem('judgeActiveMarket') || 'ebay';
     if (!MARKETPLACES[activeMarket]) activeMarket = 'ebay';
     $('market').value = activeMarket;
