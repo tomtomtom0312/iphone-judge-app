@@ -403,8 +403,8 @@
     .cand-apply:active { opacity: .85; }
     .attrs-box { margin-top: 14px; }
     .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
-    /* 入力フォームのJAN欄に添えるボタン（JANで検索／バーコードを撮る／カメラでJANを読む／JANクリア） */
-    .jan-search-btn, .jan-scan-btn, .jan-cam-btn, .jan-clear-btn {
+    /* 入力フォームのJAN欄に添えるボタン（JANで検索／カメラでJANを読む／JANクリア） */
+    .jan-search-btn, .jan-cam-btn, .jan-clear-btn {
       margin-top: 6px; margin-right: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
       color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600; cursor: pointer;
     }
@@ -974,11 +974,8 @@
               inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANで検索</button>';
               // JANクリア：値があるときだけ表示。押すとJAN欄を空にする
               inp += '<button type="button" class="jan-clear-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANクリア</button>';
-              // JAN静止画読み取り（第1段階）：1枚撮影/選択→ZXingでEAN-13デコード。既存の撮影/AIフローとは分離した専用 input を使う。
-              inp += '<button type="button" class="jan-scan-btn">バーコードを撮る</button>';
-              // JANライブ読み取り（第2段階）：カメラを開いて数秒デコード。読めたら停止。
+              // JANライブ読み取り：カメラを開いて数秒デコード。読めたら停止。
               inp += '<button type="button" class="jan-cam-btn">カメラでJANを読む</button>';
-              inp += '<input type="file" accept="image/*" capture="environment" class="jan-scan-input" style="display:none;" />';
               inp += '<span class="jan-scan-msg" aria-live="polite"></span>';
             }
           }
@@ -1004,18 +1001,8 @@
             if (site) window.open(site.url(encodeURIComponent(jan)), '_blank', 'noopener');
           });
         }
-        // JAN静止画読み取り：撮るボタン→専用 file input→ZXingデコード→JAN欄へ反映（既存撮影/AIには非干渉）
-        var scanBtn = container.querySelector('.jan-scan-btn');
-        var scanInput = container.querySelector('.jan-scan-input');
+        // JAN読み取りメッセージ（ライブ読み取りの成功/失敗表示・JANクリアでの消去に使用）
         var scanMsg = container.querySelector('.jan-scan-msg');
-        if (janInput && scanBtn && scanInput) {
-          scanBtn.addEventListener('click', function () { scanInput.click(); });
-          scanInput.addEventListener('change', function () {
-            var file = scanInput.files && scanInput.files[0];
-            scanInput.value = ''; // 同じ写真を選び直せるようにリセット
-            decodeJanFromImage(file, janInput, scanMsg);
-          });
-        }
         // JANライブ読み取り：カメラを開いて数秒デコード（成功/失敗/中止/離脱で必ず停止）
         var camBtn = container.querySelector('.jan-cam-btn');
         if (janInput && camBtn) {
@@ -1039,7 +1026,7 @@
       return out;
     }
 
-    // --- JAN静止画読み取り（第1段階）。ZXing-js をCDNから初回のみ遅延ロード。Vercel/AI/画像処理には非依存 ---
+    // --- ZXing-js をCDNから初回のみ遅延ロード（ライブJAN読み取りで使用）。Vercel/AI/画像処理には非依存 ---
     var _zxingLoad = null;
     function loadZXing() {
       if (window.ZXing && window.ZXing.BrowserMultiFormatReader) return Promise.resolve(window.ZXing);
@@ -1055,32 +1042,8 @@
       });
       return _zxingLoad;
     }
-    // 1枚の画像ファイルからEAN-13等を読み取り、成功時はJAN欄へ反映（input発火で既存「JANで検索」の表示が連動）
-    function decodeJanFromImage(file, janInput, msgEl) {
-      if (!file || !janInput) return;
-      var failMsg = 'JANを読み取れませんでした。半角数字で手入力してください。';
-      if (msgEl) msgEl.textContent = '読み取り中…';
-      var reader = new FileReader();
-      reader.onload = function (ev) {
-        var url = ev.target.result;
-        loadZXing().then(function (ZX) {
-          return new ZX.BrowserMultiFormatReader().decodeFromImageUrl(url);
-        }).then(function (result) {
-          var digits = (result && result.text ? String(result.text) : '').replace(/[^0-9]/g, '');
-          if (digits) {
-            janInput.value = digits;
-            janInput.dispatchEvent(new Event('input')); // 既存JAN検索ボタンの表示連動
-            if (msgEl) msgEl.textContent = '読み取りました：' + digits;
-          } else if (msgEl) { msgEl.textContent = failMsg; }
-        }).catch(function () {
-          if (msgEl) msgEl.textContent = failMsg;
-        });
-      };
-      reader.onerror = function () { if (msgEl) msgEl.textContent = failMsg; };
-      reader.readAsDataURL(file);
-    }
 
-    // --- JANライブ読み取り（第2段階）。カメラを開いて数秒デコード→成功でJAN欄反映＋停止。getUserMediaは入力フォームのJANのみ ---
+    // --- JANライブ読み取り。カメラを開いて数秒デコード→成功でJAN欄反映＋停止。getUserMediaは入力フォームのJANのみ ---
     var _janCam = null;       // カメラオーバーレイ（1回だけ生成して再利用）
     var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null };
     var JAN_SCAN_TIMEOUT_MS = 8000;
