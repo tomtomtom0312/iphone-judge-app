@@ -403,8 +403,8 @@
     .cand-apply:active { opacity: .85; }
     .attrs-box { margin-top: 14px; }
     .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
-    /* 入力フォームのJAN欄に添えるボタン（JANで検索／バーコードを撮る／カメラでJANを読む） */
-    .jan-search-btn, .jan-scan-btn, .jan-cam-btn {
+    /* 入力フォームのJAN欄に添えるボタン（JANで検索／バーコードを撮る／カメラでJANを読む／JANクリア） */
+    .jan-search-btn, .jan-scan-btn, .jan-cam-btn, .jan-clear-btn {
       margin-top: 6px; margin-right: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
       color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600; cursor: pointer;
     }
@@ -972,6 +972,8 @@
             if (f.key === 'jan' && container.id === 'attrsBox') {
               var hasJan = !!v.replace(/[ 　]/g, '').trim();
               inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANで検索</button>';
+              // JANクリア：値があるときだけ表示。押すとJAN欄を空にする
+              inp += '<button type="button" class="jan-clear-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANクリア</button>';
               // JAN静止画読み取り（第1段階）：1枚撮影/選択→ZXingでEAN-13デコード。既存の撮影/AIフローとは分離した専用 input を使う。
               inp += '<button type="button" class="jan-scan-btn">バーコードを撮る</button>';
               // JANライブ読み取り（第2段階）：カメラを開いて数秒デコード。読めたら停止。
@@ -987,9 +989,12 @@
       if (container.id === 'attrsBox') {
         var janInput = container.querySelector('[data-attr="jan"]');
         var janBtn = container.querySelector('.jan-search-btn');
+        var clearBtn = container.querySelector('.jan-clear-btn');
         if (janInput && janBtn) {
           janInput.addEventListener('input', function () {
-            janBtn.style.display = janInput.value.replace(/[ 　]/g, '').trim() ? '' : 'none';
+            var has = !!janInput.value.replace(/[ 　]/g, '').trim();
+            janBtn.style.display = has ? '' : 'none';
+            if (clearBtn) clearBtn.style.display = has ? '' : 'none';
           });
           janBtn.addEventListener('click', function () {
             var jan = janInput.value.replace(/[ 　]/g, '').trim();
@@ -1015,6 +1020,14 @@
         var camBtn = container.querySelector('.jan-cam-btn');
         if (janInput && camBtn) {
           camBtn.addEventListener('click', function () { startJanLiveScan(janInput, scanMsg); });
+        }
+        // JANクリア：JAN欄と読み取りメッセージを空にし、input発火で検索/クリアボタンを非表示へ戻す
+        if (janInput && clearBtn) {
+          clearBtn.addEventListener('click', function () {
+            janInput.value = '';
+            if (scanMsg) scanMsg.textContent = '';
+            janInput.dispatchEvent(new Event('input'));
+          });
         }
       }
     }
