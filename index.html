@@ -2142,15 +2142,19 @@
             '</div>'
           : '';
 
-        // コピー用ボタン：値があるものだけ。商品名/検索KWは全カテゴリ、カード名/型番/言語はトレカ単品のみ（言語は「不明」を除く）
+        // コピー用ボタン：値があるものだけ。商品名/検索KWは全カテゴリ、カード名/型番/言語はトレカ単品、BOX名/シリーズ名/JANはトレカBOX（いずれも「不明」は除く）
         var a = e.attrs || {};
         var isSingle = (e.category === 'trading_card_single');
+        var isBox = (e.category === 'trading_card_box');
         var copyBtns =
           copyBtnHtml('商品名', e.memo) +
           copyBtnHtml('検索KW', e.searchKw) +
           (isSingle ? copyBtnHtml('カード名', a.cardName) : '') +
           (isSingle ? copyBtnHtml('型番', a.modelNo) : '') +
-          (isSingle && a.language !== '不明' ? copyBtnHtml('言語', a.language) : '');
+          (isSingle && a.language !== '不明' ? copyBtnHtml('言語', a.language) : '') +
+          (isBox && a.boxName !== '不明' ? copyBtnHtml('BOX名', a.boxName) : '') +
+          (isBox && a.series  !== '不明' ? copyBtnHtml('シリーズ名', a.series) : '') +
+          (isBox && a.jan     !== '不明' ? copyBtnHtml('JAN', a.jan) : '');
         var copyHtml = copyBtns
           ? '<div class="hist-copy">' + copyBtns + '<span class="copy-msg" aria-live="polite"></span></div>'
           : '';
