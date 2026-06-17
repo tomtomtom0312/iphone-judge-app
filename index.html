@@ -403,6 +403,11 @@
     .cand-apply:active { opacity: .85; }
     .attrs-box { margin-top: 14px; }
     .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+    /* 入力フォームのJAN欄に添える「JANで検索」ボタン（値があるときだけ表示） */
+    .jan-search-btn {
+      margin-top: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
+      color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600; cursor: pointer;
+    }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -955,9 +960,31 @@
             }).join('') + '</select>';
           } else {
             inp = '<input type="text" data-attr="' + esc(f.key) + '" value="' + esc(v) + '" />';
+            // 入力フォームのJAN欄だけ「JANで検索」ボタンを添える（値があるときのみ表示／編集モーダル eAttrsBox には出さない）
+            if (f.key === 'jan' && container.id === 'attrsBox') {
+              var hasJan = !!v.replace(/[ 　]/g, '').trim();
+              inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANで検索</button>';
+            }
           }
           return '<div class="field"><label>' + esc(f.label) + '</label>' + inp + '</div>';
         }).join('');
+
+      // 入力フォームのJAN欄：値があるときだけ検索ボタンを表示し、クリックで Google 検索（同タブ）を開く
+      if (container.id === 'attrsBox') {
+        var janInput = container.querySelector('[data-attr="jan"]');
+        var janBtn = container.querySelector('.jan-search-btn');
+        if (janInput && janBtn) {
+          janInput.addEventListener('input', function () {
+            janBtn.style.display = janInput.value.replace(/[ 　]/g, '').trim() ? '' : 'none';
+          });
+          janBtn.addEventListener('click', function () {
+            var jan = janInput.value.replace(/[ 　]/g, '').trim();
+            if (!jan) return;
+            var site = findSearchSite('google');
+            if (site) window.location.href = site.url(encodeURIComponent(jan));
+          });
+        }
+      }
     }
 
     // container 内の補助項目入力値を { key: value } で回収
