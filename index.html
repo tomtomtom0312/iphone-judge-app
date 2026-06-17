@@ -2062,6 +2062,7 @@
     // 上の商品カテゴリ（手動選択/AI認識）からAmazonカテゴリを推定。該当なしは null（＝商品名/検索KW優先 or 現状維持）
     function amzCatFromCategory(cat) {
       if (cat === 'figure') return 'hobby';
+    if (cat === 'game_software') return 'game_software';
       if (cat === 'trading_card_box' || cat === 'trading_card_single') return 'hobby'; // 安全側（手数料10%）
       if (cat === 'iPhone') return 'other';
       return null; // その他 → カテゴリからは推定しない
