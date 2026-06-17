@@ -455,6 +455,8 @@
     <button class="photo-btn photo-btn-sub" id="albumBtn">🖼 アルバムから選ぶ</button>
     <!-- トレカBOX×単品モードのときだけ表示。既存のJANライブ読み取り(startJanLiveScan)を使い回す -->
     <button class="photo-btn photo-btn-sub" id="topJanScanBtn" style="display:none;">📷 ライブでJANを読む</button>
+    <!-- 右下固定のJANライブ読み取りボタン。表示条件・クリック処理は上部JANボタンと同じ（updateTopJanScanBtn で同期） -->
+    <button id="fabJanScanBtn" style="display:none; position:fixed; right:16px; bottom:16px; z-index:40; width:64px; height:64px; border:none; border-radius:50%; background:#2563eb; color:#fff; font-size:13px; line-height:1.2; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">📷<br>JAN</button>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
@@ -1387,8 +1389,15 @@
       var cat = normCategory($('category').value);
       var show = (captureMode === 'single') && (cat === 'trading_card_box');
       $('topJanScanBtn').style.display = show ? '' : 'none';
+      $('fabJanScanBtn').style.display = show ? '' : 'none'; // 右下固定JANボタンも同じ条件で同期
     }
     $('topJanScanBtn').addEventListener('click', function () {
+      var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
+      var msg = document.querySelector('#attrsBox .jan-scan-msg');
+      if (janInput) startJanLiveScan(janInput, msg);
+    });
+    // 右下固定JANボタン：上部JANボタンと同じく既存 startJanLiveScan を使い回し、結果は attrsBox のJAN欄へ反映
+    $('fabJanScanBtn').addEventListener('click', function () {
       var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
       var msg = document.querySelector('#attrsBox .jan-scan-msg');
       if (janInput) startJanLiveScan(janInput, msg);
