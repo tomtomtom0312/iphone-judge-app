@@ -455,8 +455,15 @@
     <button class="photo-btn photo-btn-sub" id="albumBtn">🖼 アルバムから選ぶ</button>
     <!-- トレカBOX×単品モードのときだけ表示。既存のJANライブ読み取り(startJanLiveScan)を使い回す -->
     <button class="photo-btn photo-btn-sub" id="topJanScanBtn" style="display:none;">📷 ライブでJANを読む</button>
-    <!-- 右下固定のJANライブ読み取りボタン。表示条件・クリック処理は上部JANボタンと同じ（updateTopJanScanBtn で同期） -->
-    <button id="fabJanScanBtn" style="display:none; position:fixed; right:16px; bottom:16px; z-index:40; width:64px; height:64px; border:none; border-radius:50%; background:#2563eb; color:#fff; font-size:13px; line-height:1.2; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">📷<br>JAN</button>
+    <!-- 右下固定の開閉メニュー（片手操作用）。各項目は既存トリガを呼ぶだけ。表示同期は updateTopJanScanBtn で実施 -->
+    <div id="fabMenu" style="display:none; position:fixed; right:16px; bottom:16px; z-index:40;">
+      <div id="fabMenuItems" style="display:none; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:10px;">
+        <button type="button" id="fabCameraBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 写真を撮る</button>
+        <button type="button" id="fabAlbumBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🖼 アルバムから選ぶ</button>
+        <button type="button" id="fabJanBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 JANを読む</button>
+      </div>
+      <button type="button" id="fabToggleBtn" aria-expanded="false" style="display:block; margin-left:auto; width:56px; height:56px; border:none; border-radius:50%; background:#2563eb; color:#fff; font-size:24px; line-height:1; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">≡</button>
+    </div>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
@@ -1389,20 +1396,36 @@
     // 表示条件は category セレクトの現在値を直接見る（currentCategory の更新タイミングや onCategoryChange の途中失敗に依存しない安全寄り）
     function updateTopJanScanBtn() {
       var cat = normCategory($('category').value);
-      var show = (captureMode === 'single') && (cat === 'trading_card_box' || cat === 'figure');
+      var single = (captureMode === 'single');
+      var show = single && (cat === 'trading_card_box' || cat === 'figure');
       $('topJanScanBtn').style.display = show ? '' : 'none';
-      $('fabJanScanBtn').style.display = show ? '' : 'none'; // 右下固定JANボタンも同じ条件で同期
+      // 右下メニュー：本体は単品モードのみ表示（連続撮影では非表示＝閉じる）。JAN項目だけ box/figure 限定で表示
+      $('fabMenu').style.display = single ? '' : 'none';
+      $('fabJanBtn').style.display = show ? '' : 'none';
+      if (!single) closeFabMenu(); // 非表示化に伴い開いた状態を畳む
     }
     $('topJanScanBtn').addEventListener('click', function () {
       var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
       var msg = document.querySelector('#attrsBox .jan-scan-msg');
       if (janInput) startJanLiveScan(janInput, msg);
     });
-    // 右下固定JANボタン：上部JANボタンと同じく既存 startJanLiveScan を使い回し、結果は attrsBox のJAN欄へ反映
-    $('fabJanScanBtn').addEventListener('click', function () {
+    // 右下メニュー：開閉トグル＋各項目は既存トリガを呼ぶだけ（写真/アルバム/JANの本体処理には触れない）
+    function closeFabMenu() {
+      $('fabMenuItems').style.display = 'none';
+      $('fabToggleBtn').setAttribute('aria-expanded', 'false');
+    }
+    $('fabToggleBtn').addEventListener('click', function () {
+      var open = this.getAttribute('aria-expanded') === 'true';
+      if (open) { closeFabMenu(); }
+      else { $('fabMenuItems').style.display = 'flex'; this.setAttribute('aria-expanded', 'true'); }
+    });
+    $('fabCameraBtn').addEventListener('click', function () { closeFabMenu(); $('photoInput').click(); });   // 既存「写真を撮る」と同じトリガ
+    $('fabAlbumBtn').addEventListener('click', function () { closeFabMenu(); $('photoInputLib').click(); });  // 既存「アルバムから選ぶ」と同じトリガ
+    $('fabJanBtn').addEventListener('click', function () {
+      closeFabMenu();
       var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
       var msg = document.querySelector('#attrsBox .jan-scan-msg');
-      if (janInput) startJanLiveScan(janInput, msg);
+      if (janInput) startJanLiveScan(janInput, msg); // 上部JANボタンと同じく既存 startJanLiveScan を使い回す
     });
 
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
