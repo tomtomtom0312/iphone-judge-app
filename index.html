@@ -1382,8 +1382,10 @@
     })();
 
     // 上部「ライブでJANを読む」：単品モード×トレカBOX のときだけ表示。既存 startJanLiveScan を使い回し、結果は attrsBox のJAN欄へ反映
+    // 表示条件は category セレクトの現在値を直接見る（currentCategory の更新タイミングや onCategoryChange の途中失敗に依存しない安全寄り）
     function updateTopJanScanBtn() {
-      var show = (captureMode === 'single') && (currentCategory === 'trading_card_box');
+      var cat = normCategory($('category').value);
+      var show = (captureMode === 'single') && (cat === 'trading_card_box');
       $('topJanScanBtn').style.display = show ? '' : 'none';
     }
     $('topJanScanBtn').addEventListener('click', function () {
@@ -2108,6 +2110,7 @@
       updateTopJanScanBtn(); // カテゴリ変更に応じて上部JANボタンの表示を同期
     }
     $('category').addEventListener('change', onCategoryChange);
+    $('category').addEventListener('change', updateTopJanScanBtn); // カテゴリ変更で必ず上部JANボタンを同期（onCategoryChangeの途中失敗に依存しない）
     // 設定（販路ごと）→ 再計算＋保存
     SETTING_IDS.forEach(function (id) {
       $(id).addEventListener('input', function () { calc(); saveMarketSettings(); });
