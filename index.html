@@ -403,7 +403,7 @@
     .cand-apply:active { opacity: .85; }
     .attrs-box { margin-top: 14px; }
     .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
-    /* 入力フォームのJAN欄に添えるボタン（JANで検索／カメラでJANを読む／JANクリア） */
+    /* 入力フォームのJAN欄に添えるボタン（JANで検索／ライブでJANを読む／JANクリア） */
     .jan-search-btn, .jan-cam-btn, .jan-clear-btn {
       margin-top: 6px; margin-right: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
       color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600; cursor: pointer;
@@ -976,7 +976,7 @@
               // JANクリア：値があるときだけ表示。押すとJAN欄を空にする
               inp += '<button type="button" class="jan-clear-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANクリア</button>';
               // JANライブ読み取り：カメラを開いて数秒デコード。読めたら停止。
-              inp += '<button type="button" class="jan-cam-btn">カメラでJANを読む</button>';
+              inp += '<button type="button" class="jan-cam-btn">ライブでJANを読む</button>';
               inp += '<span class="jan-scan-msg" aria-live="polite"></span>';
             }
           }
