@@ -2154,7 +2154,7 @@
           (isSingle && a.language !== '不明' ? copyBtnHtml('言語', a.language) : '') +
           (isBox && a.boxName !== '不明' ? copyBtnHtml('BOX名', a.boxName) : '') +
           (isBox && a.series  !== '不明' ? copyBtnHtml('シリーズ名', a.series) : '') +
-          (isBox && a.jan     !== '不明' ? copyBtnHtml('JAN', a.jan) : '');
+          (isBox && a.jan        !== '不明' ? copyBtnHtml('JAN', String(a.jan || '').replace(/\D/g, '')) : '') +
         var copyHtml = copyBtns
           ? '<div class="hist-copy">' + copyBtns + '<span class="copy-msg" aria-live="polite"></span></div>'
           : '';
