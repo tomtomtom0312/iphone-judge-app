@@ -509,6 +509,7 @@
         <option value="trading_card_box">トレカBOX</option>
         <option value="trading_card_single">トレカ単品</option>
         <option value="figure">フィギュア</option>
+        <option value="game_software">ゲームソフト</option>
         <option value="other" selected>その他</option>
       </select>
     </div>
@@ -724,6 +725,7 @@
             <option value="trading_card_single">トレカ単品</option>
             <option value="trading_card_box">トレカBOX</option>
             <option value="figure">フィギュア</option>
+            <option value="game_software">ゲームソフト</option>
             <option value="other">その他</option>
           </select>
         </div>
@@ -850,6 +852,7 @@
       trading_card_single: 'トレカ単品',
       trading_card_box:    'トレカBOX',
       figure:              'フィギュア',
+      game_software:       'ゲームソフト',
       other:               'その他'
     };
     function categoryLabel(v) { return CATEGORIES[v] || 'その他'; }
@@ -942,6 +945,15 @@
         { key: 'character', label: 'キャラ/型番' },
         // 箱物（JAN付き）向け：トレカBOXと同じ jan キーを流用。renderAttrs/readAttrs/詳細/編集は既存処理を流用（非破壊・新規キーのみ）
         { key: 'jan',       label: 'JAN' }
+      ],
+      game_software: [
+        // JAN付きゲームソフト向け。jan キーで JAN欄＋右下「JANを読む」が自動連動（状態は既存グローバル「商品状態」を使うため補助項目には入れない）
+        { key: 'jan',         label: 'JAN' },
+        { key: 'model',       label: '機種' },
+        { key: 'title',       label: 'タイトル' },
+        { key: 'edition',     label: '限定版/通常版', type: 'select', options: ['不明', '通常版', '限定版'] },
+        { key: 'accessories', label: '付属品' },
+        { key: 'memo',        label: 'メモ' }
       ],
       other: []
     };
