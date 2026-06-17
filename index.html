@@ -403,11 +403,12 @@
     .cand-apply:active { opacity: .85; }
     .attrs-box { margin-top: 14px; }
     .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
-    /* 入力フォームのJAN欄に添える「JANで検索」ボタン（値があるときだけ表示） */
-    .jan-search-btn {
-      margin-top: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
+    /* 入力フォームのJAN欄に添えるボタン（JANで検索／バーコードを撮る） */
+    .jan-search-btn, .jan-scan-btn {
+      margin-top: 6px; margin-right: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
       color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600; cursor: pointer;
     }
+    .jan-scan-msg { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -964,6 +965,10 @@
             if (f.key === 'jan' && container.id === 'attrsBox') {
               var hasJan = !!v.replace(/[ 　]/g, '').trim();
               inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANで検索</button>';
+              // JAN静止画読み取り（第1段階）：1枚撮影/選択→ZXingでEAN-13デコード。既存の撮影/AIフローとは分離した専用 input を使う。
+              inp += '<button type="button" class="jan-scan-btn">バーコードを撮る</button>';
+              inp += '<input type="file" accept="image/*" capture="environment" class="jan-scan-input" style="display:none;" />';
+              inp += '<span class="jan-scan-msg" aria-live="polite"></span>';
             }
           }
           return '<div class="field"><label>' + esc(f.label) + '</label>' + inp + '</div>';
@@ -981,7 +986,20 @@
             var jan = janInput.value.replace(/[ 　]/g, '').trim();
             if (!jan) return;
             var site = findSearchSite('google');
-            if (site) window.location.href = site.url(encodeURIComponent(jan));
+            // 同タブ遷移→戻るで補助項目表示が崩れる事象を避けるため、新しいタブで開く（入力フォームのJAN検索のみ）
+            if (site) window.open(site.url(encodeURIComponent(jan)), '_blank', 'noopener');
+          });
+        }
+        // JAN静止画読み取り：撮るボタン→専用 file input→ZXingデコード→JAN欄へ反映（既存撮影/AIには非干渉）
+        var scanBtn = container.querySelector('.jan-scan-btn');
+        var scanInput = container.querySelector('.jan-scan-input');
+        var scanMsg = container.querySelector('.jan-scan-msg');
+        if (janInput && scanBtn && scanInput) {
+          scanBtn.addEventListener('click', function () { scanInput.click(); });
+          scanInput.addEventListener('change', function () {
+            var file = scanInput.files && scanInput.files[0];
+            scanInput.value = ''; // 同じ写真を選び直せるようにリセット
+            decodeJanFromImage(file, janInput, scanMsg);
           });
         }
       }
@@ -992,6 +1010,47 @@
       var out = {}, nodes = container.querySelectorAll('[data-attr]');
       for (var i = 0; i < nodes.length; i++) out[nodes[i].getAttribute('data-attr')] = nodes[i].value;
       return out;
+    }
+
+    // --- JAN静止画読み取り（第1段階）。ZXing-js をCDNから初回のみ遅延ロード。Vercel/AI/画像処理には非依存 ---
+    var _zxingLoad = null;
+    function loadZXing() {
+      if (window.ZXing && window.ZXing.BrowserMultiFormatReader) return Promise.resolve(window.ZXing);
+      if (_zxingLoad) return _zxingLoad;
+      _zxingLoad = new Promise(function (resolve, reject) {
+        var sc = document.createElement('script');
+        sc.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js';
+        sc.onload = function () {
+          (window.ZXing && window.ZXing.BrowserMultiFormatReader) ? resolve(window.ZXing) : reject(new Error('ZXing unavailable'));
+        };
+        sc.onerror = function () { _zxingLoad = null; reject(new Error('ZXing load error')); };
+        document.head.appendChild(sc);
+      });
+      return _zxingLoad;
+    }
+    // 1枚の画像ファイルからEAN-13等を読み取り、成功時はJAN欄へ反映（input発火で既存「JANで検索」の表示が連動）
+    function decodeJanFromImage(file, janInput, msgEl) {
+      if (!file || !janInput) return;
+      var failMsg = 'JANを読み取れませんでした。半角数字で手入力してください。';
+      if (msgEl) msgEl.textContent = '読み取り中…';
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        var url = ev.target.result;
+        loadZXing().then(function (ZX) {
+          return new ZX.BrowserMultiFormatReader().decodeFromImageUrl(url);
+        }).then(function (result) {
+          var digits = (result && result.text ? String(result.text) : '').replace(/[^0-9]/g, '');
+          if (digits) {
+            janInput.value = digits;
+            janInput.dispatchEvent(new Event('input')); // 既存JAN検索ボタンの表示連動
+            if (msgEl) msgEl.textContent = '読み取りました：' + digits;
+          } else if (msgEl) { msgEl.textContent = failMsg; }
+        }).catch(function () {
+          if (msgEl) msgEl.textContent = failMsg;
+        });
+      };
+      reader.onerror = function () { if (msgEl) msgEl.textContent = failMsg; };
+      reader.readAsDataURL(file);
     }
 
     function parseInputNumber(value) {
