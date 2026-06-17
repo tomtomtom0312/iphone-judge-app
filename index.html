@@ -1399,7 +1399,9 @@
     function updateTopJanScanBtn() {
       var cat = normCategory($('category').value);
       var single = (captureMode === 'single');
-      var show = single && (cat === 'trading_card_box' || cat === 'figure');
+      // JAN対象は CATEGORY_FIELDS の jan フィールド有無から導出（追加は当該カテゴリに jan キーを足すだけで連動。現状は trading_card_box / figure のみ該当）
+      var hasJan = (CATEGORY_FIELDS[cat] || []).some(function (f) { return f.key === 'jan'; });
+      var show = single && hasJan;
       // 右下メニュー：本体は単品モードのみ表示（連続撮影では非表示＝閉じる）。JAN項目だけ box/figure 限定で表示
       $('fabMenu').style.display = single ? '' : 'none';
       $('fabJanBtn').style.display = show ? '' : 'none';
