@@ -403,12 +403,19 @@
     .cand-apply:active { opacity: .85; }
     .attrs-box { margin-top: 14px; }
     .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
-    /* 入力フォームのJAN欄に添えるボタン（JANで検索／バーコードを撮る） */
-    .jan-search-btn, .jan-scan-btn {
+    /* 入力フォームのJAN欄に添えるボタン（JANで検索／バーコードを撮る／カメラでJANを読む） */
+    .jan-search-btn, .jan-scan-btn, .jan-cam-btn {
       margin-top: 6px; margin-right: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
       color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600; cursor: pointer;
     }
     .jan-scan-msg { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+    /* JANライブスキャンのカメラオーバーレイ（getUserMedia・成功/失敗/中止/離脱で必ず停止） */
+    .jan-cam-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; }
+    .jan-cam-box { position: relative; width: min(92vw, 480px); }
+    .jan-cam-video { width: 100%; border-radius: 12px; background: #000; display: block; }
+    .jan-cam-frame { position: absolute; left: 8%; right: 8%; top: 38%; height: 24%; border: 2px solid #fff; border-radius: 8px; pointer-events: none; }
+    .jan-cam-msg { color: #fff; text-align: center; margin-top: 10px; font-size: 13px; }
+    .jan-cam-close { display: block; width: 100%; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -967,6 +974,8 @@
               inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANで検索</button>';
               // JAN静止画読み取り（第1段階）：1枚撮影/選択→ZXingでEAN-13デコード。既存の撮影/AIフローとは分離した専用 input を使う。
               inp += '<button type="button" class="jan-scan-btn">バーコードを撮る</button>';
+              // JANライブ読み取り（第2段階）：カメラを開いて数秒デコード。読めたら停止。
+              inp += '<button type="button" class="jan-cam-btn">カメラでJANを読む</button>';
               inp += '<input type="file" accept="image/*" capture="environment" class="jan-scan-input" style="display:none;" />';
               inp += '<span class="jan-scan-msg" aria-live="polite"></span>';
             }
@@ -1001,6 +1010,11 @@
             scanInput.value = ''; // 同じ写真を選び直せるようにリセット
             decodeJanFromImage(file, janInput, scanMsg);
           });
+        }
+        // JANライブ読み取り：カメラを開いて数秒デコード（成功/失敗/中止/離脱で必ず停止）
+        var camBtn = container.querySelector('.jan-cam-btn');
+        if (janInput && camBtn) {
+          camBtn.addEventListener('click', function () { startJanLiveScan(janInput, scanMsg); });
         }
       }
     }
@@ -1052,6 +1066,107 @@
       reader.onerror = function () { if (msgEl) msgEl.textContent = failMsg; };
       reader.readAsDataURL(file);
     }
+
+    // --- JANライブ読み取り（第2段階）。カメラを開いて数秒デコード→成功でJAN欄反映＋停止。getUserMediaは入力フォームのJANのみ ---
+    var _janCam = null;       // カメラオーバーレイ（1回だけ生成して再利用）
+    var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null };
+    var JAN_SCAN_TIMEOUT_MS = 8000;
+
+    function ensureJanCamOverlay() {
+      if (_janCam) return _janCam;
+      var overlay = document.createElement('div');
+      overlay.className = 'jan-cam-overlay';
+      overlay.style.display = 'none';
+      overlay.innerHTML =
+        '<div class="jan-cam-box">' +
+          '<video class="jan-cam-video" playsinline muted></video>' +
+          '<div class="jan-cam-frame"></div>' +
+          '<div class="jan-cam-msg"></div>' +
+          '<button type="button" class="jan-cam-close">閉じる / 停止</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      _janCam = {
+        overlay: overlay,
+        video: overlay.querySelector('.jan-cam-video'),
+        msg: overlay.querySelector('.jan-cam-msg'),
+        closeBtn: overlay.querySelector('.jan-cam-close')
+      };
+      return _janCam;
+    }
+
+    // カメラ停止（成功/失敗/中止/離脱の全経路で呼ぶ。冪等）。statusText があれば JAN欄付近メッセージへ反映
+    function stopJanLiveScan(statusText) {
+      if (_janScan.timer) { clearTimeout(_janScan.timer); _janScan.timer = null; }
+      try { if (_janScan.reader) _janScan.reader.reset(); } catch (e) {}
+      _janScan.reader = null;
+      // 保持しているストリーム（getUserMediaで取得した実体）を確実に停止
+      try { if (_janScan.stream) { _janScan.stream.getTracks().forEach(function (t) { t.stop(); }); } } catch (e) {}
+      _janScan.stream = null;
+      if (_janCam) {
+        try { if (_janCam.video.srcObject) { _janCam.video.srcObject.getTracks().forEach(function (t) { t.stop(); }); } } catch (e) {}
+        try { _janCam.video.srcObject = null; } catch (e) {}
+        _janCam.overlay.style.display = 'none';
+      }
+      if (statusText && _janScan.msgEl) _janScan.msgEl.textContent = statusText;
+      _janScan.active = false;
+      _janScan.janInput = null;
+      _janScan.msgEl = null;
+    }
+
+    function startJanLiveScan(janInput, msgEl) {
+      if (!janInput || _janScan.active) return;
+      var failMsg = 'JANを読み取れませんでした。半角数字で手入力してください。';
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (msgEl) msgEl.textContent = 'この環境ではカメラを利用できません。半角数字で手入力してください。';
+        return;
+      }
+      _janScan.active = true;
+      _janScan.janInput = janInput;
+      _janScan.msgEl = msgEl;
+      var cam = ensureJanCamOverlay();
+      cam.msg.textContent = 'カメラを起動中…';
+      cam.overlay.style.display = '';
+      cam.closeBtn.onclick = function () { stopJanLiveScan('読み取りを中止しました。'); };
+
+      loadZXing().then(function (ZX) {
+        var hints = new Map();
+        hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
+          ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.EAN_8, ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.UPC_E
+        ]);
+        var reader = new ZX.BrowserMultiFormatReader(hints);
+        _janScan.reader = reader;
+        _janScan.timer = setTimeout(function () { stopJanLiveScan(failMsg); }, JAN_SCAN_TIMEOUT_MS);
+        cam.msg.textContent = 'バーコードを枠に合わせてください…';
+        return Promise.resolve(reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } }, audio: false },
+          cam.video,
+          function (result) {
+            if (!_janScan.active || !result) return;   // 失敗フレーム（NotFound）は無視
+            var digits = String(result.text || '').replace(/[^0-9]/g, '');
+            if (digits) {
+              janInput.value = digits;
+              janInput.dispatchEvent(new Event('input')); // 既存JAN検索ボタンの表示連動
+              stopJanLiveScan('読み取りました：' + digits);
+            }
+          }
+        )).then(function () {
+          // getUserMedia 完了後の後始末（レース対策）：取得中に停止済みなら掴んだストリームを確実に停止、継続なら参照を保持
+          if (!_janScan.active) { stopJanLiveScan(); return; }
+          _janScan.stream = _janCam.video.srcObject || _janScan.stream;
+        });
+      }).catch(function (e) {
+        var m = (e && e.name === 'NotAllowedError')
+          ? 'カメラの使用が許可されませんでした。半角数字で手入力してください。'
+          : failMsg;
+        stopJanLiveScan(m);
+      });
+    }
+
+    // 画面離脱・バックグラウンド時もカメラを必ず停止（点きっぱなし防止）
+    window.addEventListener('pagehide', function () { if (_janScan.active) stopJanLiveScan(); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && _janScan.active) stopJanLiveScan('読み取りを中止しました。');
+    });
 
     function parseInputNumber(value) {
     var s = String(value == null ? '' : value)
