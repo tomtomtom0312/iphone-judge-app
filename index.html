@@ -933,7 +933,9 @@
       ],
       figure: [
         { key: 'series',    label: '作品/シリーズ', from: 'series' },
-        { key: 'character', label: 'キャラ/型番' }
+        { key: 'character', label: 'キャラ/型番' },
+        // 箱物（JAN付き）向け：トレカBOXと同じ jan キーを流用。renderAttrs/readAttrs/詳細/編集は既存処理を流用（非破壊・新規キーのみ）
+        { key: 'jan',       label: 'JAN' }
       ],
       other: []
     };
@@ -1387,7 +1389,7 @@
     // 表示条件は category セレクトの現在値を直接見る（currentCategory の更新タイミングや onCategoryChange の途中失敗に依存しない安全寄り）
     function updateTopJanScanBtn() {
       var cat = normCategory($('category').value);
-      var show = (captureMode === 'single') && (cat === 'trading_card_box');
+      var show = (captureMode === 'single') && (cat === 'trading_card_box' || cat === 'figure');
       $('topJanScanBtn').style.display = show ? '' : 'none';
       $('fabJanScanBtn').style.display = show ? '' : 'none'; // 右下固定JANボタンも同じ条件で同期
     }
