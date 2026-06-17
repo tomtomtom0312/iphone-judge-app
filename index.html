@@ -451,8 +451,9 @@
       <button data-mode="single" class="active">単品判定</button>
       <button data-mode="burst">連続撮影</button>
     </div>
-    <button class="photo-btn" id="cameraBtn">📷 写真を撮る</button>
-    <button class="photo-btn photo-btn-sub" id="albumBtn">🖼 アルバムから選ぶ</button>
+    <!-- 上部の撮影/アルバムボタンは連続撮影モード専用表示（単品モードは右下メニューに集約）。初期は単品なので非表示。表示制御は applyCaptureMode -->
+    <button class="photo-btn" id="cameraBtn" style="display:none;">📷 写真を撮る</button>
+    <button class="photo-btn photo-btn-sub" id="albumBtn" style="display:none;">🖼 アルバムから選ぶ</button>
     <!-- 右下固定の開閉メニュー（片手操作用）。各項目は既存トリガを呼ぶだけ。表示同期は updateTopJanScanBtn で実施 -->
     <div id="fabMenu" style="display:none; position:fixed; right:16px; bottom:16px; z-index:40;">
       <div id="fabMenuItems" style="display:none; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:10px;">
@@ -1378,6 +1379,9 @@
       // 写真カード内の見た目（アルバムボタンは両モード共通。撮影ボタンのみラベルを切替）
       $('cameraBtn').textContent = burst ? '📷 連続撮影：1枚撮る' : '📷 写真を撮る';
       $('albumBtn').textContent = burst ? '🖼 連続撮影：アルバムから1枚' : '🖼 アルバムから選ぶ';
+      // 上部の撮影/アルバムボタンは連続撮影モードのみ表示（単品モードは右下メニューに集約）
+      $('cameraBtn').style.display = burst ? '' : 'none';
+      $('albumBtn').style.display = burst ? '' : 'none';
       $('aiStatus').textContent = '';
       resetCrop(); // モード切替時はクロップ台を片付ける
       if (burst) renderBurstStatus();
