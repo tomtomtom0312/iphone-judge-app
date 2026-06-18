@@ -528,6 +528,31 @@
       <label>検索キーワード（eBay向け英語名も可）</label>
       <input id="searchKw" type="text" placeholder="例：Charizard SAR / Luffy Gear 5" />
     </div>
+    <!-- 商品名近くの JAN/ISBN ミラー表示（保存は増やさない・jan フィールドの値を表示するだけ）。JAN非対象カテゴリでは非表示 -->
+    <div class="field" id="janNear" style="display:none; margin-bottom:8px;">
+      <span class="section-label" style="margin:0;">JAN/ISBN：<span id="janNearVal">未取得</span></span>
+      <button type="button" id="copyJanNearBtn" class="hist-copy-btn">JANコピー</button>
+    </div>
+    <!-- コピー導線：各サイトの検索欄へ貼り付け用（商品名／検索キーワード）。空値は壊さない -->
+    <div class="field" style="margin-bottom:8px;">
+      <button type="button" id="copyMemoBtn" class="hist-copy-btn">商品名コピー</button>
+      <button type="button" id="copyKwBtn" class="hist-copy-btn">検索KWコピー</button>
+    </div>
+    <!-- 相場検索・候補（相場確認→候補を想定売価へ反映）。下の相場カードから移動（複製ではない） -->
+    <details>
+      <summary>相場検索・候補を開く</summary>
+      <p class="section-label">相場検索（商品名で各サイトを開く）</p>
+      <div class="search-row" id="searchRow"><!-- ボタンは searchSites から JS で描画 --></div>
+      <div class="search-msg" id="searchMsg"></div>
+      <div class="field">
+        <label>相場メモ（自分で調べた相場を貼り付け）</label>
+        <textarea id="marketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円&#10;カードショップ買取: 2,800円"></textarea>
+      </div>
+      <p class="section-label">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で上の想定売価へ</p>
+      <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
+      <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
+      <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
+    </details>
     <div class="field">
       <label id="priceLabel">想定売価</label>
       <input id="price" class="price-input" type="text" inputmode="decimal" placeholder="例: 120" />
@@ -557,22 +582,8 @@
     <p class="hint" id="aiHint">💡 Phase 2予定：写真から商品名・売価を自動入力（手入力で上書き可）。</p>
   </div>
 
-  <!-- 相場・想定売価（AI認識後に相場を確認 → 候補を反映） -->
+  <!-- カテゴリ別補助項目（相場検索ブロックは上の主要入力カードへ移動済み） -->
   <div class="card single-only">
-    <details>
-      <summary>相場検索・候補を開く</summary>
-      <p class="section-label">相場検索（商品名で各サイトを開く）</p>
-      <div class="search-row" id="searchRow"><!-- ボタンは searchSites から JS で描画 --></div>
-      <div class="search-msg" id="searchMsg"></div>
-      <div class="field">
-        <label>相場メモ（自分で調べた相場を貼り付け）</label>
-        <textarea id="marketMemo" rows="4" placeholder="例:&#10;eBay Sold: $25〜30&#10;メルカリ: 3,800〜4,200円&#10;スニダン: 4,500円&#10;カードショップ買取: 2,800円"></textarea>
-      </div>
-      <p class="section-label">想定売価の候補（<span class="candCur">USD</span>）— 「反映」で上の想定売価へ</p>
-      <div class="cand-row"><span class="cand-tag">安め</span><input id="candLow" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candLow" data-target="price">反映</button></div>
-      <div class="cand-row"><span class="cand-tag">標準</span><input id="candStd" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candStd" data-target="price">反映</button></div>
-      <div class="cand-row"><span class="cand-tag">強気</span><input id="candHigh" type="text" inputmode="decimal" placeholder="USD" /><button type="button" class="cand-apply" data-cand="candHigh" data-target="price">反映</button></div>
-    </details>
     <div id="attrsBox" class="attrs-box"></div>
   </div>
 
@@ -1063,6 +1074,7 @@
             var has = !!janInput.value.replace(/[ 　]/g, '').trim();
             janBtn.style.display = has ? '' : 'none';
             if (clearBtn) clearBtn.style.display = has ? '' : 'none';
+            updateJanNear(); // 手入力・スキャン成功(dispatch input)で商品名近くのJAN表示も更新
           });
           janBtn.addEventListener('click', function () {
             var jan = janInput.value.replace(/[ 　]/g, '').trim();
@@ -1088,6 +1100,7 @@
           });
         }
       }
+      if (container.id === 'attrsBox') updateJanNear(); // カテゴリ切替・初期描画で近接JAN表示を同期（非対象カテゴリは非表示）
     }
 
     // container 内の補助項目入力値を { key: value } で回収
@@ -1201,6 +1214,30 @@
       var input = (_lastJanInput && document.contains(_lastJanInput)) ? _lastJanInput : document.querySelector('#attrsBox [data-attr="jan"]');
       var msg = (_lastJanMsgEl && document.contains(_lastJanMsgEl)) ? _lastJanMsgEl : document.querySelector('#attrsBox .jan-scan-msg');
       if (input) startJanLiveScan(input, msg);
+    }
+
+    // 汎用コピー：clipboard→失敗/非対応は legacyCopy(execCommand) フォールバック。結果を下部中央トーストで表示。空値は壊さず通知
+    function copyTextWithToast(text) {
+      text = String(text == null ? '' : text).trim();
+      if (!text) { showJanToast('コピーする値がありません', 'fail', 1500); return; }
+      function ok() { showJanToast('コピーしました', 'success', 1500); }
+      function fail() { showJanToast('コピーできませんでした', 'fail', 1500); }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(ok, function () { if (legacyCopy(text)) ok(); else fail(); });
+        } else { if (legacyCopy(text)) ok(); else fail(); }
+      } catch (e) { if (legacyCopy(text)) ok(); else fail(); }
+    }
+
+    // 商品名近くの JAN/ISBN ミラー表示を更新。jan フィールドが無いカテゴリ（iPhone等）は行ごと非表示。保存値・CSV・localStorage には非依存
+    function updateJanNear() {
+      var wrap = document.getElementById('janNear');
+      if (!wrap) return;
+      var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
+      if (!janInput) { wrap.style.display = 'none'; return; } // JAN非対象カテゴリ
+      var v = janInput.value.replace(/[ 　]/g, '').trim();
+      document.getElementById('janNearVal').textContent = v || '未取得';
+      wrap.style.display = '';
     }
 
     // JAN桁検証：12桁(UPC-A)は先頭0で13桁化、13桁(EAN-13)はそのまま。EAN-13チェックディジット検証。12/13桁以外・不正は '' を返す
@@ -2855,14 +2892,17 @@
     // 各サイトに windowName（固定ウィンドウ名）を持たせ、同じサイトは常に同じタブを再利用 → タブ増殖を防ぐ。
     // ※既存のURL仕様は変更しない（eBayはSold/Completed、メルカリはkeyword、Googleはq）。url(k) は encodeURIComponent 済みの文字列を受け取る。
     var searchSites = [
-      { key: 'ebay', label: 'eBay Sold', windowName: 'shumi_ebay',
-        url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } },
+      // Amazon は Keepa/ASIN 未実装のため検索語で開く。preferJan: JAN/ISBN→検索KW→商品名（フォームのみ。下の onSearchClick で処理）
+      { key: 'amazon', label: 'Amazon', windowName: 'shumi_amazon', preferJan: true,
+        url: function (k) { return 'https://www.amazon.co.jp/s?k=' + k; } },
       { key: 'mercari', label: 'メルカリ', windowName: 'shumi_mercari',
         url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
       // Google は COOP: same-origin-allow-popups のため、別タブだとタブ名再利用が効かず押すたびにタブが増える。
       // 回避策として sameTab=true → 現在のタブで開く（タブは増えない／ブラウザの「戻る」でアプリへ復帰）。
       { key: 'google', label: 'Google', windowName: 'shumi_google', sameTab: true,
-        url: function (k) { return 'https://www.google.com/search?q=' + k; } }
+        url: function (k) { return 'https://www.google.com/search?q=' + k; } },
+      { key: 'ebay', label: 'eBay Sold', windowName: 'shumi_ebay',
+        url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } }
     ];
     function findSearchSite(key) {
       for (var i = 0; i < searchSites.length; i++) { if (searchSites[i].key === key) return searchSites[i]; }
@@ -2889,6 +2929,12 @@
       var q, msgEl = null;
       if (row) {
         q = (row.getAttribute('data-kw') || '').trim();
+      } else if (site.preferJan) {
+        // Amazon：JAN/ISBN優先（既存 jan フィールドを読むだけ）→ なければ検索KW → なければ商品名
+        var ji = document.querySelector('#attrsBox [data-attr="jan"]');
+        var jan = (ji ? ji.value : '').replace(/[ 　]/g, '').trim();
+        q = jan || $('searchKw').value.trim() || $('memo').value.trim();
+        msgEl = $('searchMsg');
       } else {
         q = ($('searchKw').value.trim() || $('memo').value.trim());
         msgEl = $('searchMsg');
@@ -2943,6 +2989,16 @@
       if (rowEl) rowEl.innerHTML = searchButtonsHtml('search-link');
       var btns = document.querySelectorAll('#searchRow .search-link');
       for (var i = 0; i < btns.length; i++) { btns[i].addEventListener('click', onSearchClick); }
+    })();
+
+    // コピー導線（商品名／検索KW／JAN）：各サイト検索欄へ貼付用。JANはクリック時に現在の jan フィールド値を読む
+    (function () {
+      var mb = $('copyMemoBtn'); if (mb) mb.addEventListener('click', function () { copyTextWithToast($('memo').value); });
+      var kb = $('copyKwBtn');   if (kb) kb.addEventListener('click', function () { copyTextWithToast($('searchKw').value); });
+      var jb = $('copyJanNearBtn'); if (jb) jb.addEventListener('click', function () {
+        var ji = document.querySelector('#attrsBox [data-attr="jan"]');
+        copyTextWithToast(ji ? ji.value : '');
+      });
     })();
 
     // 売価候補「反映」ボタン（単品フォーム・編集モーダル共通）。data-cand→data-target へ反映
