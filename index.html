@@ -511,6 +511,7 @@
         <option value="figure">フィギュア</option>
         <option value="game_software">ゲームソフト</option>
         <option value="game_console">ゲーム機本体</option>
+          <option value="game_accessory">ゲーム周辺機器</option>
         <option value="other" selected>その他</option>
       </select>
     </div>
@@ -728,6 +729,7 @@
             <option value="figure">フィギュア</option>
             <option value="game_software">ゲームソフト</option>
             <option value="game_console">ゲーム機本体</option>
+          <option value="game_accessory">ゲーム周辺機器</option>
             <option value="other">その他</option>
           </select>
         </div>
@@ -856,6 +858,7 @@
       figure:              'フィギュア',
       game_software:       'ゲームソフト',
       game_console:        'ゲーム機本体',
+      game_accessory:   'ゲーム周辺機器',
       other:               'その他'
     };
     function categoryLabel(v) { return CATEGORIES[v] || 'その他'; }
@@ -969,6 +972,18 @@
         { key: 'opStatus',    label: '動作確認', type: 'select', options: ['不明', '動作確認済', '未確認', 'ジャンク'] },
         { key: 'memo',        label: 'メモ' }
       ],
+  game_accessory: [
+    // JAN付きゲーム周辺機器向け。内部Amazonカテゴリは game_software に寄せて15%系として扱う
+    { key: 'jan',         label: 'JAN' },
+    { key: 'kind',        label: '種類' },
+    { key: 'compatModel', label: '対応機種' },
+    { key: 'modelNo',     label: '型番' },
+    { key: 'color',       label: '色' },
+    { key: 'accessories', label: '付属品' },
+    { key: 'opStatus',    label: '動作確認', type: 'select', options: ['不明', '動作確認済', '未確認', 'ジャンク'] },
+    { key: 'memo',        label: 'メモ' }
+  ],
+
       other: []
     };
 
@@ -2078,6 +2093,7 @@
       if (cat === 'figure') return 'hobby';
       if (cat === 'game_software') return 'game_software';
       if (cat === 'game_console') return 'game_console'; // ゲーム機本体は10%系（DOM_FEE_RATES.amazon.game_console）
+      if (cat === 'game_accessory') return 'game_software'; // 周辺機器は15%系。手数料テーブルは増やさず game_software に寄せる
       if (cat === 'trading_card_box' || cat === 'trading_card_single') return 'hobby'; // 安全側（手数料10%）
       if (cat === 'iPhone') return 'other';
       return null; // その他 → カテゴリからは推定しない
