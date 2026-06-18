@@ -2463,31 +2463,61 @@
       });
     }
 
-    // 履歴カード用：トレカBOX/単品の重要な補助項目を「ラベル：値」中黒区切りで1〜2行に要約。
-    // 表示専用（e.attrs/e.memo/e.searchKw を読むだけ）。空欄と「不明」はスキップ。BOX/単品以外は空文字。
+    // 履歴カード用：カテゴリ別の重要な補助項目を短く要約（表示専用・e.attrs を読むだけ）。空欄と「不明」はスキップ。
+    // 古い履歴(attrs無)もエラーにしない。保存構造・CSV列は変更しない。
     function histAttrLine(e) {
       var a = e.attrs || {};
-      function part(label, val) {
-        var v = (val == null) ? '' : String(val).trim();
-        if (!v || v === '不明') return '';
-        return label + '：' + esc(v);
-      }
-      function join(arr) { return arr.filter(Boolean).join('・'); }
-      var lines = [];
-      if (e.category === 'trading_card_box') {
-        var boxName = (a.boxName && String(a.boxName).trim()) || e.memo || '';
-        lines.push(join([part('BOX名', boxName), part('JAN', a.jan), part('箱状態', a.boxCondition)]));
-        lines.push(join([part('開封状態', a.sealed), part('シュリンク', a.shrink), part('箱傷み', a.boxDamage)]));
-      } else if (e.category === 'trading_card_single') {
+      function v(key) { var x = (a[key] == null) ? '' : String(a[key]).trim(); return (!x || x === '不明') ? '' : x; } // 値が空 or 不明は空文字
+      function seg(arr) { return arr.filter(Boolean).join(' / '); }
+      var cat = e.category, summary = '';
+      if (cat === 'trading_card_box') {
+        summary = seg([
+          v('jan') && ('JAN ' + v('jan')),
+          v('boxName'),
+          v('series'),
+          v('sealed'),
+          v('shrink') && ('シュリンク' + v('shrink')),
+          v('boxCondition') && ('箱状態：' + v('boxCondition'))
+        ]);
+      } else if (cat === 'book') {
+        var vol = v('volume'); if (vol && !/巻$/.test(vol)) vol = vol + '巻';
+        var titleVol = [v('title'), vol].filter(Boolean).join(' ');
+        summary = seg([
+          v('jan') && ('ISBN ' + v('jan')),
+          titleVol,
+          v('firstEd'),
+          v('obi') && ('帯' + v('obi')),
+          v('bonus') && ('特典' + v('bonus'))
+        ]);
+      } else if (cat === 'figure') {
+        summary = seg([
+          v('jan') && ('JAN ' + v('jan')),
+          v('figureName'),
+          v('series'),
+          v('maker'),
+          v('sealed'),
+          v('boxCondition') && ('箱状態：' + v('boxCondition'))
+        ]);
+      } else if (cat === 'trading_card_single') {
+        // 既存フォーマットを維持（ラベル：値・中黒区切り＋検索KW）
+        var part = function (label, val) { var x = (val == null) ? '' : String(val).trim(); return (!x || x === '不明') ? '' : label + '：' + esc(x); };
+        var join = function (arr) { return arr.filter(Boolean).join('・'); };
         var hasCardName = !!(a.cardName && String(a.cardName).trim());
         var cardName = hasCardName ? String(a.cardName).trim() : (e.memo || '');
-        lines.push(join([part(hasCardName ? 'カード名' : '名称', cardName), part('型番', a.modelNo), part('レアリティ', a.rarity)]));
-        lines.push(join([part('鑑定', a.gradeCompany), part('グレード', a.grade), part('言語', a.language)]));
+        var slines = [];
+        slines.push(join([part(hasCardName ? 'カード名' : '名称', cardName), part('型番', a.modelNo), part('レアリティ', a.rarity)]));
+        slines.push(join([part('鑑定', a.gradeCompany), part('グレード', a.grade), part('言語', a.language)]));
+        if (e.searchKw && String(e.searchKw).trim()) slines.push('検索KW：' + esc(String(e.searchKw).trim()));
+        var shtml = slines.filter(Boolean).map(function (l) { return '<div>' + l + '</div>'; }).join('');
+        return shtml ? '<div class="hist-attrs">' + shtml + '</div>' : '';
       } else {
         return '';
       }
+      // box/book/figure：補助情報を1行に要約 ＋（あれば）検索KW
+      var lines = [];
+      if (summary) lines.push('補助情報：' + esc(summary));
       if (e.searchKw && String(e.searchKw).trim()) lines.push('検索KW：' + esc(String(e.searchKw).trim()));
-      var html = lines.filter(Boolean).map(function (l) { return '<div>' + l + '</div>'; }).join('');
+      var html = lines.map(function (l) { return '<div>' + l + '</div>'; }).join('');
       return html ? '<div class="hist-attrs">' + html + '</div>' : '';
     }
 
