@@ -528,7 +528,9 @@
       <label>検索キーワード（eBay向け英語名も可）</label>
       <input id="searchKw" type="text" placeholder="例：Charizard SAR / Luffy Gear 5" />
     </div>
-    <!-- 商品名近くの JAN/ISBN ミラー表示（保存は増やさない・jan フィールドの値を表示するだけ）。JAN非対象カテゴリでは非表示 -->
+    <!-- カテゴリ非依存の JAN 保持先（単一の真実）。読み取り結果はここに入れ、補助項目JAN欄が存在すれば同期。保存構造・CSV・localStorage には非依存 -->
+    <input type="hidden" id="janHolder" />
+    <!-- 商品名近くの JAN/ISBN ミラー表示（janHolder の値を表示）。単品モードでは常に表示（カテゴリ非依存） -->
     <div class="field" id="janNear" style="display:none; margin-bottom:8px;">
       <span class="section-label" style="margin:0;">JAN/ISBN：<span id="janNearVal">未取得</span></span>
       <button type="button" id="copyJanNearBtn" class="hist-copy-btn">JANコピー</button>
@@ -1074,7 +1076,7 @@
             var has = !!janInput.value.replace(/[ 　]/g, '').trim();
             janBtn.style.display = has ? '' : 'none';
             if (clearBtn) clearBtn.style.display = has ? '' : 'none';
-            updateJanNear(); // 手入力・スキャン成功(dispatch input)で商品名近くのJAN表示も更新
+            setHeldJan(janInput.value); // 補助項目JAN欄の手入力・その場スキャンを保持値＋近接表示へ同期
           });
           janBtn.addEventListener('click', function () {
             var jan = janInput.value.replace(/[ 　]/g, '').trim();
@@ -1100,7 +1102,20 @@
           });
         }
       }
-      if (container.id === 'attrsBox') updateJanNear(); // カテゴリ切替・初期描画で近接JAN表示を同期（非対象カテゴリは非表示）
+      // カテゴリ切替時：補助項目JAN欄と保持値をリコンサイル（取得済みJANが消えないように）
+      if (container.id === 'attrsBox') {
+        var auxJan = container.querySelector('[data-attr="jan"]');
+        if (auxJan) {
+          var held = getHeldJan();
+          if (held) {
+            // 取得済みJANを新カテゴリの欄へ反映（後からトレカBOX等を選んでも反映される）
+            if (auxJan.value.replace(/[ 　]/g, '').trim() !== held) { auxJan.value = held; auxJan.dispatchEvent(new Event('input')); }
+          } else if (auxJan.value.replace(/[ 　]/g, '').trim()) {
+            setHeldJan(auxJan.value); // 既存値/AI認識のJANを保持側へ取り込み
+          }
+        }
+        updateJanNear();
+      }
     }
 
     // container 内の補助項目入力値を { key: value } で回収
@@ -1229,14 +1244,25 @@
       } catch (e) { if (legacyCopy(text)) ok(); else fail(); }
     }
 
-    // 商品名近くの JAN/ISBN ミラー表示を更新。jan フィールドが無いカテゴリ（iPhone等）は行ごと非表示。保存値・CSV・localStorage には非依存
+    // カテゴリ非依存のJAN保持。janHolder を単一の真実とし、近接表示と（存在すれば）補助項目JAN欄へ同期する
+    function getHeldJan() {
+      var h = document.getElementById('janHolder');
+      return h ? h.value.replace(/[ 　]/g, '').trim() : '';
+    }
+    function setHeldJan(v) {
+      v = String(v == null ? '' : v).replace(/[ 　]/g, '').trim();
+      var h = document.getElementById('janHolder');
+      if (h && h.value !== v) h.value = v;
+      // 補助項目JAN欄が存在すれば同期（無ければ何もしない＝カテゴリ非依存）。値が同じなら dispatch せずループを防ぐ
+      var aux = document.querySelector('#attrsBox [data-attr="jan"]');
+      if (aux && aux.value !== v) { aux.value = v; aux.dispatchEvent(new Event('input')); }
+      updateJanNear();
+    }
+    // 商品名近くの JAN/ISBN ミラー表示を更新（保持値 janHolder を表示）。単品モードでは常に表示（カテゴリ非依存）
     function updateJanNear() {
       var wrap = document.getElementById('janNear');
       if (!wrap) return;
-      var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
-      if (!janInput) { wrap.style.display = 'none'; return; } // JAN非対象カテゴリ
-      var v = janInput.value.replace(/[ 　]/g, '').trim();
-      document.getElementById('janNearVal').textContent = v || '未取得';
+      document.getElementById('janNearVal').textContent = getHeldJan() || '未取得';
       wrap.style.display = '';
     }
 
@@ -1563,15 +1589,12 @@
     // 上部「ライブでJANを読む」：単品モード×トレカBOX のときだけ表示。既存 startJanLiveScan を使い回し、結果は attrsBox のJAN欄へ反映
     // 表示条件は category セレクトの現在値を直接見る（currentCategory の更新タイミングや onCategoryChange の途中失敗に依存しない安全寄り）
     function updateTopJanScanBtn() {
-      var cat = normCategory($('category').value);
       var single = (captureMode === 'single');
-      // JAN対象は CATEGORY_FIELDS の jan フィールド有無から導出（追加は当該カテゴリに jan キーを足すだけで連動。現状は trading_card_box / figure のみ該当）
-      var hasJan = (CATEGORY_FIELDS[cat] || []).some(function (f) { return f.key === 'jan'; });
-      var show = single && hasJan;
-      // 右下メニュー：本体は単品モードのみ表示（連続撮影では非表示＝閉じる）。JAN項目だけ box/figure 限定で表示
+      // JAN読み取りはカテゴリ非依存：右下メニューもJAN項目も単品モードなら常に表示（未選択/その他/iPhone でも使える）
       $('fabMenu').style.display = single ? '' : 'none';
-      $('fabJanBtn').style.display = show ? '' : 'none';
+      $('fabJanBtn').style.display = single ? '' : 'none';
       if (!single) closeFabMenu(); // 非表示化に伴い開いた状態を畳む
+      updateJanNear(); // 近接JAN表示をカテゴリ非依存で同期（保持値を表示）
     }
     // 右下メニュー：開閉トグル＋各項目は既存トリガを呼ぶだけ（写真/アルバム/JANの本体処理には触れない）
     function closeFabMenu() {
@@ -1587,9 +1610,8 @@
     $('fabAlbumBtn').addEventListener('click', function () { closeFabMenu(); $('photoInputLib').click(); });  // 既存「アルバムから選ぶ」と同じトリガ
     $('fabJanBtn').addEventListener('click', function () {
       closeFabMenu();
-      var janInput = document.querySelector('#attrsBox [data-attr="jan"]');
-      var msg = document.querySelector('#attrsBox .jan-scan-msg');
-      if (janInput) startJanLiveScan(janInput, msg); // 上部JANボタンと同じく既存 startJanLiveScan を使い回す
+      // カテゴリ非依存：保持用 janHolder へ読み取り → janHolder の input で setHeldJan が近接表示＋（存在すれば）補助項目JAN欄へ同期
+      startJanLiveScan($('janHolder'), null);
     });
 
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
@@ -2933,16 +2955,12 @@
       if (row) {
         q = (row.getAttribute('data-kw') || '').trim();
       } else if (site.preferJan) {
-        // Amazon：JAN/ISBN優先（既存 jan フィールドを読むだけ）→ なければ検索KW → なければ商品名
-        var ji = document.querySelector('#attrsBox [data-attr="jan"]');
-        var jan = (ji ? ji.value : '').replace(/[ 　]/g, '').trim();
-        q = jan || $('searchKw').value.trim() || $('memo').value.trim();
+        // Amazon：JAN/ISBN優先（保持値＝カテゴリ非依存）→ なければ検索KW → なければ商品名
+        q = getHeldJan() || $('searchKw').value.trim() || $('memo').value.trim();
         msgEl = $('searchMsg');
       } else if (site.janFallback) {
-        // メルカリ/Google/eBay/スニダン：検索KW → 商品名 → （両方空なら）JAN/ISBN フォールバック（既存 jan フィールドを読むだけ）
-        var jiF = document.querySelector('#attrsBox [data-attr="jan"]');
-        var janF = (jiF ? jiF.value : '').replace(/[ 　]/g, '').trim();
-        q = $('searchKw').value.trim() || $('memo').value.trim() || janF;
+        // メルカリ/Google/eBay/スニダン：検索KW → 商品名 → （両方空なら）JAN/ISBN フォールバック（保持値＝カテゴリ非依存）
+        q = $('searchKw').value.trim() || $('memo').value.trim() || getHeldJan();
         msgEl = $('searchMsg');
       } else {
         q = ($('searchKw').value.trim() || $('memo').value.trim());
@@ -3004,10 +3022,9 @@
     (function () {
       var mb = $('copyMemoBtn'); if (mb) mb.addEventListener('click', function () { copyTextWithToast($('memo').value); });
       var kb = $('copyKwBtn');   if (kb) kb.addEventListener('click', function () { copyTextWithToast($('searchKw').value); });
-      var jb = $('copyJanNearBtn'); if (jb) jb.addEventListener('click', function () {
-        var ji = document.querySelector('#attrsBox [data-attr="jan"]');
-        copyTextWithToast(ji ? ji.value : '');
-      });
+      var jb = $('copyJanNearBtn'); if (jb) jb.addEventListener('click', function () { copyTextWithToast(getHeldJan()); }); // 保持値（カテゴリ非依存）をコピー
+      // 保持用 janHolder の input（fabスキャンの dispatch 等）で近接表示＋補助項目JAN欄へ同期
+      var jh = $('janHolder'); if (jh) jh.addEventListener('input', function () { setHeldJan(jh.value); });
     })();
 
     // 売価候補「反映」ボタン（単品フォーム・編集モーダル共通）。data-cand→data-target へ反映
