@@ -968,10 +968,17 @@
         { key: 'memo',         label: 'メモ' }
       ],
       figure: [
-        { key: 'series',    label: '作品/シリーズ', from: 'series' },
-        { key: 'character', label: 'キャラ/型番' },
-        // 箱物（JAN付き）向け：トレカBOXと同じ jan キーを流用。renderAttrs/readAttrs/詳細/編集は既存処理を流用（非破壊・新規キーのみ）
-        { key: 'jan',       label: 'JAN' }
+        // JANは先頭（カテゴリ非依存の読み取り結果と同期）。series は from でAI認識マッピングを維持。hasBox は iPhone と同キー・同選択肢で整合。既存キー名は変更なし（非破壊）
+        { key: 'jan',          label: 'JAN' },
+        { key: 'figureName',   label: '商品名 / フィギュア名' },
+        { key: 'series',       label: '作品名', from: 'series' },
+        { key: 'maker',        label: 'メーカー' },
+        { key: 'sealed',       label: '未開封 / 開封済み', type: 'select', options: ['不明', '未開封', '開封済み'] },
+        { key: 'hasBox',       label: '箱あり / 箱なし', type: 'select', options: ['不明', 'あり', 'なし'] },
+        { key: 'boxCondition', label: '箱状態', type: 'select', options: ['不明', '良好', '軽い傷み', '傷みあり', '大きな傷み'] },
+        { key: 'boxDamage',    label: '箱傷みメモ' },
+        { key: 'accessories',  label: '付属品' },
+        { key: 'memo',         label: 'メモ' }
       ],
       game_software: [
         // JAN付きゲームソフト向け。jan キーで JAN欄＋右下「JANを読む」が自動連動（状態は既存グローバル「商品状態」を使うため補助項目には入れない）
