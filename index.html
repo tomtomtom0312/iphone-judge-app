@@ -2897,8 +2897,8 @@
         url: function (k) { return 'https://www.amazon.co.jp/s?k=' + k; } },
       { key: 'mercari', label: 'メルカリ', windowName: 'shumi_mercari',
         url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
-      // スニダンは preferJan なし＝検索KW→商品名（JAN優先しない）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
-      { key: 'snkrdunk', label: 'スニダン', windowName: 'shumi_snkrdunk',
+      // スニダンは検索KW→商品名を優先。両方空なら JAN/ISBN をフォールバック利用（janFallback）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
+      { key: 'snkrdunk', label: 'スニダン', windowName: 'shumi_snkrdunk', janFallback: true,
         url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } },
       // Google は COOP: same-origin-allow-popups のため、別タブだとタブ名再利用が効かず押すたびにタブが増える。
       // 回避策として sameTab=true → 現在のタブで開く（タブは増えない／ブラウザの「戻る」でアプリへ復帰）。
@@ -2937,6 +2937,12 @@
         var ji = document.querySelector('#attrsBox [data-attr="jan"]');
         var jan = (ji ? ji.value : '').replace(/[ 　]/g, '').trim();
         q = jan || $('searchKw').value.trim() || $('memo').value.trim();
+        msgEl = $('searchMsg');
+      } else if (site.janFallback) {
+        // スニダン：検索KW → 商品名 → （両方空なら）JAN/ISBN フォールバック（既存 jan フィールドを読むだけ）
+        var jiF = document.querySelector('#attrsBox [data-attr="jan"]');
+        var janF = (jiF ? jiF.value : '').replace(/[ 　]/g, '').trim();
+        q = $('searchKw').value.trim() || $('memo').value.trim() || janF;
         msgEl = $('searchMsg');
       } else {
         q = ($('searchKw').value.trim() || $('memo').value.trim());
