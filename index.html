@@ -970,9 +970,9 @@
       figure: [
         // JANは先頭（カテゴリ非依存の読み取り結果と同期）。series は from でAI認識マッピングを維持。hasBox は iPhone と同キー・同選択肢で整合。既存キー名は変更なし（非破壊）
         { key: 'jan',          label: 'JAN' },
-        { key: 'figureName',   label: '商品名 / フィギュア名' },
+        { key: 'figureName',   label: '商品名 / フィギュア名', from: 'productName' },
         { key: 'series',       label: '作品名', from: 'series' },
-        { key: 'maker',        label: 'メーカー' },
+        { key: 'maker',        label: 'メーカー', from: 'brand' },
         { key: 'sealed',       label: '未開封 / 開封済み', type: 'select', options: ['不明', '未開封', '開封済み'] },
         { key: 'hasBox',       label: '箱あり / 箱なし', type: 'select', options: ['不明', 'あり', 'なし'] },
         { key: 'boxCondition', label: '箱状態', type: 'select', options: ['不明', '良好', '軽い傷み', '傷みあり', '大きな傷み'] },
@@ -1014,7 +1014,7 @@
       book: [
         // JAN/ISBN付き書籍向け。key='jan' 据え置きで JAN欄＋右下「JANを読む」が自動連動（ラベルのみ「JAN/ISBN」）
         { key: 'jan',           label: 'JAN/ISBN' },
-        { key: 'title',         label: 'タイトル' },
+        { key: 'title',         label: 'タイトル', from: 'productName' },
         { key: 'volume',        label: '巻数' },
         { key: 'firstEd',       label: '初版', type: 'select', options: ['不明', '初版', '重版'] },
         { key: 'obi',           label: '帯',   type: 'select', options: ['不明', 'あり', 'なし'] },
@@ -1037,6 +1037,18 @@
       });
       // iPhoneは機種を断定しない：modelは「未確認」を初期値に（ユーザーが手入力で確定）
       if (category === 'iPhone') out.model = '未確認';
+      return out;
+    }
+
+    // AI認識の補助項目マージ：手入力済み（空でも「不明」でもない）は温存し、空 or「不明」の項目だけAI値で補完。
+    // AIが値を持たない項目（空）は既存値を変えない。商品名/検索KW/売価はここでは扱わない（attrs のみ）。
+    function mergeAiAttrs(userAttrs, aiAttrs) {
+      var out = {};
+      Object.keys(aiAttrs || {}).forEach(function (k) { out[k] = aiAttrs[k]; });
+      Object.keys(userAttrs || {}).forEach(function (k) {
+        var u = String(userAttrs[k] == null ? '' : userAttrs[k]).trim();
+        if (u && u !== '不明') out[k] = userAttrs[k]; // 手入力済みは上書きしない
+      });
       return out;
     }
 
@@ -1684,11 +1696,15 @@
           }
           sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           // 認識結果を保持（保存時に履歴へ載せる）
+          var prevCategory = currentCategory;            // AI実行前のカテゴリ
+          var prevAttrs = readAttrs($('attrsBox'));      // ユーザーが入力済みの補助項目（温存対象）
           currentCategory = normCategory(j.category);
           $('category').value = currentCategory; // 手動カテゴリ選択UIにもAI結果を反映
           currentRank = j.estimatedRank || '';
           currentAi = pickAi(j);
-          currentAttrs = attrsFromRecognition(currentCategory, j);
+          var aiAttrs = attrsFromRecognition(currentCategory, j);
+          // 同カテゴリなら手入力を温存しつつ空欄だけAIで補完。カテゴリが変わったら項目自体が別なのでAI結果を採用
+          currentAttrs = (prevCategory === currentCategory) ? mergeAiAttrs(prevAttrs, aiAttrs) : aiAttrs;
           renderAttrs($('attrsBox'), currentCategory, currentAttrs); // カテゴリ別補助を反映
           updateTopJanScanBtn(); // AI認識でカテゴリが変わったら上部JANボタンの表示を同期
 
