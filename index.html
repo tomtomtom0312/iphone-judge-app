@@ -534,6 +534,8 @@
     <div class="field" id="janNear" style="display:none; margin-bottom:8px;">
       <span class="section-label" style="margin:0;">JAN/ISBN：<span id="janNearVal">未取得</span></span>
       <button type="button" id="copyJanNearBtn" class="hist-copy-btn">JANコピー</button>
+      <!-- JAN取得済みのときだけ表示する使い方ガイド（updateJanNear で表示切替）。文言のみ・処理には非依存 -->
+      <p class="hint" id="janUsageHint" style="display:none; margin:6px 0 0;">JAN取得済み：Amazon検索・JANコピーに使えます。他サイトは商品名/検索KWが空ならJANで検索します。</p>
     </div>
     <!-- コピー導線：各サイトの検索欄へ貼り付け用（商品名／検索キーワード）。空値は壊さない -->
     <div class="field" style="margin-bottom:8px;">
@@ -1262,8 +1264,11 @@
     function updateJanNear() {
       var wrap = document.getElementById('janNear');
       if (!wrap) return;
-      document.getElementById('janNearVal').textContent = getHeldJan() || '未取得';
+      var jan = getHeldJan();
+      document.getElementById('janNearVal').textContent = jan || '未取得';
       wrap.style.display = '';
+      var hint = document.getElementById('janUsageHint'); // 取得済みのときだけ使い方ガイドを表示
+      if (hint) hint.style.display = jan ? '' : 'none';
     }
 
     // JAN桁検証：12桁(UPC-A)は先頭0で13桁化、13桁(EAN-13)はそのまま。EAN-13チェックディジット検証。12/13桁以外・不正は '' を返す
