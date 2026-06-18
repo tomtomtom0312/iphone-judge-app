@@ -2897,6 +2897,9 @@
         url: function (k) { return 'https://www.amazon.co.jp/s?k=' + k; } },
       { key: 'mercari', label: 'メルカリ', windowName: 'shumi_mercari',
         url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
+      // スニダンは preferJan なし＝検索KW→商品名（JAN優先しない）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
+      { key: 'snkrdunk', label: 'スニダン', windowName: 'shumi_snkrdunk',
+        url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } },
       // Google は COOP: same-origin-allow-popups のため、別タブだとタブ名再利用が効かず押すたびにタブが増える。
       // 回避策として sameTab=true → 現在のタブで開く（タブは増えない／ブラウザの「戻る」でアプリへ復帰）。
       { key: 'google', label: 'Google', windowName: 'shumi_google', sameTab: true,
