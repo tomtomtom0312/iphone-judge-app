@@ -417,6 +417,10 @@
     .jan-cam-frame { position: absolute; left: 8%; right: 8%; top: 38%; height: 24%; border: 3px solid #ff3b30; border-radius: 8px; box-shadow: 0 0 0 2px rgba(0,0,0,.35); pointer-events: none; }
     .jan-cam-msg { color: #fff; text-align: center; margin-top: 10px; font-size: 13px; }
     .jan-cam-close { display: block; width: 100%; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
+    /* JAN読み取り結果トースト（上部中央・自動消去・成功緑/失敗オレンジで色分け）。JAN欄までスクロールせず結果が分かる */
+    .jan-toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; padding: 12px 18px; border-radius: 10px; color: #fff; font-size: 15px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; }
+    .jan-toast.is-success { background: #16a34a; }
+    .jan-toast.is-fail { background: #ea580c; }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -1125,6 +1129,7 @@
           '<video class="jan-cam-video" playsinline muted></video>' +
           '<div class="jan-cam-frame"></div>' +
           '<div class="jan-cam-msg"></div>' +
+          '<div class="jan-cam-msg">15〜25cmくらい離す／JANを枠いっぱいに入れる／反射する時は少し傾ける／ピントが合うまで2〜3秒待つ</div>' +
           '<button type="button" class="jan-cam-close">閉じる / 停止</button>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -1156,6 +1161,32 @@
       _janScan.msgEl = null;
     }
 
+    // JAN結果トースト（上部中央・自動消去）。要素は1回だけ生成して再利用。AI/画像/利益計算等には非依存
+    var _janToast = null, _janToastTimer = null;
+    function showJanToast(text, type, ms) {
+      if (!_janToast) {
+        _janToast = document.createElement('div');
+        _janToast.setAttribute('aria-live', 'polite');
+        document.body.appendChild(_janToast);
+      }
+      _janToast.textContent = text;
+      _janToast.className = 'jan-toast is-' + (type || 'success');
+      _janToast.style.display = 'block';
+      if (_janToastTimer) clearTimeout(_janToastTimer);
+      _janToastTimer = setTimeout(function () { if (_janToast) _janToast.style.display = 'none'; }, ms || 2500);
+    }
+
+    // JAN桁検証：12桁(UPC-A)は先頭0で13桁化、13桁(EAN-13)はそのまま。EAN-13チェックディジット検証。12/13桁以外・不正は '' を返す
+    function normalizeJan(digits) {
+      var d = String(digits || '');
+      if (d.length === 12) d = '0' + d;       // UPC-A → EAN-13 へ正規化
+      if (d.length !== 13) return '';          // 12/13桁以外は破棄
+      var sum = 0;
+      for (var i = 0; i < 12; i++) sum += (+d.charAt(i)) * (i % 2 === 0 ? 1 : 3);
+      var check = (10 - (sum % 10)) % 10;
+      return (check === +d.charAt(12)) ? d : '';
+    }
+
     function startJanLiveScan(janInput, msgEl) {
       if (!janInput || _janScan.active) return;
       var failMsg = 'JANを読み取れませんでした。半角数字で手入力してください。';
@@ -1166,6 +1197,8 @@
       _janScan.active = true;
       _janScan.janInput = janInput;
       _janScan.msgEl = msgEl;
+      _janScan.lastDigits = '';   // 誤読防止：直近に読めた有効JAN（正規化13桁）
+      _janScan.readCount = 0;     // 誤読防止：同一JANの連続一致回数（2回で確定）
       var cam = ensureJanCamOverlay();
       cam.msg.textContent = 'カメラを起動中…';
       cam.overlay.style.display = '';
@@ -1173,24 +1206,36 @@
 
       loadZXing().then(function (ZX) {
         var hints = new Map();
+        // 誤読対策：対象を EAN-13 + UPC-A に限定（EAN_8/UPC_E を外す）。TRY_HARDER で精度優先
         hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
-          ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.EAN_8, ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.UPC_E
+          ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A
         ]);
+        hints.set(ZX.DecodeHintType.TRY_HARDER, true);
         var reader = new ZX.BrowserMultiFormatReader(hints);
         _janScan.reader = reader;
-        _janScan.timer = setTimeout(function () { stopJanLiveScan(failMsg); }, JAN_SCAN_TIMEOUT_MS);
+        _janScan.timer = setTimeout(function () { showJanToast('JANを読み取れませんでした', 'fail', 3000); stopJanLiveScan(failMsg); }, JAN_SCAN_TIMEOUT_MS);
         cam.msg.textContent = 'バーコードを枠に合わせてください…';
         return Promise.resolve(reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: 'environment' } }, audio: false },
+          // 暗所/反射対策：解像度を上げて小さいバーコードを拾いやすく。focus/exposure は advanced（非対応端末では安全に無視）
+          { video: {
+              facingMode: { ideal: 'environment' },
+              width:  { ideal: 1920 }, height: { ideal: 1080 },
+              advanced: [{ focusMode: 'continuous' }, { exposureMode: 'continuous' }]
+            }, audio: false },
           cam.video,
           function (result) {
             if (!_janScan.active || !result) return;   // 失敗フレーム（NotFound）は無視
-            var digits = String(result.text || '').replace(/[^0-9]/g, '');
-            if (digits) {
-              janInput.value = digits;
-              janInput.dispatchEvent(new Event('input')); // 既存JAN検索ボタンの表示連動
-              stopJanLiveScan('読み取りました：' + digits);
-            }
+            var raw = String(result.text || '').replace(/[^0-9]/g, '');
+            var jan = normalizeJan(raw);               // 12/13桁＋チェックサム検証＋13桁正規化。不正は ''
+            if (!jan) return;                          // 桁違い/チェックサム不正は無視して継続
+            // 誤読防止：同じ有効JANを連続2回読めたら確定（速度優先。フォーマット限定＋チェックサム検証で一定の防御は維持）
+            if (jan === _janScan.lastDigits) { _janScan.readCount++; }
+            else { _janScan.lastDigits = jan; _janScan.readCount = 1; }
+            if (_janScan.readCount < 2) { cam.msg.textContent = '確認中… ' + jan; return; } // オーバーレイ中央に読取数字を表示
+            janInput.value = jan;
+            janInput.dispatchEvent(new Event('input')); // 既存JAN検索ボタンの表示連動
+            showJanToast('JAN読み取り成功 ' + jan, 'success', 2500); // 上部中央に成功表示（スクロール不要）
+            stopJanLiveScan('読み取りました：' + jan);
           }
         )).then(function () {
           // getUserMedia 完了後の後始末（レース対策）：取得中に停止済みなら掴んだストリームを確実に停止、継続なら参照を保持
@@ -1201,6 +1246,7 @@
         var m = (e && e.name === 'NotAllowedError')
           ? 'カメラの使用が許可されませんでした。半角数字で手入力してください。'
           : failMsg;
+        showJanToast('JANを読み取れませんでした', 'fail', 3000);
         stopJanLiveScan(m);
       });
     }
