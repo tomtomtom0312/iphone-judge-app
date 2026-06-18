@@ -2354,14 +2354,15 @@
 
     // --- 履歴 ---
     var HIST_KEY = 'judgeHistory';
-    var MAX_HIST = 20; // 履歴の最大保存件数。超過分は古い順（末尾）から自動削除
+    var MAX_HIST = 50; // 履歴の最大保存件数。上限超過時は「一番古い（末尾）」だけ自動削除し、最新（先頭）は必ず残す（件数表示は「件数 / MAX_HIST」）
 
     function getHistory() {
       try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); }
       catch (e) { return []; }
     }
     function setHistory(list) {
-      // 新しい順（先頭が最新）なので、先頭から MAX_HIST 件だけ残す
+      // 新しい順（先頭が最新）。先頭から MAX_HIST 件だけ残す＝上限超過分は末尾（最古）から自動削除。
+      // 新規保存は呼び出し側で list.unshift（先頭追加）するため、直前に保存した最新は切り捨てられない。
       localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, MAX_HIST)));
     }
 
