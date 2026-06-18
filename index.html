@@ -1401,6 +1401,9 @@
     var currentRank = '';
     var currentAi = null;
     var currentAttrs = {};      // 単品モードのカテゴリ別補助項目
+    // 写真選択(loadForCrop)はフォームをリセットするため、リセット直前の手入力を退避。次のAI認識で同カテゴリなら温存に使う（使い切り）
+    var _attrsBeforePhoto = {};
+    var _attrsBeforePhotoCategory = '';
     var captureMode = 'single'; // 'single' = 単品判定 / 'burst' = 連続撮影
 
     var CROP_INSET = 0.08;  // ガイド枠のインセット（CSS .crop-frame の inset:8% と一致させる）
@@ -1499,6 +1502,9 @@
 
     // ファイル → 作業用に縮小した画像をクロップ台に読み込む
     function loadForCrop(file) {
+      // フォームをリセットする前に現在の手入力（補助項目）を退避：次のAI認識で同カテゴリなら温存に使う
+      _attrsBeforePhotoCategory = currentCategory;
+      _attrsBeforePhoto = readAttrs($('attrsBox'));
       currentCategory = 'other'; currentRank = ''; currentAi = null; currentAttrs = {};
       domAmzCatTouched = false; // 新しい商品＝Amazonカテゴリの自動推定を再開（手動上書き保護をリセット）
       currentEntryId = null; // 新しい写真＝新しい商品。次の保存は新規行になる
@@ -1696,15 +1702,19 @@
           }
           sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           // 認識結果を保持（保存時に履歴へ載せる）
-          // 反映前に「現在画面」の補助項目入力値を必ず取得し、これをマージのベースにする（手入力を絶対に消さない）
+          // 反映前に「現在画面」の補助項目入力値を取得（「再調整→AI認識」経路では手入力が画面に残っている）
           var screenAttrs = readAttrs($('attrsBox'));
           currentCategory = normCategory(j.category);
           $('category').value = currentCategory; // 手動カテゴリ選択UIにもAI結果を反映
           currentRank = j.estimatedRank || '';
           currentAi = pickAi(j);
           var aiAttrs = attrsFromRecognition(currentCategory, j);
-          // 現在画面の入力値を最優先にし、空 or「不明」の項目だけAIで補完（カテゴリ一致/不一致に関わらず手入力は温存）
-          currentAttrs = mergeAiAttrs(screenAttrs, aiAttrs);
+          // 写真選択(loadForCrop)で画面がクリアされる経路向けに、選択直前の手入力を退避してある。
+          // 同カテゴリのときだけ退避値を使い、優先度は screen ＞ stash ＞ AI（空/「不明」だけ補完）。退避は使い切り。
+          var stash = (_attrsBeforePhotoCategory === currentCategory) ? _attrsBeforePhoto : {};
+          var userBase = mergeAiAttrs(screenAttrs, stash); // stash をベースに、現在画面の非空値で上書き＝screen優先
+          currentAttrs = mergeAiAttrs(userBase, aiAttrs);   // AIをベースに、手入力(userBase)の非空値で上書き＝手入力優先
+          _attrsBeforePhoto = {}; _attrsBeforePhotoCategory = ''; // 退避は次に持ち越さない
           renderAttrs($('attrsBox'), currentCategory, currentAttrs); // 手入力を含む merged attrs を渡す
           updateTopJanScanBtn(); // AI認識でカテゴリが変わったら上部JANボタンの表示を同期
 
