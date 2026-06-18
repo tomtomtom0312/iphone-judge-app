@@ -2432,7 +2432,9 @@
       return true;
     }
 
-    // 💾保存ボタン：upsert（自動保存済みなら同じ行を更新するので重複しない）
+    // 💾保存ボタン：主要フォームの保存は毎回「新規」履歴として追加する。
+    // 直前に保存した下書きを上書きしないよう、保存の前後で currentEntryId を null にする。
+    // （既存履歴の更新は履歴カードの「編集」＝saveEdit からのみ。自動同期 syncCurrent も直前行を書き換えない）
     function saveCurrent() {
       if (!lastResult) {
         // 売価なし＝下書き保存。空エントリ乱発を防ぐため、最低限の中身がある場合のみ許可。
@@ -2443,7 +2445,9 @@
           || Object.keys(a).some(function (k) { return String(a[k] || '').trim(); });
         if (!hasContent) { alert('下書き保存するには、写真・商品名/メモ・検索キーワード・補助項目のいずれかを入力してください。'); return; }
       }
+      currentEntryId = null;            // 毎回新規IDで追加（直前の履歴を上書きしない）
       if (upsertCurrent()) renderHistory();
+      currentEntryId = null;            // 保存後も保持しない：自動同期で直前行を書き換えない／次回も新規
     }
 
     function deleteEntry(id) {
