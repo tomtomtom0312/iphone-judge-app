@@ -1295,7 +1295,15 @@
       document.getElementById('janNearVal').textContent = shown;
       wrap.style.display = '';
       var hint = document.getElementById('janUsageHint'); // 取得済みのときだけ使い方ガイドを表示
-      if (hint) hint.style.display = jan ? '' : 'none';
+      if (hint) {
+        hint.style.display = jan ? '' : 'none';
+        if (jan) {
+          // 本・漫画でISBNのときは「JAN取得済み」固定文言を ISBN 向けに変更
+          hint.textContent = (kind === 'ISBN')
+            ? 'ISBN取得済み：本・漫画ではISBN検索も有効です。Amazon検索・ISBNコピーに使えます。'
+            : 'JAN取得済み：Amazon検索・JANコピーに使えます。他サイトは商品名/検索KWが空ならJANで検索します。';
+        }
+      }
     }
 
     // JAN桁検証：12桁(UPC-A)は先頭0で13桁化、13桁(EAN-13)はそのまま。EAN-13チェックディジット検証。12/13桁以外・不正は '' を返す
@@ -1352,6 +1360,12 @@
             var raw = String(result.text || '').replace(/[^0-9]/g, '');
             var jan = normalizeJan(raw);               // 12/13桁＋チェックサム検証＋13桁正規化。不正は ''
             if (!jan) return;                          // 桁違い/チェックサム不正は無視して継続
+            // 本・漫画の2段バーコード対策：下段（192始まり＝Cコード/価格）は確定・保存せず、上段ISBNを促す
+            if (normCategory($('category').value) === 'book' && /^192/.test(jan)) {
+              cam.msg.textContent = '下段コードを読んでいます。上段のISBNバーコード（978/979）を写してください。';
+              _janScan.lastDigits = ''; _janScan.readCount = 0; // 下段では確定させない（カウントをリセットして継続）
+              return;
+            }
             // 誤読防止：同じ有効JANを連続2回読めたら確定（速度優先。フォーマット限定＋チェックサム検証で一定の防御は維持）
             if (jan === _janScan.lastDigits) { _janScan.readCount++; }
             else { _janScan.lastDigits = jan; _janScan.readCount = 1; }
