@@ -418,7 +418,7 @@
     .jan-cam-msg { color: #fff; text-align: center; margin-top: 10px; font-size: 13px; }
     .jan-cam-close { display: block; width: 100%; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
     /* JAN読み取り結果トースト（上部中央・自動消去・成功緑/失敗オレンジで色分け）。JAN欄までスクロールせず結果が分かる */
-    .jan-toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; padding: 12px 18px; border-radius: 10px; color: #fff; font-size: 15px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; }
+    .jan-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; min-width: 220px; padding: 14px 22px; border-radius: 12px; color: #fff; font-size: 16px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; cursor: pointer; }
     .jan-toast.is-success { background: #16a34a; }
     .jan-toast.is-fail { background: #ea580c; }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
@@ -1161,9 +1161,9 @@
       _janScan.msgEl = null;
     }
 
-    // JAN結果トースト（上部中央・自動消去）。要素は1回だけ生成して再利用。AI/画像/利益計算等には非依存
+    // JAN結果トースト（上部中央・自動消去）。要素は1回だけ生成して再利用。onTap でタップ動作を付与。AI/画像/利益計算等には非依存
     var _janToast = null, _janToastTimer = null;
-    function showJanToast(text, type, ms) {
+    function showJanToast(text, type, ms, onTap) {
       if (!_janToast) {
         _janToast = document.createElement('div');
         _janToast.setAttribute('aria-live', 'polite');
@@ -1171,9 +1171,36 @@
       }
       _janToast.textContent = text;
       _janToast.className = 'jan-toast is-' + (type || 'success');
+      _janToast.onclick = onTap || null; // 成功＝コピー／失敗＝再起動。なければ無反応
       _janToast.style.display = 'block';
       if (_janToastTimer) clearTimeout(_janToastTimer);
-      _janToastTimer = setTimeout(function () { if (_janToast) _janToast.style.display = 'none'; }, ms || 2500);
+      _janToastTimer = setTimeout(function () { if (_janToast) { _janToast.style.display = 'none'; _janToast.onclick = null; } }, ms || 2500);
+    }
+
+    // 成功トーストのタップ：読み取ったJANをクリップボードへ。結果を一瞬表示し、非対応/失敗でも壊さない（JAN欄反映は確定時に実施済みで不変）
+    function copyJanToClipboard(jan) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(jan).then(function () {
+            showJanToast('JANをコピーしました', 'success', 1800);
+          }).catch(function () {
+            showJanToast('コピーできませんでした', 'fail', 1800);
+          });
+        } else {
+          showJanToast('コピーできませんでした', 'fail', 1800); // clipboard API 非対応
+        }
+      } catch (e) {
+        showJanToast('コピーできませんでした', 'fail', 1800);
+      }
+    }
+
+    // 失敗トーストのタップ：直前に使ったJAN欄で再起動。消えていれば #attrsBox の欄を引き直す。二重起動は startJanLiveScan 側のガードで防止
+    var _lastJanInput = null, _lastJanMsgEl = null;
+    function relaunchJanLiveScan() {
+      if (_janScan.active) return; // 起動中は無視（カメラ残り・二重起動を防ぐ）
+      var input = (_lastJanInput && document.contains(_lastJanInput)) ? _lastJanInput : document.querySelector('#attrsBox [data-attr="jan"]');
+      var msg = (_lastJanMsgEl && document.contains(_lastJanMsgEl)) ? _lastJanMsgEl : document.querySelector('#attrsBox .jan-scan-msg');
+      if (input) startJanLiveScan(input, msg);
     }
 
     // JAN桁検証：12桁(UPC-A)は先頭0で13桁化、13桁(EAN-13)はそのまま。EAN-13チェックディジット検証。12/13桁以外・不正は '' を返す
@@ -1199,6 +1226,8 @@
       _janScan.msgEl = msgEl;
       _janScan.lastDigits = '';   // 誤読防止：直近に読めた有効JAN（正規化13桁）
       _janScan.readCount = 0;     // 誤読防止：同一JANの連続一致回数（2回で確定）
+      _lastJanInput = janInput;   // 失敗トーストからの再起動用に直前の入力欄/メッセージを保持（stopJanLiveScan では消さない）
+      _lastJanMsgEl = msgEl;
       var cam = ensureJanCamOverlay();
       cam.msg.textContent = 'カメラを起動中…';
       cam.overlay.style.display = '';
@@ -1213,7 +1242,7 @@
         hints.set(ZX.DecodeHintType.TRY_HARDER, true);
         var reader = new ZX.BrowserMultiFormatReader(hints);
         _janScan.reader = reader;
-        _janScan.timer = setTimeout(function () { showJanToast('JANを読み取れませんでした', 'fail', 3000); stopJanLiveScan(failMsg); }, JAN_SCAN_TIMEOUT_MS);
+        _janScan.timer = setTimeout(function () { showJanToast('JANを読み取れませんでした（タップで再読み取り）', 'fail', 4000, relaunchJanLiveScan); stopJanLiveScan(failMsg); }, JAN_SCAN_TIMEOUT_MS);
         cam.msg.textContent = 'バーコードを枠に合わせてください…';
         return Promise.resolve(reader.decodeFromConstraints(
           // 暗所/反射対策：解像度を上げて小さいバーコードを拾いやすく。focus/exposure は advanced（非対応端末では安全に無視）
@@ -1234,7 +1263,7 @@
             if (_janScan.readCount < 2) { cam.msg.textContent = '確認中… ' + jan; return; } // オーバーレイ中央に読取数字を表示
             janInput.value = jan;
             janInput.dispatchEvent(new Event('input')); // 既存JAN検索ボタンの表示連動
-            showJanToast('JAN読み取り成功 ' + jan, 'success', 2500); // 上部中央に成功表示（スクロール不要）
+            showJanToast('JAN読み取り成功 ' + jan + '（タップでコピー）', 'success', 4000, function () { copyJanToClipboard(jan); }); // タップでJANコピー
             stopJanLiveScan('読み取りました：' + jan);
           }
         )).then(function () {
@@ -1246,7 +1275,7 @@
         var m = (e && e.name === 'NotAllowedError')
           ? 'カメラの使用が許可されませんでした。半角数字で手入力してください。'
           : failMsg;
-        showJanToast('JANを読み取れませんでした', 'fail', 3000);
+        showJanToast('JANを読み取れませんでした（タップで再読み取り）', 'fail', 4000, relaunchJanLiveScan);
         stopJanLiveScan(m);
       });
     }
