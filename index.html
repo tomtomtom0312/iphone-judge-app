@@ -1696,16 +1696,16 @@
           }
           sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           // 認識結果を保持（保存時に履歴へ載せる）
-          var prevCategory = currentCategory;            // AI実行前のカテゴリ
-          var prevAttrs = readAttrs($('attrsBox'));      // ユーザーが入力済みの補助項目（温存対象）
+          // 反映前に「現在画面」の補助項目入力値を必ず取得し、これをマージのベースにする（手入力を絶対に消さない）
+          var screenAttrs = readAttrs($('attrsBox'));
           currentCategory = normCategory(j.category);
           $('category').value = currentCategory; // 手動カテゴリ選択UIにもAI結果を反映
           currentRank = j.estimatedRank || '';
           currentAi = pickAi(j);
           var aiAttrs = attrsFromRecognition(currentCategory, j);
-          // 同カテゴリなら手入力を温存しつつ空欄だけAIで補完。カテゴリが変わったら項目自体が別なのでAI結果を採用
-          currentAttrs = (prevCategory === currentCategory) ? mergeAiAttrs(prevAttrs, aiAttrs) : aiAttrs;
-          renderAttrs($('attrsBox'), currentCategory, currentAttrs); // カテゴリ別補助を反映
+          // 現在画面の入力値を最優先にし、空 or「不明」の項目だけAIで補完（カテゴリ一致/不一致に関わらず手入力は温存）
+          currentAttrs = mergeAiAttrs(screenAttrs, aiAttrs);
+          renderAttrs($('attrsBox'), currentCategory, currentAttrs); // 手入力を含む merged attrs を渡す
           updateTopJanScanBtn(); // AI認識でカテゴリが変わったら上部JANボタンの表示を同期
 
           // 商品名（＋容量・色）を自動入力（人が上書き可能）
