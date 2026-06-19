@@ -14,7 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
 export const config = { maxDuration: 30 };
 
 // 取り扱いカテゴリ（機械値）。フロント CATEGORIES のキーと一致させること。
-const CATEGORY_VALUES = ['iPhone', 'trading_card_single', 'trading_card_box', 'figure', 'other'];
+const CATEGORY_VALUES = ['iPhone', 'trading_card_single', 'trading_card_box', 'figure', 'book', 'other'];
 
 // 状態ランク（外観グレード）。フロントの状態セレクトへマッピングして使う
 const RANKS = ['S', 'A', 'B', 'C', 'D', 'ジャンク'];
@@ -26,12 +26,12 @@ const SCHEMA = {
   properties: {
     productName: {
       type: 'string',
-      description: '出品タイトルに使える簡潔な商品名（日本語可）。iPhoneなら機種名、トレカ単品ならカード名、BOXならBOX名、フィギュアなら作品＋キャラ名など。'
+      description: '出品タイトルに使える簡潔な商品名（日本語可）。iPhoneなら機種名、トレカ単品ならカード名、BOXならBOX名、フィギュアなら作品＋キャラ名、本・漫画なら表紙の正式タイトル（巻数が明確に見える場合のみ「タイトル ◯巻」）など。'
     },
     category: {
       type: 'string',
       enum: CATEGORY_VALUES,
-      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り）/ trading_card_box=トレカの未開封BOX・パック箱 / figure=フィギュア・プライズ・プラモ完成品 / other=それ以外。'
+      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り）/ trading_card_box=トレカの未開封BOX・パック箱 / figure=フィギュア・プライズ・プラモ完成品 / book=本・漫画・雑誌・文庫・単行本・書籍 / other=それ以外。'
     },
     brand: {
       type: 'string',
@@ -128,6 +128,9 @@ export default async function handler(req, res) {
               + ' それら背景・周辺物は無視し、画像の中央に最も大きく写っている主要な商品「1点だけ」を特定してください。'
               + ' フリマ/eBay 出品を想定し、まず category を判定し、そのカテゴリに関係する項目だけを埋めてください（関係しない項目は空文字）。'
               + ' トレカ単品なら cardName/series/setName、トレカBOXなら boxName/series/setName、iPhoneなら storage/color を優先的に読み取ります。'
+              + ' 文庫・漫画・単行本・雑誌・書籍と判断できる画像は category=book とし、productName は表紙に見える正式タイトル（巻数が明確に見える場合のみ「タイトル ◯巻」）にします。'
+              + ' 本・漫画では condition に表紙の傷・汚れ・折れ・日焼け・帯の傷みなど写真から見える範囲だけを簡潔に書き、裏面・小口・背表紙が写っていない場合は「裏面/背表紙は未確認」のように確認できない旨も記します。'
+              + ' 帯の有無・初版/重版・特典の有無は写真だけで断定できないため、明確に分かる場合のみ言及し、迷う場合は触れないでください（憶測で断定しない）。'
               + ' productName はそのカテゴリで出品タイトルに使える簡潔な商品名にします。'
               + ' condition は写真から実際に見える外観状態のみを記述し（割れ・傷・汚れ・未開封か否か）、見えない部分を憶測で断定しないでください。'
               + ' estimatedRank は外観から推定した状態ランク（S/A/B/C/D/ジャンク）です。'

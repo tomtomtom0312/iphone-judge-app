@@ -1019,7 +1019,7 @@
         { key: 'firstEd',       label: '初版', type: 'select', options: ['不明', '初版', '重版'] },
         { key: 'obi',           label: '帯',   type: 'select', options: ['不明', 'あり', 'なし'] },
         { key: 'bonus',         label: '特典', type: 'select', options: ['不明', 'あり', 'なし'] },
-        { key: 'conditionMemo', label: '状態メモ' },
+        { key: 'conditionMemo', label: '状態メモ', from: 'condition' },
         { key: 'memo',          label: 'メモ' }
       ],
       other: []
@@ -1711,7 +1711,8 @@
       fetch('/api/recognize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: currentAiImage }),
+        // 手動でカテゴリを選んでいる場合（その他以外）はヒントとして送り、そのカテゴリ前提でAIに埋めさせる。未選択(その他)は送らずAIに自由判定させる
+        body: JSON.stringify({ image: currentAiImage, categoryHint: (currentCategory && currentCategory !== 'other') ? currentCategory : '' }),
         signal: controller.signal
       })
         // JSON以外（ローカルの501/404のHTMLなど）でも落ちないよう text→parse
