@@ -333,7 +333,7 @@
     .hist-del { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
     /* 履歴カード内の相場確認リンク（eBay Sold / メルカリ / Google） */
-    .hist-search { display: flex; gap: 6px; margin-top: 8px; }
+    .hist-search { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .hist-search-link {
       flex: 1; padding: 7px 4px; border-radius: 8px; background: #0d1117;
       color: var(--text); border: 1px solid var(--line); font-size: 12px; font-weight: 600;
@@ -421,10 +421,16 @@
     .jan-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; min-width: 220px; padding: 14px 22px; border-radius: 12px; color: #fff; font-size: 16px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; cursor: pointer; }
     .jan-toast.is-success { background: #16a34a; }
     .jan-toast.is-fail { background: #ea580c; }
-    /* 相場検索の丸アイコンボタン（常時表示・横並び・折り返し可）。文字は最小限・aria-label/title でサイト名を補う */
-    .search-icons { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
-    .search-icon { width: 46px; height: 46px; border-radius: 50%; border: 1px solid #d0d0d0; background: #fff; color: #111; font-size: 19px; font-weight: 700; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
-    .search-icon:active { background: #f0f0f0; }
+    /* 相場検索の丸アイコンボタン（常時表示・横並び・折り返し可）。正式ロゴは使わず自作の文字アイコン。aria-label/title でサイト名を補う */
+    .search-icons { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+    .search-icon { width: 42px; height: 42px; border-radius: 50%; border: 1px solid #d0d0d0; background: #fff; color: #111; font-size: 17px; font-weight: 800; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+    .search-icon:active { opacity: .85; }
+    /* サイト別カラー（自作UIの識別用・正式ロゴ色の完全再現ではない） */
+    .search-icon.site-amazon   { background: #232f3e; color: #fff; border-color: #232f3e; }
+    .search-icon.site-mercari  { background: #e60023; color: #fff; border-color: #e60023; }
+    .search-icon.site-google   { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    .search-icon.site-ebay     { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+    .search-icon.site-snkrdunk { background: #6d28d9; color: #fff; border-color: #6d28d9; }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -471,6 +477,8 @@
       </div>
       <button type="button" id="fabToggleBtn" aria-expanded="false" style="display:block; margin-left:auto; width:56px; height:56px; border:none; border-radius:50%; background:#2563eb; color:#fff; font-size:24px; line-height:1; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">≡</button>
     </div>
+    <!-- ページ上部へ戻る固定ボタン（左下・右下メニューと干渉しない）。少しスクロールしたら表示 -->
+    <button type="button" id="scrollTopBtn" aria-label="ページ上部へ戻る" title="ページ上部へ戻る" style="display:none; position:fixed; left:16px; bottom:16px; z-index:40; width:48px; height:48px; border:none; border-radius:50%; background:#2563eb; color:#fff; font-size:22px; line-height:1; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">↑</button>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
@@ -548,7 +556,7 @@
     </div>
     <!-- 相場検索アイコン（常時表示・丸ボタン）。検索語の優先順は既存 onSearchClick を流用（AmazonはJAN優先、他は検索KW→商品名→JAN） -->
     <div class="field" style="margin-bottom:8px;">
-      <span class="section-label" style="margin:0 0 6px;">相場検索（アイコンをタップ）</span>
+      <span class="section-label" style="margin:0 0 6px; font-size:11px;">相場検索（アイコンをタップ）</span>
       <div id="searchIcons" class="search-icons"><!-- ボタンは searchSites から JS で描画 --></div>
     </div>
     <!-- 相場検索・候補（相場確認→候補を想定売価へ反映）。下の相場カードから移動（複製ではない） -->
@@ -1679,6 +1687,17 @@
       if (open) { closeFabMenu(); }
       else { $('fabMenuItems').style.display = 'flex'; this.setAttribute('aria-expanded', 'true'); }
     });
+    // ページ上部へ戻る固定ボタン：少しスクロールしたら表示、タップでスムーズに最上部へ
+    (function () {
+      var top = $('scrollTopBtn');
+      if (!top) return;
+      top.addEventListener('click', function () {
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+      });
+      function toggleTop() { top.style.display = (window.pageYOffset > 300) ? 'block' : 'none'; }
+      window.addEventListener('scroll', toggleTop, { passive: true });
+      toggleTop();
+    })();
     $('fabCameraBtn').addEventListener('click', function () { closeFabMenu(); $('photoInput').click(); });   // 既存「写真を撮る」と同じトリガ
     $('fabAlbumBtn').addEventListener('click', function () { closeFabMenu(); $('photoInputLib').click(); });  // 既存「アルバムから選ぶ」と同じトリガ
     $('fabJanBtn').addEventListener('click', function () {
@@ -2675,11 +2694,13 @@
           }
         }
 
-        // 相場確認リンク：既存データ（検索KW優先、無ければ商品名メモ）からキーワードを作って生成。両方空なら非表示
-        var kw = (e.searchKw || e.memo || '').trim();
-        var searchHtml = kw
-          ? '<div class="hist-search" data-kw="' + esc(kw) + '">' +
-              searchButtonsHtml('hist-search-link') +
+        // 相場確認アイコン：履歴の検索KW/商品名/JANから生成。優先順は onSearchClick が data-* を見て決定（AmazonはJAN優先、他はKW→商品名→JAN）。いずれも空なら非表示
+        var hKw = (e.searchKw || '').trim();
+        var hMemo = (e.memo || '').trim();
+        var hJan = ((e.attrs && e.attrs.jan) ? String(e.attrs.jan) : '').replace(/[^0-9]/g, '').trim();
+        var searchHtml = (hKw || hMemo || hJan)
+          ? '<div class="hist-search" data-kw="' + esc(hKw) + '" data-memo="' + esc(hMemo) + '" data-jan="' + esc(hJan) + '">' +
+              searchIconsHtml('search-icon') +
             '</div>'
           : '';
 
@@ -2747,7 +2768,7 @@
         });
       }
       // 相場確認リンク配線：共通ハンドラ onSearchClick（preventDefault/stopPropagation/window.open を内包）
-      var slinks = $('histList').querySelectorAll('.hist-search-link');
+      var slinks = $('histList').querySelectorAll('.hist-search .search-icon');
       for (var s = 0; s < slinks.length; s++) {
         slinks[s].addEventListener('click', onSearchClick);
       }
@@ -3034,19 +3055,20 @@
     // ※既存のURL仕様は変更しない（eBayはSold/Completed、メルカリはkeyword、Googleはq）。url(k) は encodeURIComponent 済みの文字列を受け取る。
     var searchSites = [
       // Amazon は Keepa/ASIN 未実装のため検索語で開く。preferJan: JAN/ISBN→検索KW→商品名（フォームのみ。下の onSearchClick で処理）
+      // 表示順：Amazon / メルカリ / Google / eBay / スニダン（アイコン a / メ / G / e / S）
       { key: 'amazon', label: 'Amazon', icon: 'a', windowName: 'shumi_amazon', preferJan: true,
         url: function (k) { return 'https://www.amazon.co.jp/s?k=' + k; } },
       { key: 'mercari', label: 'メルカリ', icon: 'メ', windowName: 'shumi_mercari', janFallback: true,
         url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
-      // スニダンは検索KW→商品名を優先。両方空なら JAN/ISBN をフォールバック利用（janFallback）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
-      { key: 'snkrdunk', label: 'スニダン', icon: 'S', windowName: 'shumi_snkrdunk', janFallback: true,
-        url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } },
       // Google は COOP: same-origin-allow-popups のため、別タブだとタブ名再利用が効かず押すたびにタブが増える。
       // 回避策として sameTab=true → 現在のタブで開く（タブは増えない／ブラウザの「戻る」でアプリへ復帰）。
       { key: 'google', label: 'Google', icon: 'G', windowName: 'shumi_google', sameTab: true, janFallback: true,
         url: function (k) { return 'https://www.google.com/search?q=' + k; } },
       { key: 'ebay', label: 'eBay Sold', icon: 'e', windowName: 'shumi_ebay', janFallback: true,
-        url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } }
+        url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } },
+      // スニダンは検索KW→商品名を優先。両方空なら JAN/ISBN をフォールバック利用（janFallback）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
+      { key: 'snkrdunk', label: 'スニダン', icon: 'S', windowName: 'shumi_snkrdunk', janFallback: true,
+        url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } }
     ];
     function findSearchSite(key) {
       for (var i = 0; i < searchSites.length; i++) { if (searchSites[i].key === key) return searchSites[i]; }
@@ -3062,7 +3084,7 @@
     function searchIconsHtml(cls) {
       return searchSites.map(function (s) {
         var lab = esc(s.label) + 'で相場検索';
-        return '<button type="button" class="' + cls + '" data-site="' + s.key + '" aria-label="' + lab + '" title="' + lab + '">'
+        return '<button type="button" class="' + cls + ' site-' + s.key + '" data-site="' + s.key + '" aria-label="' + lab + '" title="' + lab + '">'
           + esc(s.icon || s.label.charAt(0)) + '</button>';
       }).join('');
     }
@@ -3080,7 +3102,11 @@
       var row = btn.closest('.hist-search');
       var q, msgEl = null;
       if (row) {
-        q = (row.getAttribute('data-kw') || '').trim();
+        // 履歴カード：data-kw（検索KW）/ data-memo（商品名）/ data-jan（JAN/ISBN）から、フォームと同じ優先順で決定
+        var rKw = (row.getAttribute('data-kw') || '').trim();
+        var rMemo = (row.getAttribute('data-memo') || '').trim();
+        var rJan = (row.getAttribute('data-jan') || '').trim();
+        q = site.preferJan ? (rJan || rKw || rMemo) : (rKw || rMemo || rJan); // Amazon=JAN優先 / 他=KW→商品名→JAN
       } else if (site.preferJan) {
         // Amazon：JAN/ISBN優先（保持値＝カテゴリ非依存）→ なければ検索KW → なければ商品名
         q = getHeldJan() || $('searchKw').value.trim() || $('memo').value.trim();
