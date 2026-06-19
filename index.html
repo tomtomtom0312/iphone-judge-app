@@ -548,6 +548,11 @@
       <button type="button" id="copyJanNearBtn" class="hist-copy-btn">JANコピー</button>
       <!-- JAN取得済みのときだけ表示する使い方ガイド（updateJanNear で表示切替）。文言のみ・処理には非依存 -->
       <p class="hint" id="janUsageHint" style="display:none; margin:6px 0 0;">JAN取得済み：Amazon検索・JANコピーに使えます。他サイトは商品名/検索KWが空ならJANで検索します。</p>
+      <!-- カテゴリ候補（Step1・APIなし）：978/979(ISBN)かつカテゴリ未選択（その他）のときだけ表示。タップでカテゴリ反映（自動反映しない） -->
+      <div id="janCatSuggest" style="display:none; margin-top:6px;">
+        <span class="section-label" style="margin:0 6px 0 0;">カテゴリ候補：</span>
+        <button type="button" id="janCatSuggestBtn" class="hist-copy-btn">本・漫画にする</button>
+      </div>
     </div>
     <!-- コピー導線：各サイトの検索欄へ貼り付け用（商品名／検索キーワード）。空値は壊さない -->
     <div class="field" style="margin-bottom:8px;">
@@ -1307,8 +1312,9 @@
       var wrap = document.getElementById('janNear');
       if (!wrap) return;
       var jan = getHeldJan();
+      var cat = normCategory($('category').value);
       // 本・漫画カテゴリのときだけ ISBN/JAN を併記（表示専用。コピー/検索/保存はコード本体のみ）
-      var kind = (normCategory($('category').value) === 'book') ? janKind(jan) : '';
+      var kind = (cat === 'book') ? janKind(jan) : '';
       var shown = jan ? (kind ? jan + '（' + kind + '）' : jan) : '未取得';
       document.getElementById('janNearVal').textContent = shown;
       wrap.style.display = '';
@@ -1322,6 +1328,9 @@
             : 'JAN取得済み：Amazon検索・JANコピーに使えます。他サイトは商品名/検索KWが空ならJANで検索します。';
         }
       }
+      // Step1（APIなし）：978/979(ISBN) かつ カテゴリ未選択（その他）のときだけ候補を提示。手動で他カテゴリを選んでいる場合は出さない（タップ時のみ反映）
+      var sug = document.getElementById('janCatSuggest');
+      if (sug) sug.style.display = (janKind(jan) === 'ISBN' && cat === 'other') ? '' : 'none';
     }
 
     // AI認識結果から JAN/ISBN らしき番号を拾う（jan/barcode/isbn/code を許容）。8/10/13桁を採用、12桁(UPC-A)は先頭0で13桁化。該当なしは ''
@@ -3196,6 +3205,8 @@
       var jb = $('copyJanNearBtn'); if (jb) jb.addEventListener('click', function () { copyTextWithToast(getHeldJan()); }); // 保持値（カテゴリ非依存）をコピー
       // 保持用 janHolder の input（fabスキャンの dispatch 等）で近接表示＋補助項目JAN欄へ同期
       var jh = $('janHolder'); if (jh) jh.addEventListener('input', function () { setHeldJan(jh.value); });
+      // カテゴリ候補（Step1）：タップ時のみ「本・漫画」へ反映。onCategoryChange 経由で既存入力は温存・商品名/検索KW/売価には触れない
+      var cs = $('janCatSuggestBtn'); if (cs) cs.addEventListener('click', function () { $('category').value = 'book'; onCategoryChange(); });
     })();
 
     // 売価候補「反映」ボタン（単品フォーム・編集モーダル共通）。data-cand→data-target へ反映
