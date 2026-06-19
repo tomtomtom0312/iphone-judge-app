@@ -897,6 +897,7 @@
       return {
         brand: j.brand || '', series: j.series || '', setName: j.setName || '',
         cardName: j.cardName || '', boxName: j.boxName || '',
+        obi: j.obi || '', // 本・漫画の帯（あり/なし/空＝不明）
         storage: j.storage || '', color: j.color || '',
         condition: j.condition || '', notes: j.notes || '',
         confidence: Number(j.confidence) || 0
@@ -1017,10 +1018,10 @@
         { key: 'title',         label: 'タイトル', from: 'productName' },
         { key: 'volume',        label: '巻数' },
         { key: 'firstEd',       label: '初版', type: 'select', options: ['不明', '初版', '重版'] },
-        { key: 'obi',           label: '帯',   type: 'select', options: ['不明', 'あり', 'なし'] },
+        { key: 'obi',           label: '帯',   type: 'select', options: ['不明', 'あり', 'なし'], from: 'obi' },
         { key: 'bonus',         label: '特典', type: 'select', options: ['不明', 'あり', 'なし'] },
         { key: 'conditionMemo', label: '状態メモ', from: 'condition' },
-        { key: 'memo',          label: 'メモ' }
+        { key: 'memo',          label: 'メモ', from: 'series' }
       ],
       other: []
     };

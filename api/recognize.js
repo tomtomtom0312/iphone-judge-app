@@ -26,7 +26,7 @@ const SCHEMA = {
   properties: {
     productName: {
       type: 'string',
-      description: '出品タイトルに使える簡潔な商品名（日本語可）。iPhoneなら機種名、トレカ単品ならカード名、BOXならBOX名、フィギュアなら作品＋キャラ名、本・漫画なら表紙の正式タイトル（巻数が明確に見える場合のみ「タイトル ◯巻」）など。'
+      description: '出品タイトルに使える簡潔な商品名（日本語可）。iPhoneなら機種名、トレカ単品ならカード名、BOXならBOX名、フィギュアなら作品＋キャラ名、本・漫画なら検索しやすいタイトル＋レーベル/文庫名/出版社/シリーズ名（例: 超かぐや姫! ファミ通文庫。巻数が明確に見える場合は「タイトル ◯巻」）など。'
     },
     category: {
       type: 'string',
@@ -52,6 +52,11 @@ const SCHEMA = {
     boxName: {
       type: 'string',
       description: 'トレカBOXの商品名（例: スカーレットex BOX）。trading_card_box 以外や不明なら空文字。'
+    },
+    obi: {
+      type: 'string',
+      enum: ['あり', 'なし', '不明'],
+      description: '本・漫画の帯の有無。写真で帯が見えれば「あり」、明らかに帯が無いと判断できる場合だけ「なし」、判断できない/本以外なら「不明」。'
     },
     storage: {
       type: 'string',
@@ -128,9 +133,12 @@ export default async function handler(req, res) {
               + ' それら背景・周辺物は無視し、画像の中央に最も大きく写っている主要な商品「1点だけ」を特定してください。'
               + ' フリマ/eBay 出品を想定し、まず category を判定し、そのカテゴリに関係する項目だけを埋めてください（関係しない項目は空文字）。'
               + ' トレカ単品なら cardName/series/setName、トレカBOXなら boxName/series/setName、iPhoneなら storage/color を優先的に読み取ります。'
-              + ' 文庫・漫画・単行本・雑誌・書籍と判断できる画像は category=book とし、productName は表紙に見える正式タイトル（巻数が明確に見える場合のみ「タイトル ◯巻」）にします。'
+              + ' 文庫・漫画・単行本・雑誌・書籍と判断できる画像は category=book とします。'
+              + ' 本・漫画の productName は検索しやすい商品名にし、表紙のタイトルに加え、レーベル/文庫名/出版社/シリーズ名が見える場合はそれも含めます（例: 超かぐや姫! ファミ通文庫。巻数が明確に見える場合は「タイトル ◯巻」）。'
+              + ' series にはレーベル/文庫名/出版社/シリーズ名（例: ファミ通文庫）を入れます。'
+              + ' obi は写真で帯が見えていれば「あり」、明らかに帯が無いと判断できる場合だけ「なし」、判断できない場合は「不明」にします。'
               + ' 本・漫画では condition に表紙の傷・汚れ・折れ・日焼け・帯の傷みなど写真から見える範囲だけを簡潔に書き、裏面・小口・背表紙が写っていない場合は「裏面/背表紙は未確認」のように確認できない旨も記します。'
-              + ' 帯の有無・初版/重版・特典の有無は写真だけで断定できないため、明確に分かる場合のみ言及し、迷う場合は触れないでください（憶測で断定しない）。'
+              + ' 初版/重版・特典の有無は写真だけで断定できないため、明確に分かる場合のみ言及し、迷う場合は触れないでください（憶測で断定しない）。'
               + ' productName はそのカテゴリで出品タイトルに使える簡潔な商品名にします。'
               + ' condition は写真から実際に見える外観状態のみを記述し（割れ・傷・汚れ・未開封か否か）、見えない部分を憶測で断定しないでください。'
               + ' estimatedRank は外観から推定した状態ランク（S/A/B/C/D/ジャンク）です。'
@@ -165,6 +173,7 @@ export default async function handler(req, res) {
       setName: String(data.setName || ''),
       cardName: String(data.cardName || ''),
       boxName: String(data.boxName || ''),
+      obi: (data.obi === 'あり' || data.obi === 'なし') ? data.obi : '', // あり/なし が明確な場合のみ。不明/未判定は空＝フロントで「不明」
       storage: String(data.storage || ''),
       color: String(data.color || ''),
       condition: String(data.condition || ''),
