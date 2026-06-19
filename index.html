@@ -421,6 +421,10 @@
     .jan-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; min-width: 220px; padding: 14px 22px; border-radius: 12px; color: #fff; font-size: 16px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; cursor: pointer; }
     .jan-toast.is-success { background: #16a34a; }
     .jan-toast.is-fail { background: #ea580c; }
+    /* 相場検索の丸アイコンボタン（常時表示・横並び・折り返し可）。文字は最小限・aria-label/title でサイト名を補う */
+    .search-icons { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
+    .search-icon { width: 46px; height: 46px; border-radius: 50%; border: 1px solid #d0d0d0; background: #fff; color: #111; font-size: 19px; font-weight: 700; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+    .search-icon:active { background: #f0f0f0; }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -541,6 +545,11 @@
     <div class="field" style="margin-bottom:8px;">
       <button type="button" id="copyMemoBtn" class="hist-copy-btn">商品名コピー</button>
       <button type="button" id="copyKwBtn" class="hist-copy-btn">検索KWコピー</button>
+    </div>
+    <!-- 相場検索アイコン（常時表示・丸ボタン）。検索語の優先順は既存 onSearchClick を流用（AmazonはJAN優先、他は検索KW→商品名→JAN） -->
+    <div class="field" style="margin-bottom:8px;">
+      <span class="section-label" style="margin:0 0 6px;">相場検索（アイコンをタップ）</span>
+      <div id="searchIcons" class="search-icons"><!-- ボタンは searchSites から JS で描画 --></div>
     </div>
     <!-- 相場検索・候補（相場確認→候補を想定売価へ反映）。下の相場カードから移動（複製ではない） -->
     <details>
@@ -3025,18 +3034,18 @@
     // ※既存のURL仕様は変更しない（eBayはSold/Completed、メルカリはkeyword、Googleはq）。url(k) は encodeURIComponent 済みの文字列を受け取る。
     var searchSites = [
       // Amazon は Keepa/ASIN 未実装のため検索語で開く。preferJan: JAN/ISBN→検索KW→商品名（フォームのみ。下の onSearchClick で処理）
-      { key: 'amazon', label: 'Amazon', windowName: 'shumi_amazon', preferJan: true,
+      { key: 'amazon', label: 'Amazon', icon: 'a', windowName: 'shumi_amazon', preferJan: true,
         url: function (k) { return 'https://www.amazon.co.jp/s?k=' + k; } },
-      { key: 'mercari', label: 'メルカリ', windowName: 'shumi_mercari', janFallback: true,
+      { key: 'mercari', label: 'メルカリ', icon: 'メ', windowName: 'shumi_mercari', janFallback: true,
         url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
       // スニダンは検索KW→商品名を優先。両方空なら JAN/ISBN をフォールバック利用（janFallback）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
-      { key: 'snkrdunk', label: 'スニダン', windowName: 'shumi_snkrdunk', janFallback: true,
+      { key: 'snkrdunk', label: 'スニダン', icon: 'S', windowName: 'shumi_snkrdunk', janFallback: true,
         url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } },
       // Google は COOP: same-origin-allow-popups のため、別タブだとタブ名再利用が効かず押すたびにタブが増える。
       // 回避策として sameTab=true → 現在のタブで開く（タブは増えない／ブラウザの「戻る」でアプリへ復帰）。
-      { key: 'google', label: 'Google', windowName: 'shumi_google', sameTab: true, janFallback: true,
+      { key: 'google', label: 'Google', icon: 'G', windowName: 'shumi_google', sameTab: true, janFallback: true,
         url: function (k) { return 'https://www.google.com/search?q=' + k; } },
-      { key: 'ebay', label: 'eBay Sold', windowName: 'shumi_ebay', janFallback: true,
+      { key: 'ebay', label: 'eBay Sold', icon: 'e', windowName: 'shumi_ebay', janFallback: true,
         url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } }
     ];
     function findSearchSite(key) {
@@ -3047,6 +3056,14 @@
     function searchButtonsHtml(cls) {
       return searchSites.map(function (s) {
         return '<button type="button" class="' + cls + '" data-site="' + s.key + '">' + esc(s.label) + '</button>';
+      }).join('');
+    }
+    // 相場検索の丸アイコンボタンHTML（文字は icon のみ。aria-label/title でサイト名を補う）。クリックは onSearchClick を流用
+    function searchIconsHtml(cls) {
+      return searchSites.map(function (s) {
+        var lab = esc(s.label) + 'で相場検索';
+        return '<button type="button" class="' + cls + '" data-site="' + s.key + '" aria-label="' + lab + '" title="' + lab + '">'
+          + esc(s.icon || s.label.charAt(0)) + '</button>';
       }).join('');
     }
     // 開いたタブの参照を windowName ごとに保持。2回目以降は新規に開かず同じタブを更新する。
@@ -3126,6 +3143,11 @@
       if (rowEl) rowEl.innerHTML = searchButtonsHtml('search-link');
       var btns = document.querySelectorAll('#searchRow .search-link');
       for (var i = 0; i < btns.length; i++) { btns[i].addEventListener('click', onSearchClick); }
+      // 常時表示の丸アイコン行も同じ onSearchClick を配線（検索語ロジックは既存どおり）
+      var iconEl = $('searchIcons');
+      if (iconEl) iconEl.innerHTML = searchIconsHtml('search-icon');
+      var icons = document.querySelectorAll('#searchIcons .search-icon');
+      for (var k = 0; k < icons.length; k++) { icons[k].addEventListener('click', onSearchClick); }
     })();
 
     // コピー導線（商品名／検索KW／JAN）：各サイト検索欄へ貼付用。JANはクリック時に現在の jan フィールド値を読む
