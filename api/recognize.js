@@ -58,6 +58,10 @@ const SCHEMA = {
       enum: ['あり', 'なし', '不明'],
       description: '本・漫画の帯の有無。写真で帯が見えれば「あり」、明らかに帯が無いと判断できる場合だけ「なし」、判断できない/本以外なら「不明」。'
     },
+    jan: {
+      type: 'string',
+      description: '画像内に JANコード/バーコード/ISBN が明確に読み取れる場合のみ、その数字（ハイフン・スペース無しの数字のみ）。読み取れない/不確実なら空文字。推測で創作しない。商品名やカテゴリの推定には使わない。'
+    },
     storage: {
       type: 'string',
       description: 'iPhoneのストレージ容量（例: 256GB）。読み取れなければ、またはiPhone以外なら空文字。'
@@ -139,6 +143,7 @@ export default async function handler(req, res) {
               + ' obi は写真で帯が見えていれば「あり」、明らかに帯が無いと判断できる場合だけ「なし」、判断できない場合は「不明」にします。'
               + ' 本・漫画では condition に表紙の傷・汚れ・折れ・日焼け・帯の傷みなど写真から見える範囲だけを簡潔に書き、裏面・小口・背表紙が写っていない場合は「裏面/背表紙は未確認」のように確認できない旨も記します。'
               + ' 初版/重版・特典の有無は写真だけで断定できないため、明確に分かる場合のみ言及し、迷う場合は触れないでください（憶測で断定しない）。'
+              + ' 画像内にJANコード/バーコード/ISBNが明確に読み取れる場合のみ jan にその数字（数字のみ）を入れ、読めない/不確実なら空文字にします（推測で創作しない）。jan は商品名やカテゴリの判定には使いません。'
               + ' productName はそのカテゴリで出品タイトルに使える簡潔な商品名にします。'
               + ' condition は写真から実際に見える外観状態のみを記述し（割れ・傷・汚れ・未開封か否か）、見えない部分を憶測で断定しないでください。'
               + ' estimatedRank は外観から推定した状態ランク（S/A/B/C/D/ジャンク）です。'
@@ -174,6 +179,7 @@ export default async function handler(req, res) {
       cardName: String(data.cardName || ''),
       boxName: String(data.boxName || ''),
       obi: (data.obi === 'あり' || data.obi === 'なし') ? data.obi : '', // あり/なし が明確な場合のみ。不明/未判定は空＝フロントで「不明」
+      jan: String(data.jan || '').replace(/[^0-9]/g, ''), // 数字のみ。桁の妥当性はフロントで判定
       storage: String(data.storage || ''),
       color: String(data.color || ''),
       condition: String(data.condition || ''),
