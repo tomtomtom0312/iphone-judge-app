@@ -1109,11 +1109,14 @@
             // 入力フォームのJAN欄だけ「JANで検索」ボタンを添える（値があるときのみ表示／編集モーダル eAttrsBox には出さない）
             if (f.key === 'jan' && container.id === 'attrsBox') {
               var hasJan = !!v.replace(/[ 　]/g, '').trim();
-              inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANで検索</button>';
-              // JANクリア：値があるときだけ表示。押すとJAN欄を空にする
-              inp += '<button type="button" class="jan-clear-btn"' + (hasJan ? '' : ' style="display:none;"') + '>JANクリア</button>';
-              // JANライブ読み取り：カメラを開いて数秒デコード。読めたら停止。
-              inp += '<button type="button" class="jan-cam-btn">ライブでJANを読む</button>';
+              // 本・漫画カテゴリのみ ISBN 表記に変更（内部処理は共通）
+              var _isBook = (normCategory(category) === 'book');
+              var _lblSearch = _isBook ? 'ISBNで検索'       : 'JANで検索';
+              var _lblClear  = _isBook ? 'ISBNクリア'        : 'JANクリア';
+              var _lblCam    = _isBook ? 'ライブでISBNを読む' : 'ライブでJANを読む';
+              inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>' + _lblSearch + '</button>';
+              inp += '<button type="button" class="jan-clear-btn"'  + (hasJan ? '' : ' style="display:none;"') + '>' + _lblClear  + '</button>';
+              inp += '<button type="button" class="jan-cam-btn">' + _lblCam + '</button>';
               inp += '<span class="jan-scan-msg" aria-live="polite"></span>';
             }
           }
@@ -1338,6 +1341,9 @@
       var kind = (cat === 'book') ? janKind(jan) : '';
       var shown = jan ? (kind ? jan + '（' + kind + '）' : jan) : '未取得';
       document.getElementById('janNearVal').textContent = shown;
+      // 本・漫画カテゴリのとき「JANコピー」→「ISBNコピー」に切り替え
+      var copyJanBtn = document.getElementById('copyJanNearBtn');
+      if (copyJanBtn) copyJanBtn.textContent = (cat === 'book') ? 'ISBNコピー' : 'JANコピー';
       wrap.style.display = '';
       var hint = document.getElementById('janUsageHint'); // 取得済みのときだけ使い方ガイドを表示
       if (hint) {
