@@ -417,6 +417,8 @@
     .jan-cam-frame { position: absolute; left: 8%; right: 8%; top: 38%; height: 24%; border: 3px solid #ff3b30; border-radius: 8px; box-shadow: 0 0 0 2px rgba(0,0,0,.35); pointer-events: none; }
     .jan-cam-msg { color: #fff; text-align: center; margin-top: 10px; font-size: 13px; }
     .jan-cam-close { display: block; width: 100%; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .jan-cam-torch { display: none; width: 100%; margin-top: 8px; padding: 12px; border-radius: 8px; background: #374151; color: #fff; border: 1px solid #4b5563; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .jan-cam-torch.is-on { background: #b45309; border-color: #fbbf24; color: #fef3c7; }
     /* JAN読み取り結果トースト（上部中央・自動消去・成功緑/失敗オレンジで色分け）。JAN欄までスクロールせず結果が分かる */
     .jan-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; min-width: 220px; padding: 14px 22px; border-radius: 12px; color: #fff; font-size: 16px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; cursor: pointer; }
     .jan-toast.is-success { background: #16a34a; }
@@ -1187,7 +1189,7 @@
 
     // --- JANライブ読み取り。カメラを開いて数秒デコード→成功でJAN欄反映＋停止。getUserMediaは入力フォームのJANのみ ---
     var _janCam = null;       // カメラオーバーレイ（1回だけ生成して再利用）
-    var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null, isbnWaitTimer: null, pendingNonIsbn: null };
+    var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null, isbnWaitTimer: null, pendingNonIsbn: null, torchOn: false, torchTrack: null };
     var JAN_SCAN_TIMEOUT_MS = 8000;
 
     function ensureJanCamOverlay() {
@@ -1200,7 +1202,8 @@
           '<video class="jan-cam-video" playsinline muted></video>' +
           '<div class="jan-cam-frame"></div>' +
           '<div class="jan-cam-msg"></div>' +
-          '<div class="jan-cam-msg">15〜25cmくらい離す／JANを枠いっぱいに入れる／反射する時は少し傾ける／ピントが合うまで2〜3秒待つ</div>' +
+          '<div class="jan-cam-msg">暗い場所はライトON／反射する場合は少し斜めから読む／15〜25cmくらい離す／JANを枠いっぱいに入れる／ピントが合うまで2〜3秒待つ</div>' +
+          '<button type="button" class="jan-cam-torch">🔦 ライト　OFF</button>' +
           '<button type="button" class="jan-cam-close">閉じる / 停止</button>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -1208,7 +1211,8 @@
         overlay: overlay,
         video: overlay.querySelector('.jan-cam-video'),
         msg: overlay.querySelector('.jan-cam-msg'),
-        closeBtn: overlay.querySelector('.jan-cam-close')
+        closeBtn: overlay.querySelector('.jan-cam-close'),
+        torchBtn: overlay.querySelector('.jan-cam-torch')
       };
       return _janCam;
     }
@@ -1218,6 +1222,9 @@
       if (_janScan.timer) { clearTimeout(_janScan.timer); _janScan.timer = null; }
       if (_janScan.isbnWaitTimer) { clearTimeout(_janScan.isbnWaitTimer); _janScan.isbnWaitTimer = null; }
       _janScan.pendingNonIsbn = null;
+      if (_janScan.torchOn && _janScan.torchTrack) { try { _janScan.torchTrack.applyConstraints({ advanced: [{ torch: false }] }); } catch(e) {} }
+      _janScan.torchOn = false; _janScan.torchTrack = null;
+      if (_janCam && _janCam.torchBtn) { _janCam.torchBtn.style.display = 'none'; _janCam.torchBtn.className = 'jan-cam-torch'; }
       try { if (_janScan.reader) _janScan.reader.reset(); } catch (e) {}
       _janScan.reader = null;
       // 保持しているストリーム（getUserMediaで取得した実体）を確実に停止
@@ -1367,6 +1374,8 @@
       _janScan.readCount = 0;     // 誤読防止：同一JANの連続一致回数（2回で確定）
       _janScan.isbnWaitTimer = null;
       _janScan.pendingNonIsbn = null;
+      _janScan.torchOn = false;
+      _janScan.torchTrack = null;
       _lastJanInput = janInput;   // 失敗トーストからの再起動用に直前の入力欄/メッセージを保持（stopJanLiveScan では消さない）
       _lastJanMsgEl = msgEl;
       var cam = ensureJanCamOverlay();
@@ -1441,6 +1450,26 @@
           // getUserMedia 完了後の後始末（レース対策）：取得中に停止済みなら掴んだストリームを確実に停止、継続なら参照を保持
           if (!_janScan.active) { stopJanLiveScan(); return; }
           _janScan.stream = _janCam.video.srcObject || _janScan.stream;
+          // torch 対応確認：capabilities は getUserMedia 完了後に確定する端末があるためここで判定
+          var _tt = _janScan.stream && _janScan.stream.getVideoTracks()[0];
+          if (_tt && _tt.getCapabilities) {
+            var _caps = _tt.getCapabilities();
+            if (_caps.torch) {
+              _janScan.torchTrack = _tt;
+              _janCam.torchBtn.style.display = '';
+              _janCam.torchBtn.onclick = function () {
+                if (!_janScan.torchTrack) return;
+                _janScan.torchOn = !_janScan.torchOn;
+                _janScan.torchTrack.applyConstraints({ advanced: [{ torch: _janScan.torchOn }] }).catch(function () {
+                  _janScan.torchOn = false;
+                  _janCam.torchBtn.textContent = '🔦 ライト　OFF';
+                  _janCam.torchBtn.className = 'jan-cam-torch';
+                });
+                _janCam.torchBtn.textContent = _janScan.torchOn ? '🔦 ライト　ON' : '🔦 ライト　OFF';
+                _janCam.torchBtn.className = 'jan-cam-torch' + (_janScan.torchOn ? ' is-on' : '');
+              };
+            }
+          }
         });
       }).catch(function (e) {
         var m = (e && e.name === 'NotAllowedError')
