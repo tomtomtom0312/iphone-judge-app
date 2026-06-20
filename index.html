@@ -1197,8 +1197,9 @@
     var _janCam = null;       // カメラオーバーレイ（1回だけ生成して再利用）
     var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null, isbnWaitTimer: null, pendingNonIsbn: null, torchOn: false, torchTrack: null };
     var JAN_SCAN_TIMEOUT_MS = 8000;
-    var _openBdCache = {};      // isbn → { title, author } または null（未収録）
+    var _openBdCache = {};      // isbn → { title, author, publisher, pubdate, isbn } または null（未収録）
     var _openBdLastIsbn = '';   // 現在フェッチ中 or 最後に表示した ISBN（重複リクエスト防止）
+    var _currentBookInfo = null; // _renderOpenBd が最後に表示した書籍情報（buildCurrentEntry で参照。非ISBN/未取得は null）
 
     function ensureJanCamOverlay() {
       if (_janCam) return _janCam;
@@ -1352,7 +1353,7 @@
       var obEl = document.getElementById('openBdSuggest');
       if (obEl) {
         if (janKind(jan) === 'ISBN') { fetchOpenBd(jan); }
-        else { obEl.style.display = 'none'; _openBdLastIsbn = ''; }
+        else { obEl.style.display = 'none'; _openBdLastIsbn = ''; _currentBookInfo = null; }
       }
     }
 
@@ -1392,6 +1393,7 @@
       if (!obEl) return;
       obEl.style.display = '';
       obEl.innerHTML = '';
+      _currentBookInfo = (info && info.title) ? info : null; // 表示内容を保持し buildCurrentEntry で参照
       if (!info || !info.title) {
         obEl.innerHTML = '<p style="margin:0;font-size:12px;color:var(--muted);">書籍情報なし</p>';
         return;
@@ -2652,8 +2654,8 @@
       var m = MARKETPLACES[market] || MARKETPLACES.ebay;
       var shipSel = $('shipping');
       var _jan = getHeldJan(); // 保存時点の JAN/ISBN を確定（bookInfo と jan で同一値を使う）
-      var _bookInfo = (_jan && _openBdCache.hasOwnProperty(_jan) && _openBdCache[_jan] && _openBdCache[_jan].title)
-        ? _openBdCache[_jan] : null;
+      // _currentBookInfo に表示中の書籍情報を保持しているので、isbn が一致する場合のみ保存
+      var _bookInfo = (_currentBookInfo && _currentBookInfo.isbn === _jan) ? _currentBookInfo : null;
       var e = {
         id: currentEntryId || (String(new Date().getTime()) + Math.round(Math.random() * 1000)),
         date: nowLabel(),
@@ -3349,8 +3351,8 @@
       var text = btn.getAttribute('data-copy') || '';
       var row = btn.closest('.hist-copy');
       var msg = row ? row.querySelector('.copy-msg') : null;
-      function ok() { if (msg) { msg.textContent = 'コピーしました'; setTimeout(function () { msg.textContent = ''; }, 1500); } }
-      function fail() { if (msg) { msg.textContent = 'コピーできませんでした。長押しで選択してください。'; } }
+      function ok() { showJanToast('コピーしました', 'success', 1500); if (msg) { msg.textContent = 'コピーしました'; setTimeout(function () { msg.textContent = ''; }, 1500); } }
+      function fail() { showJanToast('コピーできませんでした', 'fail', 2000); if (msg) { msg.textContent = 'コピーできませんでした'; } }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(ok, function () { if (legacyCopy(text)) ok(); else fail(); });
       } else {
