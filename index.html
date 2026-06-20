@@ -2654,8 +2654,14 @@
       var m = MARKETPLACES[market] || MARKETPLACES.ebay;
       var shipSel = $('shipping');
       var _jan = getHeldJan(); // 保存時点の JAN/ISBN を確定（bookInfo と jan で同一値を使う）
-      // _currentBookInfo に表示中の書籍情報を保持しているので、isbn が一致する場合のみ保存
-      var _bookInfo = (_currentBookInfo && _currentBookInfo.isbn === _jan) ? _currentBookInfo : null;
+      // bookInfo: 表示中の書籍情報 → isbn一致チェックなし（複数経路での再設定で isbn がずれる場合があるため）
+      // フォールバック: _openBdCache を直接参照（キャッシュが残っていれば保存できる）
+      var _bookInfo = null;
+      if (_currentBookInfo && _currentBookInfo.title) {
+        _bookInfo = _currentBookInfo;
+      } else if (_jan && _openBdCache[_jan] && _openBdCache[_jan].title) {
+        _bookInfo = _openBdCache[_jan];
+      }
       var e = {
         id: currentEntryId || (String(new Date().getTime()) + Math.round(Math.random() * 1000)),
         date: nowLabel(),
@@ -3072,8 +3078,8 @@
         rows += detailRow('相場メモ', esc(e.marketMemo).replace(/\n/g, '<br>'));
       }
       if (ai.notes) rows += detailRow('AIメモ', '⚠️ ' + esc(ai.notes));
-      // openBD書籍情報（保存時に取得済みの場合のみ表示。既存履歴・非ISBN履歴では何も出さない）
-      var bi = e.bookInfo;
+      // openBD書籍情報（保存済み bookInfo → セッション内キャッシュの順で表示。既存履歴・非ISBN履歴では何も出さない）
+      var bi = e.bookInfo || (_openBdCache[e.jan] && _openBdCache[e.jan].title ? _openBdCache[e.jan] : null);
       if (bi && bi.title) {
         rows += detailRow('書名', esc(bi.title));
         if (bi.author)    rows += detailRow('著者', esc(bi.author));
