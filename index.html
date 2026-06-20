@@ -1438,7 +1438,7 @@
       };
       card.appendChild(btn);
       obEl.appendChild(card);
-      // 本・漫画カテゴリ選択中のとき attrsBox の各欄へ自動流し込み（既入力は温存、空欄のみ補完）
+      // 本・漫画カテゴリ選択中のとき attrsBox ＋ 商品名 / 検索KW へ自動流し込み（既入力は温存、空欄のみ補完）
       var catEl = $('category');
       if (catEl && normCategory(catEl.value) === 'book') {
         var pd2 = String(info.pubdate || '').replace(/[^0-9]/g, '');
@@ -1449,6 +1449,13 @@
           var el = document.querySelector('#attrsBox [data-attr="' + k + '"]');
           if (el && !el.value.trim()) el.value = fillMap[k];
         });
+        // 商品名・検索KW（空欄のみ補完。ユーザー入力は温存）
+        if (info.title) {
+          var memoEl = $('memo'), kwEl = $('searchKw');
+          if (memoEl && !memoEl.value.trim()) memoEl.value = info.title;
+          if (kwEl   && !kwEl.value.trim())   kwEl.value   = info.title;
+          refreshAmzCatGuess();
+        }
       }
     }
 
