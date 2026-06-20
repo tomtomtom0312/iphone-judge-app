@@ -1046,6 +1046,9 @@
         // JAN/ISBN付き書籍向け。key='jan' 据え置きで JAN欄＋右下「JANを読む」が自動連動（ラベルのみ「JAN/ISBN」）
         { key: 'jan',           label: 'JAN/ISBN' },
         { key: 'title',         label: 'タイトル', from: 'productName' },
+        { key: 'author',        label: '著者' },        // openBD自動入力
+        { key: 'publisher',     label: '出版社' },      // openBD自動入力
+        { key: 'releaseDate',   label: '発売日' },      // openBD自動入力
         { key: 'volume',        label: '巻数' },
         { key: 'firstEd',       label: '初版', type: 'select', options: ['不明', '初版', '重版'] },
         { key: 'obi',           label: '帯',   type: 'select', options: ['不明', 'あり', 'なし'], from: 'obi' },
@@ -1435,6 +1438,18 @@
       };
       card.appendChild(btn);
       obEl.appendChild(card);
+      // 本・漫画カテゴリ選択中のとき attrsBox の各欄へ自動流し込み（既入力は温存、空欄のみ補完）
+      var catEl = $('category');
+      if (catEl && normCategory(catEl.value) === 'book') {
+        var pd2 = String(info.pubdate || '').replace(/[^0-9]/g, '');
+        var fmtDate = pd2.length >= 6 ? pd2.slice(0,4) + '年' + pd2.slice(4,6) + '月' : pd2;
+        var fillMap = { title: info.title, author: info.author, publisher: info.publisher, releaseDate: fmtDate };
+        Object.keys(fillMap).forEach(function(k) {
+          if (!fillMap[k]) return;
+          var el = document.querySelector('#attrsBox [data-attr="' + k + '"]');
+          if (el && !el.value.trim()) el.value = fillMap[k];
+        });
+      }
     }
 
     // AI認識結果から JAN/ISBN らしき番号を拾う（jan/barcode/isbn/code を許容）。8/10/13桁を採用、12桁(UPC-A)は先頭0で13桁化。該当なしは ''
