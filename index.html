@@ -417,8 +417,8 @@
     .jan-cam-frame { position: absolute; left: 8%; right: 8%; top: 38%; height: 24%; border: 3px solid #ff3b30; border-radius: 8px; box-shadow: 0 0 0 2px rgba(0,0,0,.35); pointer-events: none; }
     .jan-cam-msg { color: #fff; text-align: center; margin-top: 10px; font-size: 13px; }
     .jan-cam-close { display: block; width: 100%; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
-    .jan-cam-torch { display: none; width: 100%; margin-top: 8px; padding: 12px; border-radius: 8px; background: #374151; color: #fff; border: 1px solid #4b5563; font-size: 15px; font-weight: 700; cursor: pointer; }
-    .jan-cam-torch.is-on { background: #b45309; border-color: #fbbf24; color: #fef3c7; }
+    .jan-cam-torch { position: absolute; top: 10px; right: 10px; z-index: 10; display: none; padding: 8px 14px; border-radius: 20px; background: rgba(55,65,81,.88); color: #fff; border: 1px solid rgba(255,255,255,.35); font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .jan-cam-torch.is-on { background: rgba(180,83,9,.92); border-color: #fbbf24; color: #fef3c7; }
     /* JAN読み取り結果トースト（上部中央・自動消去・成功緑/失敗オレンジで色分け）。JAN欄までスクロールせず結果が分かる */
     .jan-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; min-width: 220px; padding: 14px 22px; border-radius: 12px; color: #fff; font-size: 16px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; cursor: pointer; }
     .jan-toast.is-success { background: #16a34a; }
@@ -1203,7 +1203,7 @@
           '<div class="jan-cam-frame"></div>' +
           '<div class="jan-cam-msg"></div>' +
           '<div class="jan-cam-msg">暗い場所はライトON／反射する場合は少し斜めから読む／15〜25cmくらい離す／JANを枠いっぱいに入れる／ピントが合うまで2〜3秒待つ</div>' +
-          '<button type="button" class="jan-cam-torch">🔦 ライト　OFF</button>' +
+          '<button type="button" class="jan-cam-torch">💡 ライト OFF</button>' +
           '<button type="button" class="jan-cam-close">閉じる / 停止</button>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -1455,7 +1455,9 @@
           var _tt = _janScan.stream && _janScan.stream.getVideoTracks()[0];
           if (_tt) {
             _janScan.torchTrack = _tt;
-            _janCam.torchBtn.style.display = '';
+            _janCam.torchBtn.style.display = 'block';
+            _janCam.torchBtn.textContent = '💡 ライト OFF';
+            _janCam.torchBtn.className = 'jan-cam-torch';
             _janCam.torchBtn.onclick = function () {
               if (!_janScan.torchTrack) return;
               var nextOn = !_janScan.torchOn;
@@ -1469,7 +1471,7 @@
                   _janCam.torchBtn.onclick = null;
                 } else {
                   _janScan.torchOn = nextOn;
-                  _janCam.torchBtn.textContent = _janScan.torchOn ? '🔦 ライト　ON' : '🔦 ライト　OFF';
+                  _janCam.torchBtn.textContent = _janScan.torchOn ? '💡 ライト ON' : '💡 ライト OFF';
                   _janCam.torchBtn.className = 'jan-cam-torch' + (_janScan.torchOn ? ' is-on' : '');
                 }
               }).catch(function () {
