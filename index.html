@@ -2786,13 +2786,24 @@
       } else if (cat === 'book') {
         var vol = v('volume'); if (vol && !/巻$/.test(vol)) vol = vol + '巻';
         var titleVol = [v('title'), vol].filter(Boolean).join(' ');
-        summary = seg([
+        var bookSummary = seg([
           v('jan') && ('ISBN ' + v('jan')),
           titleVol,
           v('firstEd'),
           v('obi') && ('帯' + v('obi')),
           v('bonus') && ('特典' + v('bonus'))
         ]);
+        var bookMeta = seg([
+          v('author')      && ('著者：' + v('author')),
+          v('publisher')   && ('出版社：' + v('publisher')),
+          v('releaseDate') && ('発売日：' + v('releaseDate'))
+        ]);
+        var bookLines = [];
+        if (bookSummary) bookLines.push('補助情報：' + esc(bookSummary));
+        if (bookMeta)    bookLines.push(esc(bookMeta));
+        if (e.searchKw && String(e.searchKw).trim()) bookLines.push('検索KW：' + esc(String(e.searchKw).trim()));
+        var bhtml = bookLines.map(function (l) { return '<div>' + l + '</div>'; }).join('');
+        return bhtml ? '<div class="hist-attrs">' + bhtml + '</div>' : '';
       } else if (cat === 'figure') {
         summary = seg([
           v('jan') && ('JAN ' + v('jan')),
