@@ -2651,6 +2651,9 @@
       var market = activeMarket;
       var m = MARKETPLACES[market] || MARKETPLACES.ebay;
       var shipSel = $('shipping');
+      var _jan = getHeldJan(); // 保存時点の JAN/ISBN を確定（bookInfo と jan で同一値を使う）
+      var _bookInfo = (_jan && _openBdCache.hasOwnProperty(_jan) && _openBdCache[_jan] && _openBdCache[_jan].title)
+        ? _openBdCache[_jan] : null;
       var e = {
         id: currentEntryId || (String(new Date().getTime()) + Math.round(Math.random() * 1000)),
         date: nowLabel(),
@@ -2663,8 +2666,8 @@
         marketMemo: ($('marketMemo').value || '').trim(),
         cand: { low: $('candLow').value, std: $('candStd').value, high: $('candHigh').value },
         attrs: readAttrs($('attrsBox')),
-        jan: getHeldJan(), // カテゴリ非依存の保持JAN/ISBN（jan欄が無いカテゴリでも履歴に残す・非破壊の新規キー）
-        bookInfo: (function () { var j = getHeldJan(); return (j && _openBdCache[j]) ? _openBdCache[j] : null; })(), // openBD書籍情報（ISBN取得時のみ。ない場合は null＝CSV/既存履歴に影響なし）
+        jan: _jan,       // カテゴリ非依存の保持JAN/ISBN（jan欄が無いカテゴリでも履歴に残す・非破壊の新規キー）
+        bookInfo: _bookInfo, // openBD書籍情報（ISBN取得済み時のみ。ない場合は null＝CSV/既存履歴に影響なし）
         market: market,
         marketName: m.name,
         currency: m.currency,
