@@ -1403,18 +1403,23 @@
       titleEl.className = 'openbd-card-title';
       titleEl.textContent = info.title;
       card.appendChild(titleEl);
-      // 著者・出版社・発売日・ISBN をまとめてメタ行に
-      var metaParts = [];
-      if (info.author)    metaParts.push(info.author);
-      if (info.publisher) metaParts.push(info.publisher);
+      // 著者・出版社・発売日・ISBN を縦4行（ラベル付き・空項目は非表示）
+      var metaEl = document.createElement('div');
+      metaEl.className = 'openbd-card-meta';
+      var metaLines = [];
+      if (info.author)    metaLines.push('著者：' + info.author);
+      if (info.publisher) metaLines.push('出版社：' + info.publisher);
       if (info.pubdate) {
         var pd = String(info.pubdate).replace(/[^0-9]/g, '');
-        metaParts.push(pd.length >= 6 ? pd.slice(0,4) + '年' + pd.slice(4,6) + '月' : pd);
+        metaLines.push('発売日：' + (pd.length >= 6 ? pd.slice(0,4) + '年' + pd.slice(4,6) + '月' : pd));
       }
-      metaParts.push('ISBN: ' + info.isbn);
-      var metaEl = document.createElement('p');
-      metaEl.className = 'openbd-card-meta';
-      metaEl.textContent = metaParts.join('  /  ');
+      metaLines.push('ISBN：' + info.isbn);
+      metaLines.forEach(function (line) {
+        var row = document.createElement('p');
+        row.style.margin = '0 0 3px';
+        row.textContent = line;
+        metaEl.appendChild(row);
+      });
       card.appendChild(metaEl);
       // 反映ボタン
       var btn = document.createElement('button');
