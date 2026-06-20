@@ -1187,7 +1187,7 @@
 
     // --- JANライブ読み取り。カメラを開いて数秒デコード→成功でJAN欄反映＋停止。getUserMediaは入力フォームのJANのみ ---
     var _janCam = null;       // カメラオーバーレイ（1回だけ生成して再利用）
-    var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null };
+    var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null, isbnWaitTimer: null, pendingNonIsbn: null };
     var JAN_SCAN_TIMEOUT_MS = 8000;
 
     function ensureJanCamOverlay() {
@@ -1216,6 +1216,8 @@
     // カメラ停止（成功/失敗/中止/離脱の全経路で呼ぶ。冪等）。statusText があれば JAN欄付近メッセージへ反映
     function stopJanLiveScan(statusText) {
       if (_janScan.timer) { clearTimeout(_janScan.timer); _janScan.timer = null; }
+      if (_janScan.isbnWaitTimer) { clearTimeout(_janScan.isbnWaitTimer); _janScan.isbnWaitTimer = null; }
+      _janScan.pendingNonIsbn = null;
       try { if (_janScan.reader) _janScan.reader.reset(); } catch (e) {}
       _janScan.reader = null;
       // 保持しているストリーム（getUserMediaで取得した実体）を確実に停止
@@ -1363,6 +1365,8 @@
       _janScan.msgEl = msgEl;
       _janScan.lastDigits = '';   // 誤読防止：直近に読めた有効JAN（正規化13桁）
       _janScan.readCount = 0;     // 誤読防止：同一JANの連続一致回数（2回で確定）
+      _janScan.isbnWaitTimer = null;
+      _janScan.pendingNonIsbn = null;
       _lastJanInput = janInput;   // 失敗トーストからの再起動用に直前の入力欄/メッセージを保持（stopJanLiveScan では消さない）
       _lastJanMsgEl = msgEl;
       var cam = ensureJanCamOverlay();
@@ -1404,6 +1408,26 @@
             if (jan === _janScan.lastDigits) { _janScan.readCount++; }
             else { _janScan.lastDigits = jan; _janScan.readCount = 1; }
             if (_janScan.readCount < 2) { cam.msg.textContent = '確認中… ' + jan; return; } // オーバーレイ中央に読取数字を表示
+            // 978/979(ISBN)を優先：複数バーコードが写っている場合、非ISBNが先に2回確定しても1秒だけISBNを待つ
+            var isIsbn = /^97[89]/.test(jan);
+            if (!isIsbn) {
+              if (_janScan.pendingNonIsbn === jan) return; // 同じ非ISBNが続く→タイマー待ち継続
+              if (_janScan.isbnWaitTimer) { clearTimeout(_janScan.isbnWaitTimer); _janScan.isbnWaitTimer = null; }
+              _janScan.pendingNonIsbn = jan;
+              cam.msg.textContent = 'ISBN(978/979)確認中…';
+              var _nij = jan;
+              _janScan.isbnWaitTimer = setTimeout(function () {
+                if (!_janScan.active) return;
+                _janScan.isbnWaitTimer = null; _janScan.pendingNonIsbn = null;
+                janInput.value = _nij; janInput.dispatchEvent(new Event('input'));
+                showJanToast('JAN読み取り成功 ' + _nij + '（タップでコピー）', 'success', 4000, function () { copyJanToClipboard(_nij); });
+                stopJanLiveScan('読み取りました：' + _nij);
+              }, 1000);
+              return;
+            }
+            // ISBN(978/979)確定：非ISBNの保留をキャンセルして即採用
+            if (_janScan.isbnWaitTimer) { clearTimeout(_janScan.isbnWaitTimer); _janScan.isbnWaitTimer = null; }
+            _janScan.pendingNonIsbn = null;
             janInput.value = jan;
             janInput.dispatchEvent(new Event('input')); // 既存JAN検索ボタンの表示連動
             // 本・漫画でISBN(978/979)を読んだときだけ案内文を変える。トースト/コピーの値はコード本体のまま
