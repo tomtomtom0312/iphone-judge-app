@@ -2664,6 +2664,7 @@
         cand: { low: $('candLow').value, std: $('candStd').value, high: $('candHigh').value },
         attrs: readAttrs($('attrsBox')),
         jan: getHeldJan(), // カテゴリ非依存の保持JAN/ISBN（jan欄が無いカテゴリでも履歴に残す・非破壊の新規キー）
+        bookInfo: (function () { var j = getHeldJan(); return (j && _openBdCache[j]) ? _openBdCache[j] : null; })(), // openBD書籍情報（ISBN取得時のみ。ない場合は null＝CSV/既存履歴に影響なし）
         market: market,
         marketName: m.name,
         currency: m.currency,
@@ -3066,6 +3067,17 @@
         rows += detailRow('相場メモ', esc(e.marketMemo).replace(/\n/g, '<br>'));
       }
       if (ai.notes) rows += detailRow('AIメモ', '⚠️ ' + esc(ai.notes));
+      // openBD書籍情報（保存時に取得済みの場合のみ表示。既存履歴・非ISBN履歴では何も出さない）
+      var bi = e.bookInfo;
+      if (bi && bi.title) {
+        rows += detailRow('書名', esc(bi.title));
+        if (bi.author)    rows += detailRow('著者', esc(bi.author));
+        if (bi.publisher) rows += detailRow('出版社', esc(bi.publisher));
+        if (bi.pubdate) {
+          var bpd = String(bi.pubdate).replace(/[^0-9]/g, '');
+          rows += detailRow('発売日', esc(bpd.length >= 6 ? bpd.slice(0,4) + '年' + bpd.slice(4,6) + '月' : bpd));
+        }
+      }
       rows += detailRow('日時', esc(e.date));
       $('dRows').innerHTML = rows;
 
