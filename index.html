@@ -1360,6 +1360,21 @@
       }
     }
 
+    // openBDタイトルから巻数を抽出。1〜99のみ採用（年号・大号数の誤検知排除）。「第N巻」は明示的なので範囲外も許容
+    function extractVolume(title) {
+      if (!title) return '';
+      var m, n;
+      m = title.match(/第(\d+)巻/);                  // 「第N巻」（明示的）
+      if (m) return m[1];
+      m = title.match(/[　 .]巻(\d+)/);             // 「巻N」（スペース/ピリオド+巻+数字）
+      if (m) { n = parseInt(m[1], 10); if (n >= 1 && n <= 99) return String(n); }
+      m = title.match(/[（(](\d+)[）)]/);            // 「（N）」括弧形式
+      if (m) { n = parseInt(m[1], 10); if (n >= 1 && n <= 99) return String(n); }
+      m = title.match(/[　 ](\d+)$/);               // 末尾の半角数字（スペース区切り）
+      if (m) { n = parseInt(m[1], 10); if (n >= 1 && n <= 99) return String(n); }
+      return '';
+    }
+
     // openBD API で ISBN → 書籍情報を取得。キャッシュ済みなら即表示。失敗は「書籍情報なし」表示
     function fetchOpenBd(isbn) {
       var obEl = document.getElementById('openBdSuggest');
@@ -1373,12 +1388,14 @@
         .then(function (r) { return r.json(); })
         .then(function (data) {
           var s = data && data[0] && data[0].summary;
-          _openBdCache[isbn] = (s && s.title) ? {
-            title:     (s.title     || '').trim(),
+          var _t = (s && s.title) ? s.title.trim() : '';
+          _openBdCache[isbn] = _t ? {
+            title:     _t,
             author:    (s.author    || '').trim(),
             publisher: (s.publisher || '').trim(),
             pubdate:   (s.pubdate   || '').trim(),
-            isbn:      isbn
+            isbn:      isbn,
+            volume:    extractVolume(_t)  // タイトルから巻数抽出（1〜99 or 第N巻）
           } : null;
           if (_openBdLastIsbn === isbn) _renderOpenBd(isbn);
         })
@@ -1443,7 +1460,7 @@
       if (catEl && normCategory(catEl.value) === 'book') {
         var pd2 = String(info.pubdate || '').replace(/[^0-9]/g, '');
         var fmtDate = pd2.length >= 6 ? pd2.slice(0,4) + '年' + pd2.slice(4,6) + '月' : pd2;
-        var fillMap = { title: info.title, author: info.author, publisher: info.publisher, releaseDate: fmtDate };
+        var fillMap = { title: info.title, author: info.author, publisher: info.publisher, releaseDate: fmtDate, volume: info.volume };
         Object.keys(fillMap).forEach(function(k) {
           if (!fillMap[k]) return;
           var el = document.querySelector('#attrsBox [data-attr="' + k + '"]');
@@ -2803,7 +2820,8 @@
         var bookMeta = seg([
           v('author')      && ('著者：' + v('author')),
           v('publisher')   && ('出版社：' + v('publisher')),
-          v('releaseDate') && ('発売日：' + v('releaseDate'))
+          v('releaseDate') && ('発売日：' + v('releaseDate')),
+          vol              && ('巻数：' + vol)
         ]);
         var bookLines = [];
         if (bookSummary) bookLines.push('補助情報：' + esc(bookSummary));
