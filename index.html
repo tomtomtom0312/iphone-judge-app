@@ -1450,25 +1450,35 @@
           // getUserMedia 完了後の後始末（レース対策）：取得中に停止済みなら掴んだストリームを確実に停止、継続なら参照を保持
           if (!_janScan.active) { stopJanLiveScan(); return; }
           _janScan.stream = _janCam.video.srcObject || _janScan.stream;
-          // torch 対応確認：capabilities は getUserMedia 完了後に確定する端末があるためここで判定
+          // torch：capabilities に torch が載らない端末（iOS Safari等）でも試行できるよう常にボタンを表示。
+          // タップ後 getSettings().torch で実際に on になったか確認し、ならなければ「非対応」表示。
           var _tt = _janScan.stream && _janScan.stream.getVideoTracks()[0];
-          if (_tt && _tt.getCapabilities) {
-            var _caps = _tt.getCapabilities();
-            if (_caps.torch) {
-              _janScan.torchTrack = _tt;
-              _janCam.torchBtn.style.display = '';
-              _janCam.torchBtn.onclick = function () {
-                if (!_janScan.torchTrack) return;
-                _janScan.torchOn = !_janScan.torchOn;
-                _janScan.torchTrack.applyConstraints({ advanced: [{ torch: _janScan.torchOn }] }).catch(function () {
+          if (_tt) {
+            _janScan.torchTrack = _tt;
+            _janCam.torchBtn.style.display = '';
+            _janCam.torchBtn.onclick = function () {
+              if (!_janScan.torchTrack) return;
+              var nextOn = !_janScan.torchOn;
+              _janScan.torchTrack.applyConstraints({ advanced: [{ torch: nextOn }] }).then(function () {
+                var s = _janScan.torchTrack && _janScan.torchTrack.getSettings ? _janScan.torchTrack.getSettings() : {};
+                if (nextOn && !s.torch) {
+                  // resolve されたが torch は on にならなかった（iOS Safari の silent ignore 等）
                   _janScan.torchOn = false;
-                  _janCam.torchBtn.textContent = '🔦 ライト　OFF';
+                  _janCam.torchBtn.textContent = 'ライト非対応';
                   _janCam.torchBtn.className = 'jan-cam-torch';
-                });
-                _janCam.torchBtn.textContent = _janScan.torchOn ? '🔦 ライト　ON' : '🔦 ライト　OFF';
-                _janCam.torchBtn.className = 'jan-cam-torch' + (_janScan.torchOn ? ' is-on' : '');
-              };
-            }
+                  _janCam.torchBtn.onclick = null;
+                } else {
+                  _janScan.torchOn = nextOn;
+                  _janCam.torchBtn.textContent = _janScan.torchOn ? '🔦 ライト　ON' : '🔦 ライト　OFF';
+                  _janCam.torchBtn.className = 'jan-cam-torch' + (_janScan.torchOn ? ' is-on' : '');
+                }
+              }).catch(function () {
+                _janScan.torchOn = false;
+                _janCam.torchBtn.textContent = 'ライト非対応';
+                _janCam.torchBtn.className = 'jan-cam-torch';
+                _janCam.torchBtn.onclick = null;
+              });
+            };
           }
         });
       }).catch(function (e) {
