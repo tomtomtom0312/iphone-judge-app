@@ -2962,7 +2962,7 @@
         var hMemo = (e.memo || '').trim();
         var hJan = String((e.attrs && e.attrs.jan) || e.jan || '').replace(/[^0-9]/g, '').trim(); // 補助項目JAN優先・無ければ保持JAN(e.jan)
         var searchHtml = (hKw || hMemo || hJan)
-          ? '<div class="hist-search" data-kw="' + esc(hKw) + '" data-memo="' + esc(hMemo) + '" data-jan="' + esc(hJan) + '">' +
+          ? '<div class="hist-search" data-kw="' + esc(hKw) + '" data-memo="' + esc(hMemo) + '" data-jan="' + esc(hJan) + '" data-category="' + esc(e.category || '') + '">' +
               searchIconsHtml('search-icon') +
             '</div>'
           : '';
@@ -3381,13 +3381,24 @@
       var row = btn.closest('.hist-search');
       var q, msgEl = null;
       if (row) {
-        // 履歴カード：data-kw（検索KW）/ data-memo（商品名）/ data-jan（JAN/ISBN）から、フォームと同じ優先順で決定
+        // 履歴カード：data-kw（検索KW）/ data-memo（商品名）/ data-jan（JAN/ISBN）/ data-category から優先順で決定
         var rKw = (row.getAttribute('data-kw') || '').trim();
         var rMemo = (row.getAttribute('data-memo') || '').trim();
         var rJan = (row.getAttribute('data-jan') || '').trim();
-        q = site.preferJan ? (rJan || rKw || rMemo) : (rKw || rMemo || rJan); // Amazon=JAN優先 / 他=KW→商品名→JAN
+        var rCat = (row.getAttribute('data-category') || '');
+        // 本・漫画 + ISBN（978/979）の場合、AmazonはISBN検索を優先（他サイト・他カテゴリは既存ロジックのまま）
+        if (site.key === 'amazon' && rCat === 'book' && /^97[89]/.test(rJan)) {
+          q = rJan;
+        } else {
+          q = site.preferJan ? (rJan || rKw || rMemo) : (rKw || rMemo || rJan); // Amazon=JAN優先 / 他=KW→商品名→JAN
+        }
+      } else if (site.key === 'amazon' && normCategory($('category').value) === 'book') {
+        // 入力フォーム・本・漫画カテゴリ：ISBNがあればISBN優先、なければ検索KW→商品名
+        var _heldJan = getHeldJan();
+        q = (/^97[89]/.test(_heldJan) ? _heldJan : null) || $('searchKw').value.trim() || $('memo').value.trim();
+        msgEl = $('searchMsg');
       } else if (site.preferJan) {
-        // Amazon：JAN/ISBN優先（保持値＝カテゴリ非依存）→ なければ検索KW → なければ商品名
+        // Amazon（他カテゴリ）：JAN/ISBN優先（保持値＝カテゴリ非依存）→ なければ検索KW → なければ商品名
         q = getHeldJan() || $('searchKw').value.trim() || $('memo').value.trim();
         msgEl = $('searchMsg');
       } else if (site.janFallback) {
