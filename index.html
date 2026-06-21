@@ -1607,8 +1607,9 @@
       _janScan.active = true;
       _janScan.janInput = janInput;
       _janScan.msgEl = msgEl;
-      _janScan.lastDigits = '';   // 誤読防止：直近に読めた有効JAN（正規化13桁）
-      _janScan.readCount = 0;     // 誤読防止：同一JANの連続一致回数（2回で確定）
+      _janScan.lastDigits = '';      // 誤読防止：現在の候補JAN（正規化13桁）
+      _janScan.readCount = 0;      // 誤読防止：候補JANの検出回数（2回で確定）
+      _janScan.firstReadTime = 0;  // 誤読防止：候補JANを初めて読んだ時刻（ms）。2秒ウィンドウ管理用
       _janScan.isbnWaitTimer = null;
       _janScan.pendingNonIsbn = null;
       _janScan.torchOn = false;
@@ -1668,9 +1669,13 @@
               _janScan.lastDigits = ''; _janScan.readCount = 0; // 下段では確定させない（カウントをリセットして継続）
               return;
             }
-            // 誤読防止：同じ有効JANを連続2回読めたら確定（速度優先。フォーマット限定＋チェックサム検証で一定の防御は維持）
-            if (jan === _janScan.lastDigits) { _janScan.readCount++; }
-            else { _janScan.lastDigits = jan; _janScan.readCount = 1; }
+            // 誤読防止：2秒以内に同じJANを2回検出したら確定。途中の失敗フレームは保持、別JAN検出時は候補を差し替える
+            var _now = Date.now();
+            if (jan !== _janScan.lastDigits || (_now - _janScan.firstReadTime) > 2000) {
+              _janScan.lastDigits = jan; _janScan.readCount = 1; _janScan.firstReadTime = _now;
+            } else {
+              _janScan.readCount++;
+            }
             if (_janScan.readCount < 2) { cam.msg.textContent = '確認中… ' + jan; return; } // オーバーレイ中央に読取数字を表示
             // 978/979(ISBN)を優先：複数バーコードが写っている場合、非ISBNが先に2回確定しても1秒だけISBNを待つ
             var isIsbn = /^97[89]/.test(jan);
