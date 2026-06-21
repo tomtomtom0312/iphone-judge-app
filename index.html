@@ -1381,6 +1381,14 @@
       return '';
     }
 
+    // openBD著者名の表示用整形：末尾の生年/没年（,NNNN- 等）を除去し、姓名カンマを削除。複数著者はスペース分割で個別処理し「、」で結合
+    function formatOpenBdAuthor(raw) {
+      if (!raw) return '';
+      return raw.split(' ').map(function (part) {
+        return part.replace(/,\d{4}(-\d{4})?-?$/, '').replace(/,/g, '');
+      }).filter(Boolean).join('、');
+    }
+
     // openBD API で ISBN → 書籍情報を取得。キャッシュ済みなら即表示。失敗は「書籍情報なし」表示
     function fetchOpenBd(isbn) {
       var obEl = document.getElementById('openBdSuggest');
@@ -1397,7 +1405,7 @@
           var _t = (s && s.title) ? s.title.trim() : '';
           _openBdCache[isbn] = _t ? {
             title:     _t,
-            author:    (s.author    || '').trim(),
+            author:    formatOpenBdAuthor((s.author || '').trim()),
             publisher: (s.publisher || '').trim(),
             pubdate:   (s.pubdate   || '').trim(),
             isbn:      isbn,
