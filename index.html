@@ -485,6 +485,15 @@
         <button type="button" id="fabAlbumBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🖼 アルバムから選ぶ</button>
         <button type="button" id="fabJanBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 JANを読む</button>
         <button type="button" id="fabVoiceBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🎙 音声で商品入力</button>
+        <!-- 現在の商品情報プレビュー -->
+        <div style="display:flex; align-items:center; align-self:stretch; justify-content:flex-end; margin-top:2px;">
+          <span style="font-size:11px; color:#6b7280; white-space:nowrap;">― 現在の商品情報 ―</span>
+        </div>
+        <div id="fabInfoPanel" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 12px; max-width:220px; font-size:12px; line-height:1.7; color:#374151; text-align:right;">
+          <div id="fabInfoMemo" style="display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;">商品名：未入力</div>
+          <div id="fabInfoKw"   style="display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;">検索KW：未入力</div>
+          <div id="fabInfoJan"  style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">JAN/ISBN：未取得</div>
+        </div>
         <!-- コピー系区切り -->
         <div style="display:flex; align-items:center; gap:6px; align-self:stretch; justify-content:flex-end;">
           <span style="font-size:11px; color:#6b7280; white-space:nowrap;">― コピー ―</span>
@@ -1993,7 +2002,18 @@
     $('fabToggleBtn').addEventListener('click', function () {
       var open = this.getAttribute('aria-expanded') === 'true';
       if (open) { closeFabMenu(); }
-      else { $('fabMenuItems').style.display = 'flex'; this.setAttribute('aria-expanded', 'true'); }
+      else {
+        // メニューを開く直前に現在値を取得して情報パネルを更新
+        var _memo = ($('memo').value || '').trim();
+        var _kw   = ($('searchKw').value || '').trim();
+        var _jan  = getHeldJan();
+        var _janLabel = normCategory($('category').value) === 'book' ? 'ISBN' : 'JAN/ISBN';
+        $('fabInfoMemo').textContent = '商品名：' + (_memo || '未入力');
+        $('fabInfoKw').textContent   = '検索KW：' + (_kw   || '未入力');
+        $('fabInfoJan').textContent  = _janLabel + '：' + (_jan || '未取得');
+        $('fabMenuItems').style.display = 'flex';
+        this.setAttribute('aria-expanded', 'true');
+      }
     });
     // ページ上部へ戻る固定ボタン：少しスクロールしたら表示、タップでスムーズに最上部へ
     (function () {
