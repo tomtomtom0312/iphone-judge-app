@@ -1338,6 +1338,11 @@
       // 補助項目JAN欄が存在すれば同期（無ければ何もしない＝カテゴリ非依存）。値が同じなら dispatch せずループを防ぐ
       var aux = document.querySelector('#attrsBox [data-attr="jan"]');
       if (aux && aux.value !== v) { aux.value = v; aux.dispatchEvent(new Event('input')); }
+      // ISBN(978/979)13桁検出時：カテゴリが「本・漫画」でない場合のみ自動切り替え（通常JANは対象外）
+      if (janKind(v) === 'ISBN' && normCategory($('category').value) !== 'book') {
+        $('category').value = 'book';
+        onCategoryChange();
+      }
       updateJanNear();
     }
     // 商品名近くの JAN/ISBN ミラー表示を更新（保持値 janHolder を表示）。単品モードでは常に表示（カテゴリ非依存）
