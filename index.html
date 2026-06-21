@@ -2866,10 +2866,9 @@
         ]);
       } else if (cat === 'book') {
         var vol = v('volume'); if (vol && !/巻$/.test(vol)) vol = vol + '巻';
-        var titleVol = [formatOpenBdTitle(v('title')), vol].filter(Boolean).join(' ');
+        // タイトルはカード上部の商品名に表示済みのため補助情報には含めない
         var bookSummary = seg([
           v('jan') && ('ISBN ' + v('jan')),
-          titleVol,
           v('firstEd'),
           v('obi') && ('帯' + v('obi')),
           v('bonus') && ('特典' + v('bonus'))
