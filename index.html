@@ -1151,10 +1151,20 @@
           camBtn.addEventListener('click', function () { startJanLiveScan(janInput, scanMsg); });
         }
         // JANクリア：JAN欄と読み取りメッセージを空にし、input発火で検索/クリアボタンを非表示へ戻す
+        // 本・漫画カテゴリのときは openBD 自動入力フィールド・商品名・検索KWもまとめてクリア（次の本をスキャンするための全リセット）
         if (janInput && clearBtn) {
           clearBtn.addEventListener('click', function () {
             janInput.value = '';
             if (scanMsg) scanMsg.textContent = '';
+            if (normCategory($('category').value) === 'book') {
+              ['title', 'author', 'publisher', 'releaseDate', 'volume', 'firstEd', 'obi', 'bonus', 'conditionMemo', 'memo'].forEach(function (k) {
+                var el = container.querySelector('[data-attr="' + k + '"]');
+                if (!el) return;
+                if (el.tagName === 'SELECT') { el.selectedIndex = 0; } else { el.value = ''; }
+              });
+              if ($('memo'))     $('memo').value = '';
+              if ($('searchKw')) $('searchKw').value = '';
+            }
             janInput.dispatchEvent(new Event('input'));
           });
         }
