@@ -1396,6 +1396,11 @@
       return '';
     }
 
+    // openBDタイトルの整形：「巻N」形式（スペース/ピリオド+巻+数字）を「N巻」に変換。冪等。第N巻・巻末・上巻等には不一致
+    function formatOpenBdTitle(t) {
+      if (!t) return '';
+      return t.replace(/([　 .])巻(\d+)/g, '$1$2巻');
+    }
     // openBD著者名の表示用整形：末尾の生年/没年（,NNNN- 等）を除去し、姓名カンマを削除。複数著者はスペース分割で個別処理し「、」で結合
     function formatOpenBdAuthor(raw) {
       if (!raw) return '';
@@ -1419,7 +1424,7 @@
           var s = data && data[0] && data[0].summary;
           var _t = (s && s.title) ? s.title.trim() : '';
           _openBdCache[isbn] = _t ? {
-            title:     _t,
+            title:     formatOpenBdTitle(_t),
             author:    formatOpenBdAuthor((s.author || '').trim()),
             publisher: (s.publisher || '').trim(),
             pubdate:   (s.pubdate   || '').trim(),
@@ -2856,7 +2861,7 @@
         ]);
       } else if (cat === 'book') {
         var vol = v('volume'); if (vol && !/巻$/.test(vol)) vol = vol + '巻';
-        var titleVol = [v('title'), vol].filter(Boolean).join(' ');
+        var titleVol = [formatOpenBdTitle(v('title')), vol].filter(Boolean).join(' ');
         var bookSummary = seg([
           v('jan') && ('ISBN ' + v('jan')),
           titleVol,
@@ -3220,8 +3225,11 @@
       // カテゴリ別補助項目（保存値をフォールバックでAI生値からも補完）
       var _editAttrs = e.attrs || (e.ai ? attrsFromRecognition(e.category, e.ai) : {});
       // 本・漫画カテゴリの author は表示用に整形（保存データは変更しない）
-      if (normCategory(e.category) === 'book' && _editAttrs.author) {
-        _editAttrs = Object.assign({}, _editAttrs, { author: formatOpenBdAuthor(_editAttrs.author) });
+      if (normCategory(e.category) === 'book') {
+        var _bookOverrides = {};
+        if (_editAttrs.author) _bookOverrides.author = formatOpenBdAuthor(_editAttrs.author);
+        if (_editAttrs.title)  _bookOverrides.title  = formatOpenBdTitle(_editAttrs.title);
+        if (Object.keys(_bookOverrides).length) _editAttrs = Object.assign({}, _editAttrs, _bookOverrides);
       }
       renderAttrs($('eAttrsBox'), e.category, _editAttrs);
       // 売価候補
