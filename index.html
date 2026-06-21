@@ -484,6 +484,7 @@
         <button type="button" id="fabCameraBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 写真を撮る</button>
         <button type="button" id="fabAlbumBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🖼 アルバムから選ぶ</button>
         <button type="button" id="fabJanBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 JANを読む</button>
+        <button type="button" id="fabVoiceBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🎙 音声で商品入力</button>
       </div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:8px;">
         <button type="button" id="fabSaveBtn" aria-label="下書き保存" title="下書き保存" style="border:none; border-radius:50%; width:48px; height:48px; background:#1d4ed8; color:#fff; font-size:22px; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.3); cursor:pointer;">💾</button>
@@ -627,6 +628,13 @@
   <!-- カテゴリ別補助項目（相場検索ブロックは上の主要入力カードへ移動済み） -->
   <div class="card single-only">
     <div id="attrsBox" class="attrs-box"></div>
+  </div>
+
+  <!-- 音声で商品入力（iPhone標準キーボードのマイクで話して補助項目を一括反映） -->
+  <div class="card single-only" id="voiceInputCard">
+    <p class="section-label" style="margin-bottom:8px;">🎙 音声で商品入力</p>
+    <textarea id="voiceInputArea" rows="3" placeholder="例：ONE PIECE 1巻 初版 帯あり シュリンクあり 特典トレカ 9784088704166" style="margin-bottom:8px;"></textarea>
+    <button type="button" id="voiceApplyBtn" style="width:100%; padding:10px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-size:15px; font-weight:600; cursor:pointer;">音声入力を反映</button>
   </div>
 
   <!-- 結果 -->
@@ -1202,8 +1210,9 @@
                   c.classList.toggle('selected', c.getAttribute('data-val') === '');
                 });
               });
-              if ($('memo'))     $('memo').value = '';
-              if ($('searchKw')) $('searchKw').value = '';
+              if ($('memo'))          $('memo').value = '';
+              if ($('searchKw'))      $('searchKw').value = '';
+              if ($('voiceInputArea')) $('voiceInputArea').value = '';
             }
             janInput.dispatchEvent(new Event('input'));
           });
@@ -2002,11 +2011,92 @@
       var cb = document.querySelector('#attrsBox .jan-clear-btn');
       if (cb) { cb.click(); return; }
       // JAN欄がないカテゴリ用フォールバック
-      if ($('memo'))     $('memo').value = '';
-      if ($('searchKw')) $('searchKw').value = '';
+      if ($('memo'))           $('memo').value = '';
+      if ($('searchKw'))       $('searchKw').value = '';
+      if ($('voiceInputArea')) $('voiceInputArea').value = '';
       setHeldJan('');
     }
     $('fabClearBtn').addEventListener('click', function () { closeFabMenu(); clearCurrentForm(); });
+    // FAB 音声で商品入力：音声入力カードへスクロールしてfocus（iOSキーボード+マイクが開く）
+    $('fabVoiceBtn').addEventListener('click', function () {
+      closeFabMenu();
+      var ta = $('voiceInputArea');
+      if (ta) { ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); ta.focus(); }
+    });
+
+    // quicktapチップのCSSを select 値に合わせて同期するユーティリティ
+    function syncQuickChip(selectEl) {
+      var chipsDiv = selectEl.nextElementSibling;
+      if (!chipsDiv || !chipsDiv.classList.contains('quick-chips')) return;
+      var val = selectEl.value;
+      chipsDiv.querySelectorAll('.quick-chip').forEach(function (c) {
+        c.classList.toggle('selected', c.getAttribute('data-val') === val);
+      });
+    }
+
+    // 音声入力テキストを解析して各補助項目へ反映（空欄のみ上書き）
+    function applyVoiceInput(text) {
+      // ISBN/JAN: 978 or 979 で始まる13桁（setHeldJan がカテゴリ自動切替も行う）
+      var janMatch = text.match(/97[89]\d{10}/);
+      if (janMatch) setHeldJan(janMatch[0]);
+
+      // setHeldJan でカテゴリが切り替わった可能性があるため再取得
+      var cat = normCategory($('category').value);
+
+      // 商品名・検索KW（空欄のみ反映。ISBNのみ入力時は空のためスキップ）
+      var titleText = text
+        .replace(/97[89]\d{10}/g, '')
+        .replace(/初版|重版|帯あり|帯なし|シュリンク包装あり|シュリンク包装なし|シュリンクあり|シュリンクなし|特典トレカ|イラストカード|小冊子|応募券|トレカ/g, '')
+        .replace(/\s+/g, ' ').trim();
+      if (titleText) {
+        var memoEl = $('memo'), kwEl = $('searchKw');
+        if (memoEl && !memoEl.value.trim()) memoEl.value = titleText;
+        if (kwEl   && !kwEl.value.trim())   kwEl.value   = titleText;
+      }
+
+      if (cat !== 'book') return;
+
+      // 初版 / 重版
+      var firstEdEl = document.querySelector('#attrsBox [data-attr="firstEd"]');
+      if (firstEdEl && !firstEdEl.value) {
+        if (/初版/.test(text)) { firstEdEl.value = '初版'; syncQuickChip(firstEdEl); }
+        else if (/重版/.test(text)) { firstEdEl.value = '重版'; syncQuickChip(firstEdEl); }
+      }
+
+      // 帯
+      var obiEl = document.querySelector('#attrsBox [data-attr="obi"]');
+      if (obiEl && !obiEl.value) {
+        if (/帯あり/.test(text)) { obiEl.value = 'あり'; syncQuickChip(obiEl); }
+        else if (/帯なし/.test(text)) { obiEl.value = 'なし'; syncQuickChip(obiEl); }
+      }
+
+      // シュリンク包装
+      var bonusEl = document.querySelector('#attrsBox [data-attr="bonus"]');
+      if (bonusEl && !bonusEl.value) {
+        if (/シュリンク包装あり|シュリンクあり/.test(text)) { bonusEl.value = 'あり'; syncQuickChip(bonusEl); }
+        else if (/シュリンク包装なし|シュリンクなし/.test(text)) { bonusEl.value = 'なし'; syncQuickChip(bonusEl); }
+      }
+
+      // 特典
+      var tokutenEl = document.querySelector('#attrsBox [data-attr="tokuten"]');
+      if (tokutenEl && !tokutenEl.value) {
+        var tokuMap = [
+          { re: /特典トレカ|トレカ/,  val: 'トレカ' },
+          { re: /応募券/,             val: '応募券' },
+          { re: /小冊子/,             val: '小冊子' },
+          { re: /イラストカード/,      val: 'イラストカード' }
+        ];
+        for (var ti = 0; ti < tokuMap.length; ti++) {
+          if (tokuMap[ti].re.test(text)) { tokutenEl.value = tokuMap[ti].val; syncQuickChip(tokutenEl); break; }
+        }
+      }
+    }
+
+    $('voiceApplyBtn').addEventListener('click', function () {
+      var text = ($('voiceInputArea').value || '').trim();
+      if (!text) return;
+      applyVoiceInput(text);
+    });
 
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
     // 「この位置でAI認識」：クロップ枠の画像を生成し、モードに応じて認識へ回す
