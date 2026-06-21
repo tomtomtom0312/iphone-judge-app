@@ -407,6 +407,10 @@
     .cand-apply:active { opacity: .85; }
     .attrs-box { margin-top: 14px; }
     .attrs-head { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+    /* タップ選択チップ（本・漫画カテゴリ 初版／帯／シュリンク包装） */
+    .quick-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .quick-chip { padding: 6px 14px; border: 1.5px solid var(--line); border-radius: 20px; background: #fff; color: #333; font-size: 14px; cursor: pointer; line-height: 1.4; }
+    .quick-chip.selected { background: #2563eb; color: #fff; border-color: #2563eb; }
     /* 入力フォームのJAN欄に添えるボタン（JANで検索／ライブでJANを読む／JANクリア） */
     .jan-search-btn, .jan-cam-btn, .jan-clear-btn {
       margin-top: 6px; margin-right: 6px; padding: 7px 12px; border-radius: 8px; background: #0d1117;
@@ -1054,9 +1058,9 @@
         { key: 'publisher',     label: '出版社' },      // openBD自動入力
         { key: 'releaseDate',   label: '発売日' },      // openBD自動入力
         { key: 'volume',        label: '巻数' },
-        { key: 'firstEd',       label: '初版', type: 'select', options: ['不明', '初版', '重版'] },
-        { key: 'obi',           label: '帯',   type: 'select', options: ['不明', 'あり', 'なし'], from: 'obi' },
-        { key: 'bonus',         label: '特典', type: 'select', options: ['不明', 'あり', 'なし'] },
+        { key: 'firstEd',       label: '初版',        type: 'select', options: ['不明', '初版', '重版'],    quicktap: true },
+        { key: 'obi',           label: '帯',          type: 'select', options: ['不明', 'あり', 'なし'], from: 'obi', quicktap: true },
+        { key: 'bonus',         label: 'シュリンク包装', type: 'select', options: ['不明', 'あり', 'なし'],    quicktap: true },
         { key: 'conditionMemo', label: '状態メモ', from: 'condition' },
         { key: 'memo',          label: 'メモ', from: 'series' }
       ],
@@ -1104,10 +1108,21 @@
           var v = attrs[f.key] != null ? String(attrs[f.key]) : '';
           var inp;
           if (f.type === 'select') {
-            inp = '<select data-attr="' + esc(f.key) + '">' + f.options.map(function (o) {
+            var _optHtml = f.options.map(function (o) {
               var val = (o === '不明') ? '' : o;
               return '<option value="' + esc(val) + '"' + (v === val ? ' selected' : '') + '>' + esc(o) + '</option>';
-            }).join('') + '</select>';
+            }).join('');
+            if (f.quicktap && container.id === 'attrsBox') {
+              // タップ選択チップUI：非表示selectで値を保持し readAttrs() に対応
+              var _chipsHtml = f.options.map(function (o) {
+                var val = (o === '不明') ? '' : o;
+                return '<button type="button" class="quick-chip' + (v === val ? ' selected' : '') + '" data-val="' + esc(val) + '">' + esc(o) + '</button>';
+              }).join('');
+              inp = '<select data-attr="' + esc(f.key) + '" style="display:none;">' + _optHtml + '</select>' +
+                    '<div class="quick-chips">' + _chipsHtml + '</div>';
+            } else {
+              inp = '<select data-attr="' + esc(f.key) + '">' + _optHtml + '</select>';
+            }
           } else {
             inp = '<input type="text" data-attr="' + esc(f.key) + '" value="' + esc(v) + '" />';
             // 入力フォームのJAN欄だけ「JANで検索」ボタンを添える（値があるときのみ表示／編集モーダル eAttrsBox には出さない）
@@ -1154,6 +1169,17 @@
         if (janInput && camBtn) {
           camBtn.addEventListener('click', function () { startJanLiveScan(janInput, scanMsg); });
         }
+        // quicktapチップ：タップで選択状態を更新し非表示selectへ反映
+        container.querySelectorAll('.quick-chips').forEach(function (chipsDiv) {
+          var sel = chipsDiv.previousElementSibling; // 直前の非表示select
+          chipsDiv.querySelectorAll('.quick-chip').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+              sel.value = chip.getAttribute('data-val');
+              chipsDiv.querySelectorAll('.quick-chip').forEach(function (c) { c.classList.remove('selected'); });
+              chip.classList.add('selected');
+            });
+          });
+        });
         // JANクリア：JAN欄と読み取りメッセージを空にし、input発火で検索/クリアボタンを非表示へ戻す
         // 本・漫画カテゴリのときは openBD 自動入力フィールド・商品名・検索KWもまとめてクリア（次の本をスキャンするための全リセット）
         if (janInput && clearBtn) {
@@ -1165,6 +1191,12 @@
                 var el = container.querySelector('[data-attr="' + k + '"]');
                 if (!el) return;
                 if (el.tagName === 'SELECT') { el.selectedIndex = 0; } else { el.value = ''; }
+              });
+              // quicktapチップをリセット（不明=data-val="" を選択状態に）
+              container.querySelectorAll('.quick-chips').forEach(function (cd) {
+                cd.querySelectorAll('.quick-chip').forEach(function (c) {
+                  c.classList.toggle('selected', c.getAttribute('data-val') === '');
+                });
               });
               if ($('memo'))     $('memo').value = '';
               if ($('searchKw')) $('searchKw').value = '';
@@ -2871,7 +2903,7 @@
           v('jan') && ('ISBN ' + v('jan')),
           v('firstEd'),
           v('obi') && ('帯' + v('obi')),
-          v('bonus') && ('特典' + v('bonus'))
+          v('bonus') && ('シュリンク包装' + v('bonus'))
         ]);
         var bookMeta = seg([
           v('author')      && ('著者：' + formatOpenBdAuthor(v('author'))),
