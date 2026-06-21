@@ -1626,7 +1626,7 @@
           ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A
         ]);
         hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-        var reader = new ZX.BrowserMultiFormatReader(hints, 300);
+        var reader = new ZX.BrowserMultiFormatReader(hints, 150);
         _janScan.reader = reader;
         _janScan.timer = setTimeout(function () { showJanToast('JANを読み取れませんでした（タップで再読み取り）', 'fail', 4000, relaunchJanLiveScan); stopJanLiveScan(failMsg); }, JAN_SCAN_TIMEOUT_MS);
         cam.msg.textContent = 'バーコードを枠に合わせてください…';
