@@ -1309,10 +1309,11 @@
     }
 
     // 汎用コピー：clipboard→失敗/非対応は legacyCopy(execCommand) フォールバック。結果を下部中央トーストで表示。空値は壊さず通知
-    function copyTextWithToast(text) {
+    function copyTextWithToast(text, label) {
       text = String(text == null ? '' : text).trim();
       if (!text) { showJanToast('コピーする値がありません', 'fail', 1500); return; }
-      function ok() { showJanToast('コピーしました', 'success', 1500); }
+      var _okMsg = label ? (label + 'をコピーしました') : 'コピーしました';
+      function ok() { showJanToast(_okMsg, 'success', 2000); }
       function fail() { showJanToast('コピーできませんでした', 'fail', 1500); }
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -3478,9 +3479,12 @@
 
     // コピー導線（商品名／検索KW／JAN）：各サイト検索欄へ貼付用。JANはクリック時に現在の jan フィールド値を読む
     (function () {
-      var mb = $('copyMemoBtn'); if (mb) mb.addEventListener('click', function () { copyTextWithToast($('memo').value); });
-      var kb = $('copyKwBtn');   if (kb) kb.addEventListener('click', function () { copyTextWithToast($('searchKw').value); });
-      var jb = $('copyJanNearBtn'); if (jb) jb.addEventListener('click', function () { copyTextWithToast(getHeldJan()); }); // 保持値（カテゴリ非依存）をコピー
+      var mb = $('copyMemoBtn'); if (mb) mb.addEventListener('click', function () { copyTextWithToast($('memo').value, '商品名'); });
+      var kb = $('copyKwBtn');   if (kb) kb.addEventListener('click', function () { copyTextWithToast($('searchKw').value, '検索KW'); });
+      var jb = $('copyJanNearBtn'); if (jb) jb.addEventListener('click', function () { // 保持値（カテゴリ非依存）をコピー。ISBN/JAN で文言切り替え
+        var _lbl = (normCategory($('category').value) === 'book') ? 'ISBN' : 'JAN';
+        copyTextWithToast(getHeldJan(), _lbl);
+      });
       // 保持用 janHolder の input（fabスキャンの dispatch 等）で近接表示＋補助項目JAN欄へ同期
       var jh = $('janHolder'); if (jh) jh.addEventListener('input', function () { setHeldJan(jh.value); });
       // カテゴリ候補（Step1）：タップ時のみ「本・漫画」へ反映。onCategoryChange 経由で既存入力は温存・商品名/検索KW/売価には触れない
