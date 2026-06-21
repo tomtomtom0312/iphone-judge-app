@@ -1062,6 +1062,7 @@
         { key: 'obi',           label: '帯',          type: 'select', options: ['不明', 'あり', 'なし'], from: 'obi', quicktap: true },
         { key: 'bonus',         label: 'シュリンク包装', type: 'select', options: ['不明', 'あり', 'なし'],    quicktap: true },
         { key: 'tokuten',       label: '特典',        type: 'select', options: ['不明', 'なし', 'あり', 'トレカ', '応募券', '小冊子', 'イラストカード', 'その他'], quicktap: true },
+        { key: 'voiceMemo',     label: '音声メモ',   type: 'textarea' },
         { key: 'conditionMemo', label: '状態メモ', from: 'condition' },
         { key: 'memo',          label: 'メモ', from: 'series' }
       ],
@@ -1124,6 +1125,8 @@
             } else {
               inp = '<select data-attr="' + esc(f.key) + '">' + _optHtml + '</select>';
             }
+          } else if (f.type === 'textarea') {
+            inp = '<textarea data-attr="' + esc(f.key) + '" rows="2" placeholder="例：ワンピース 1巻 初版 帯あり シュリンクあり 特典トレカ">' + esc(v) + '</textarea>';
           } else {
             inp = '<input type="text" data-attr="' + esc(f.key) + '" value="' + esc(v) + '" />';
             // 入力フォームのJAN欄だけ「JANで検索」ボタンを添える（値があるときのみ表示／編集モーダル eAttrsBox には出さない）
@@ -1188,7 +1191,7 @@
             janInput.value = '';
             if (scanMsg) scanMsg.textContent = '';
             if (normCategory($('category').value) === 'book') {
-              ['title', 'author', 'publisher', 'releaseDate', 'volume', 'firstEd', 'obi', 'bonus', 'tokuten', 'conditionMemo', 'memo'].forEach(function (k) {
+              ['title', 'author', 'publisher', 'releaseDate', 'volume', 'firstEd', 'obi', 'bonus', 'tokuten', 'voiceMemo', 'conditionMemo', 'memo'].forEach(function (k) {
                 var el = container.querySelector('[data-attr="' + k + '"]');
                 if (!el) return;
                 if (el.tagName === 'SELECT') { el.selectedIndex = 0; } else { el.value = ''; }
