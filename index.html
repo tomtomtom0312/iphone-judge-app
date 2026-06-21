@@ -481,6 +481,10 @@
         <button type="button" id="fabAlbumBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🖼 アルバムから選ぶ</button>
         <button type="button" id="fabJanBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 JANを読む</button>
       </div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:8px;">
+        <button type="button" id="fabSaveBtn" aria-label="下書き保存" title="下書き保存" style="border:none; border-radius:50%; width:48px; height:48px; background:#1d4ed8; color:#fff; font-size:22px; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.3); cursor:pointer;">💾</button>
+        <button type="button" id="fabClearBtn" aria-label="クリア" title="クリア" style="border:none; border-radius:50%; width:48px; height:48px; background:#dc2626; color:#fff; font-size:22px; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.3); cursor:pointer;">🧹</button>
+      </div>
       <button type="button" id="fabToggleBtn" aria-expanded="false" style="display:block; margin-left:auto; width:56px; height:56px; border:none; border-radius:50%; background:#2563eb; color:#fff; font-size:24px; line-height:1; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">≡</button>
     </div>
     <!-- ページ上部へ戻る固定ボタン（左下・右下メニューと干渉しない）。少しスクロールしたら表示 -->
@@ -1945,6 +1949,18 @@
       // カテゴリ非依存：保持用 janHolder へ読み取り → janHolder の input で setHeldJan が近接表示＋（存在すれば）補助項目JAN欄へ同期
       startJanLiveScan($('janHolder'), null);
     });
+    // FAB 下書き保存：既存 saveCurrent() を呼ぶだけ（売価なし下書き対応済み）
+    $('fabSaveBtn').addEventListener('click', function () { closeFabMenu(); saveCurrent(); });
+    // FAB クリア：.jan-clear-btn をプログラムクリックで既存ロジックを再利用（本・漫画は全フィールドクリア、他はJAN+memo+searchKw）
+    function clearCurrentForm() {
+      var cb = document.querySelector('#attrsBox .jan-clear-btn');
+      if (cb) { cb.click(); return; }
+      // JAN欄がないカテゴリ用フォールバック
+      if ($('memo'))     $('memo').value = '';
+      if ($('searchKw')) $('searchKw').value = '';
+      setHeldJan('');
+    }
+    $('fabClearBtn').addEventListener('click', function () { closeFabMenu(); clearCurrentForm(); });
 
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
     // 「この位置でAI認識」：クロップ枠の画像を生成し、モードに応じて認識へ回す
