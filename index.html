@@ -3165,7 +3165,13 @@
       var fields = CATEGORY_FIELDS[normCategory(e.category)] || [];
       var attrs = e.attrs || {};
       if (ai.brand) rows += detailRow('ブランド', esc(ai.brand));
-      fields.forEach(function (f) { if (attrs[f.key]) rows += detailRow(f.label, esc(attrs[f.key])); });
+      var _detailCat = normCategory(e.category);
+      fields.forEach(function (f) {
+        if (!attrs[f.key]) return;
+        // 本・漫画：タイトルが商品名/メモと同じなら重複を非表示
+        if (_detailCat === 'book' && f.key === 'title' && e.memo && String(attrs.title || '').trim() === String(e.memo || '').trim()) return;
+        rows += detailRow(f.label, esc(attrs[f.key]));
+      });
       if (!fields.length && ai.series) rows += detailRow('シリーズ', esc(ai.series));
       if (draft) {
         rows += detailRow('売価', '<span class="muted">未入力</span>');
@@ -3184,10 +3190,17 @@
       // openBD書籍情報（保存済み bookInfo → セッション内キャッシュの順で表示。既存履歴・非ISBN履歴では何も出さない）
       var bi = e.bookInfo || (_openBdCache[e.jan] && _openBdCache[e.jan].title ? _openBdCache[e.jan] : null);
       if (bi && bi.title) {
-        rows += detailRow('書名', esc(bi.title));
-        if (bi.author)    rows += detailRow('著者', esc(bi.author));
-        if (bi.publisher) rows += detailRow('出版社', esc(bi.publisher));
-        if (bi.pubdate) {
+        var _biTitle = String(bi.title).trim();
+        // 本・漫画：書名が商品名/メモまたはタイトルと同じなら非表示
+        var _skipBiTitle = _detailCat === 'book' && (
+          (String(e.memo || '').trim() && _biTitle === String(e.memo || '').trim()) ||
+          (String(attrs.title || '').trim() && _biTitle === String(attrs.title || '').trim())
+        );
+        if (!_skipBiTitle) rows += detailRow('書名', esc(bi.title));
+        // 著者・出版社・発売日：本・漫画かつ補助項目に既にある場合は重複回避
+        if (bi.author    && !(_detailCat === 'book' && attrs.author))    rows += detailRow('著者',   esc(bi.author));
+        if (bi.publisher && !(_detailCat === 'book' && attrs.publisher)) rows += detailRow('出版社', esc(bi.publisher));
+        if (bi.pubdate   && !(_detailCat === 'book' && attrs.releaseDate)) {
           var bpd = String(bi.pubdate).replace(/[^0-9]/g, '');
           rows += detailRow('発売日', esc(bpd.length >= 6 ? bpd.slice(0,4) + '年' + bpd.slice(4,6) + '月' : bpd));
         }
