@@ -485,6 +485,13 @@
         <button type="button" id="fabAlbumBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🖼 アルバムから選ぶ</button>
         <button type="button" id="fabJanBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 JANを読む</button>
         <button type="button" id="fabVoiceBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🎙 音声で商品入力</button>
+        <!-- コピー系区切り -->
+        <div style="display:flex; align-items:center; gap:6px; align-self:stretch; justify-content:flex-end;">
+          <span style="font-size:11px; color:#6b7280; white-space:nowrap;">― コピー ―</span>
+        </div>
+        <button type="button" id="fabCopyMemoBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📋 商品名コピー</button>
+        <button type="button" id="fabCopyKwBtn"   style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📋 検索KWコピー</button>
+        <button type="button" id="fabCopyJanBtn"  style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📋 JANコピー</button>
       </div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:8px;">
         <button type="button" id="fabSaveBtn" aria-label="下書き保存" title="下書き保存" style="border:none; border-radius:50%; width:48px; height:48px; background:#1d4ed8; color:#fff; font-size:22px; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.3); cursor:pointer;">💾</button>
@@ -1409,6 +1416,8 @@
       // 本・漫画カテゴリのとき「JANコピー」→「ISBNコピー」に切り替え
       var copyJanBtn = document.getElementById('copyJanNearBtn');
       if (copyJanBtn) copyJanBtn.textContent = (cat === 'book') ? 'ISBNコピー' : 'JANコピー';
+      var fabCopyJan = document.getElementById('fabCopyJanBtn');
+      if (fabCopyJan) fabCopyJan.textContent = '📋 ' + ((cat === 'book') ? 'ISBNコピー' : 'JANコピー');
       wrap.style.display = '';
       var hint = document.getElementById('janUsageHint'); // 取得済みのときだけ使い方ガイドを表示
       if (hint) {
@@ -2017,6 +2026,14 @@
       setHeldJan('');
     }
     $('fabClearBtn').addEventListener('click', function () { closeFabMenu(); clearCurrentForm(); });
+    // FAB コピー系（メニューを閉じずに連続コピー可能）
+    $('fabCopyMemoBtn').addEventListener('click', function () { copyTextWithToast($('memo').value, '商品名'); });
+    $('fabCopyKwBtn').addEventListener('click',   function () { copyTextWithToast($('searchKw').value, '検索KW'); });
+    $('fabCopyJanBtn').addEventListener('click',  function () {
+      var jan = getHeldJan();
+      var label = normCategory($('category').value) === 'book' ? 'ISBN' : 'JAN';
+      copyTextWithToast(jan, label);
+    });
     // FAB 音声で商品入力：音声入力カードへスクロールしてfocus（iOSキーボード+マイクが開く）
     $('fabVoiceBtn').addEventListener('click', function () {
       closeFabMenu();
