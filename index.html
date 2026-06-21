@@ -1202,7 +1202,7 @@
     // --- JANライブ読み取り。カメラを開いて数秒デコード→成功でJAN欄反映＋停止。getUserMediaは入力フォームのJANのみ ---
     var _janCam = null;       // カメラオーバーレイ（1回だけ生成して再利用）
     var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null, isbnWaitTimer: null, pendingNonIsbn: null, torchOn: false, torchTrack: null };
-    var JAN_SCAN_TIMEOUT_MS = 8000;
+    var JAN_SCAN_TIMEOUT_MS = 15000;
     var _openBdCache = {};      // isbn → { title, author, publisher, pubdate, isbn } または null（未収録）
     var _openBdLastIsbn = '';   // 現在フェッチ中 or 最後に表示した ISBN（重複リクエスト防止）
     var _currentBookInfo = null; // _renderOpenBd が最後に表示した書籍情報（buildCurrentEntry で参照。非ISBN/未取得は null）
@@ -1538,7 +1538,7 @@
           ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A
         ]);
         hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-        var reader = new ZX.BrowserMultiFormatReader(hints);
+        var reader = new ZX.BrowserMultiFormatReader(hints, 300);
         _janScan.reader = reader;
         _janScan.timer = setTimeout(function () { showJanToast('JANを読み取れませんでした（タップで再読み取り）', 'fail', 4000, relaunchJanLiveScan); stopJanLiveScan(failMsg); }, JAN_SCAN_TIMEOUT_MS);
         cam.msg.textContent = 'バーコードを枠に合わせてください…';
