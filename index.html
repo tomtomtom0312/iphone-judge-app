@@ -2838,7 +2838,7 @@
           v('bonus') && ('特典' + v('bonus'))
         ]);
         var bookMeta = seg([
-          v('author')      && ('著者：' + v('author')),
+          v('author')      && ('著者：' + formatOpenBdAuthor(v('author'))),
           v('publisher')   && ('出版社：' + v('publisher')),
           v('releaseDate') && ('発売日：' + v('releaseDate')),
           vol              && ('巻数：' + vol)
@@ -3191,7 +3191,12 @@
       $('eRank').value = e.estimatedRank || '';
       $('eMarketMemo').value = e.marketMemo || '';
       // カテゴリ別補助項目（保存値をフォールバックでAI生値からも補完）
-      renderAttrs($('eAttrsBox'), e.category, e.attrs || (e.ai ? attrsFromRecognition(e.category, e.ai) : {}));
+      var _editAttrs = e.attrs || (e.ai ? attrsFromRecognition(e.category, e.ai) : {});
+      // 本・漫画カテゴリの author は表示用に整形（保存データは変更しない）
+      if (normCategory(e.category) === 'book' && _editAttrs.author) {
+        _editAttrs = Object.assign({}, _editAttrs, { author: formatOpenBdAuthor(_editAttrs.author) });
+      }
+      renderAttrs($('eAttrsBox'), e.category, _editAttrs);
       // 売価候補
       var cand = e.cand || {};
       $('eCandLow').value = cand.low || '';
