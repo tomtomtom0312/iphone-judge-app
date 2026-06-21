@@ -1118,8 +1118,8 @@
               var _lblSearch = _isBook ? 'ISBNで検索'       : 'JANで検索';
               var _lblClear  = _isBook ? 'ISBNクリア'        : 'JANクリア';
               var _lblCam    = _isBook ? 'ライブでISBNを読む' : 'ライブでJANを読む';
-              inp += '<button type="button" class="jan-search-btn"' + (hasJan ? '' : ' style="display:none;"') + '>' + _lblSearch + '</button>';
-              inp += '<button type="button" class="jan-clear-btn"'  + (hasJan ? '' : ' style="display:none;"') + '>' + _lblClear  + '</button>';
+              inp += '<button type="button" class="jan-search-btn"' + ((hasJan || _isBook) ? '' : ' style="display:none;"') + '>' + _lblSearch + '</button>';
+              inp += '<button type="button" class="jan-clear-btn"'  + ((hasJan || _isBook) ? '' : ' style="display:none;"') + '>' + _lblClear  + '</button>';
               inp += '<button type="button" class="jan-cam-btn">' + _lblCam + '</button>';
               inp += '<span class="jan-scan-msg" aria-live="polite"></span>';
             }
@@ -1135,8 +1135,8 @@
         if (janInput && janBtn) {
           janInput.addEventListener('input', function () {
             var has = !!janInput.value.replace(/[ 　]/g, '').trim();
-            janBtn.style.display = has ? '' : 'none';
-            if (clearBtn) clearBtn.style.display = has ? '' : 'none';
+            janBtn.style.display   = (has || _isBook) ? '' : 'none';
+            if (clearBtn) clearBtn.style.display = (has || _isBook) ? '' : 'none';
             setHeldJan(janInput.value); // 補助項目JAN欄の手入力・その場スキャンを保持値＋近接表示へ同期
           });
           janBtn.addEventListener('click', function () {
