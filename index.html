@@ -2649,6 +2649,11 @@
       $(id).addEventListener('change', syncCurrent);
     });
     // 手動カテゴリ選択（写真なしでも可）：補助項目を切替（既存入力＞AI生値で初期化）。編集モーダルの onEditCategoryChange と同作法
+    // JANコピーボタンの文言を現在のカテゴリに合わせて直接更新（book→ISBNコピー、その他→JANコピー）
+    function syncCopyJanBtnLabel() {
+      var cb = $('copyJanNearBtn');
+      if (cb) cb.textContent = (normCategory($('category').value) === 'book') ? 'ISBNコピー' : 'JANコピー';
+    }
     function onCategoryChange() {
       currentCategory = normCategory($('category').value);
       var cur = readAttrs($('attrsBox'));
@@ -2658,6 +2663,7 @@
       Object.keys(cur).forEach(function (k) { if (cur[k]) base[k] = cur[k]; }); // 既存入力を優先保持
       currentAttrs = base;
       renderAttrs($('attrsBox'), currentCategory, currentAttrs);
+      syncCopyJanBtnLabel(); // カテゴリ変更時にコピーボタン文言を直接更新
       syncCurrent(); // 自動保存済みなら現在行へ反映（未保存なら何もしない）
       refreshAmzCatGuess(); // 上の商品カテゴリの変更をAmazonカテゴリ推定へ連動
       updateTopJanScanBtn(); // カテゴリ変更に応じて上部JANボタンの表示を同期
@@ -3532,6 +3538,7 @@
     // --- 初期化 ---
     buildMarketSelect();
     renderAttrs($('attrsBox'), 'other', {}); // 単品フォームの補助項目の初期表示
+    syncCopyJanBtnLabel(); // 起動時のコピーボタン文言を確定（ブラウザがカテゴリ値を復元していても対応）
     updateTopJanScanBtn(); // 起動時の上部JANボタン表示を確定（初期は other＝非表示）
     activeMarket = localStorage.getItem('judgeActiveMarket') || 'ebay';
     if (!MARKETPLACES[activeMarket]) activeMarket = 'ebay';
