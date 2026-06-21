@@ -1277,6 +1277,7 @@
     // --- JANライブ読み取り。カメラを開いて数秒デコード→成功でJAN欄反映＋停止。getUserMediaは入力フォームのJANのみ ---
     var _janCam = null;       // カメラオーバーレイ（1回だけ生成して再利用）
     var _janScan = { active: false, reader: null, timer: null, janInput: null, msgEl: null, stream: null, isbnWaitTimer: null, pendingNonIsbn: null, torchOn: false, torchTrack: null };
+    var _janRotCanvas = null; // 180°回転フォールバック用キャンバス（初回スキャン時に生成、以降使い回す）
     var JAN_SCAN_TIMEOUT_MS = 15000;
     var _openBdCache = {};      // isbn → { title, author, publisher, pubdate, isbn } または null（未収録）
     var _openBdLastIsbn = '';   // 現在フェッチ中 or 最後に表示した ISBN（重複リクエスト防止）
@@ -1639,7 +1640,25 @@
             }, audio: false },
           cam.video,
           function (result) {
-            if (!_janScan.active || !result) return;   // 失敗フレーム（NotFound）は無視
+            if (!_janScan.active) return;
+            if (!result) {
+              // 通常スキャン失敗 → 3フレームに1回180°回転で再試行（iPhone負荷対策で間引き：150ms×3=450ms毎）
+              _janScan.failCount = (_janScan.failCount || 0) + 1;
+              if (_janScan.failCount % 3 !== 0) return;
+              var _vid = cam.video;
+              if (!_vid.videoWidth || !_vid.videoHeight) return;
+              if (!_janRotCanvas) _janRotCanvas = document.createElement('canvas');
+              _janRotCanvas.width = _vid.videoWidth; _janRotCanvas.height = _vid.videoHeight;
+              var _rctx = _janRotCanvas.getContext('2d');
+              _rctx.save();
+              _rctx.translate(_janRotCanvas.width / 2, _janRotCanvas.height / 2);
+              _rctx.rotate(Math.PI);
+              _rctx.drawImage(_vid, -_janRotCanvas.width / 2, -_janRotCanvas.height / 2);
+              _rctx.restore();
+              try { result = _janScan.reader.decodeFromCanvas(_janRotCanvas); } catch (e) { return; }
+              if (!result) return;
+            }
+            _janScan.failCount = 0;
             var raw = String(result.text || '').replace(/[^0-9]/g, '');
             var jan = normalizeJan(raw);               // 12/13桁＋チェックサム検証＋13桁正規化。不正は ''
             if (!jan) return;                          // 桁違い/チェックサム不正は無視して継続
