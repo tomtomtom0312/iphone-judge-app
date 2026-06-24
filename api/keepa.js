@@ -92,19 +92,28 @@ export default async function handler(req, res) {
     : dropsPerMonth !== null ? 'drops' : null;
 
   // デバッグログ（Vercel Functions ログで確認。問題解消後に削除可）
-  console.log('[keepa]'
+  console.log('[keepa] basic'
     + ' jan=' + jan
     + ' asin=' + p.asin
-    + ' csv[0]last=' + (p.csv && p.csv[0] && p.csv[0][p.csv[0].length - 1])
-    + ' csv[1]last=' + (p.csv && p.csv[1] && p.csv[1][p.csv[1].length - 1])
-    + ' csv[3]last=' + (p.csv && p.csv[3] && p.csv[3][p.csv[3].length - 1])
     + ' newPrice=' + newPrice
     + ' salesRank=' + salesRank
     + ' p.monthlySold=' + p.monthlySold
-    + ' salesRankDrops30=' + (p.stats && p.stats.salesRankDrops30)
     + ' monthlySoldType=' + monthlySoldType
     + ' tokensLeft=' + data.tokensLeft
   );
+  console.log('[keepa] csv_last'
+    + ' csv[0]=' + (p.csv && p.csv[0] && p.csv[0][p.csv[0].length - 1])
+    + ' csv[1]=' + (p.csv && p.csv[1] && p.csv[1][p.csv[1].length - 1])
+    + ' csv[3]=' + (p.csv && p.csv[3] && p.csv[3][p.csv[3].length - 1])
+  );
+  // stats の全キーと salesRankDrops 関連フィールドを全て出力
+  console.log('[keepa] stats_keys=' + (p.stats ? Object.keys(p.stats).join(',') : 'null'));
+  if (p.stats) {
+    var dropKeys = Object.keys(p.stats).filter(function(k) {
+      return k.toLowerCase().indexOf('drop') !== -1 || k.toLowerCase().indexOf('sold') !== -1 || k.toLowerCase().indexOf('sales') !== -1;
+    });
+    console.log('[keepa] stats_drop_related=' + JSON.stringify(dropKeys.reduce(function(acc, k) { acc[k] = p.stats[k]; return acc; }, {})));
+  }
 
   return res.status(200).json({
     title:          p.title || '',
