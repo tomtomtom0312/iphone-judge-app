@@ -1585,7 +1585,7 @@
       card.appendChild(btn);
       // Amazon / Keepa リンク（ISBN で検索。Keepaカードは非表示のため代替導線として配置）
       var isbnLinkRow = document.createElement('div');
-      isbnLinkRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;';
+      isbnLinkRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;';
       var isbnAmzLink = document.createElement('a');
       isbnAmzLink.className = 'keepa-open-link';
       isbnAmzLink.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(isbn);
@@ -1595,7 +1595,8 @@
       isbnLinkRow.appendChild(isbnAmzLink);
       var isbnKeepaLink = document.createElement('a');
       isbnKeepaLink.className = 'keepa-open-link';
-      isbnKeepaLink.href = 'https://keepa.com/#!search/5-' + encodeURIComponent(isbn);
+      // Keepa は ISBN（EAN-13）を product コードとして検索できる
+      isbnKeepaLink.href = 'https://keepa.com/#!search/5-' + isbn;
       isbnKeepaLink.target = '_blank';
       isbnKeepaLink.rel = 'noopener noreferrer';
       isbnKeepaLink.textContent = 'Keepaで開く';
