@@ -1468,10 +1468,10 @@
         if (janKind(jan) === 'ISBN') { fetchOpenBd(jan); }
         else { obEl.style.display = 'none'; _openBdLastIsbn = ''; _currentBookInfo = null; }
       }
-      // Keepa：JAN・ISBN 問わず全ジャンル照会（Amazon登録商品全般対応）
+      // Keepa：JAN商品のみ照会。ISBNはopenBD優先のためスキップ（二重表示を防ぐ）
       var keepaEl = document.getElementById('keepaSuggest');
       if (keepaEl) {
-        if (jan) { fetchKeepa(jan); }
+        if (jan && janKind(jan) !== 'ISBN') { fetchKeepa(jan); }
         else { keepaEl.style.display = 'none'; _keepaLastJan = ''; }
       }
     }
