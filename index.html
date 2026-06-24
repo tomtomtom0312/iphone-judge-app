@@ -1794,81 +1794,105 @@
 
     // 静止画JAN検出：写真撮影直後に1回だけ実行。EAN-13/UPC-A を ZXing で探索し
     // 見つかれば setHeldJan() 経由で既存 Keepa/openBD フローへ自動接続する。
-    // 未検出・ZXing失敗はすべて無視し、通常のAI認識ボタン操作へ自然にフォールバック。
+    // 複数クロップを順番に試して最初に見つかった有効JANを採用する。
     function tryJanFromPhoto(file) {
       try {
         dbgLog('[開始] file=' + (file && file.name) + ' heldJan=' + getHeldJan());
         $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN自動検出: 開始</span>';
-        if (getHeldJan()) {
-          dbgLog('[開始] 既存JAN有りのためスキップ');
-          return;
-        }
+        if (getHeldJan()) { dbgLog('[開始] 既存JAN有りスキップ'); return; }
         var url = URL.createObjectURL(file);
-        dbgLog('[開始] ObjectURL作成OK');
         var img = new Image();
         img.onload = function () {
           try {
-            var natW = img.naturalWidth  || img.width;
+            var natW = img.naturalWidth || img.width;
             var natH = img.naturalHeight || img.height;
-            var w = Math.min(natW, 1920);
-            var h = Math.round(natH * w / natW);
-            dbgLog('[画像サイズ] ' + natW + 'x' + natH + ' → ' + w + 'x' + h);
-            $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 画像OK ' + w + 'x' + h + ' / ZXing読込中…</span>';
-            // canvas → JPEG dataURL → Image要素 → decodeFromImageElement
-            var cv = document.createElement('canvas');
-            cv.width = w; cv.height = h;
-            cv.getContext('2d').drawImage(img, 0, 0, w, h);
+            dbgLog('[画像サイズ] ' + natW + 'x' + natH);
             URL.revokeObjectURL(url);
-            var dataUrl = cv.toDataURL('image/jpeg', 0.9);
-            var tmpImg = new Image();
-            tmpImg.src = dataUrl; // dataURLは同期的にロードされる
-            dbgLog('[ZXingロード開始] dataUrl長さ=' + dataUrl.length);
+
+            // クロップ定義: [label, x割合, y割合, w割合, h割合]
+            // バーコードが右・中央・下に多い前提で右/中央優先
+            var crops = [
+              ['右60%',       0.40, 0.00, 0.60, 1.00],
+              ['右60%下半分', 0.40, 0.45, 0.60, 0.55],
+              ['下半分',      0.00, 0.50, 1.00, 0.50],
+              ['下3分の1',    0.00, 0.67, 1.00, 0.33],
+              ['中央下',      0.20, 0.50, 0.60, 0.50],
+              ['全体',        0.00, 0.00, 1.00, 1.00],
+              ['左60%',       0.00, 0.00, 0.60, 1.00],
+            ];
+
+            // canvas crop → JPEG dataURL → Image → decodeFromImageElement
+            function makeCropImg(c) {
+              var sx = Math.round(natW * c[1]);
+              var sy = Math.round(natH * c[2]);
+              var sw = Math.max(1, Math.round(natW * c[3]));
+              var sh = Math.max(1, Math.round(natH * c[4]));
+              // 短辺が1920未満なら拡大してバーコードを大きく見せる
+              var scale = Math.min(1920 / sw, 1920 / sh);
+              var dw = Math.max(1, Math.round(sw * scale));
+              var dh = Math.max(1, Math.round(sh * scale));
+              var cv2 = document.createElement('canvas');
+              cv2.width = dw; cv2.height = dh;
+              cv2.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+              var tmpImg = new Image();
+              tmpImg.src = cv2.toDataURL('image/jpeg', 0.92);
+              return tmpImg;
+            }
+
+            $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing読込中…</span>';
             loadZXing().then(function (ZX) {
               dbgLog('[ZXingロード完了]');
-              $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing完了 / デコード中…</span>';
               var hints = new Map();
               hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,
                 [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A]);
               hints.set(ZX.DecodeHintType.TRY_HARDER, true);
               var reader = new ZX.BrowserMultiFormatReader(hints, 150);
-              // decodeFromImageElement: Image要素を受け取りPromiseを返す
-              return reader.decodeFromImageElement(tmpImg);
-            }).then(function (result) {
-              var raw = String(result.text || '').replace(/[^0-9]/g, '');
-              dbgLog('[decode結果] text=' + result.text + ' raw=' + raw);
-              var jan = normalizeJan(raw);
-              dbgLog('[チェックサム] raw=' + raw + ' → jan=' + jan);
-              if (!jan) {
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 チェックサムNG raw=' + raw + '</span>';
-                return;
+
+              // 再帰でクロップを順番に試す
+              function tryNext(i) {
+                if (i >= crops.length) {
+                  dbgLog('[全クロップ失敗] バーコード未検出');
+                  $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出（全' + crops.length + '領域）</span>';
+                  return;
+                }
+                var c = crops[i];
+                dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0]);
+                $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 デコード中… ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')</span>';
+                reader.decodeFromImageElement(makeCropImg(c)).then(function (result) {
+                  var raw = String(result.text || '').replace(/[^0-9]/g, '');
+                  var jan = normalizeJan(raw);
+                  dbgLog('[decode] crop=' + c[0] + ' text=' + result.text + ' jan=' + jan);
+                  if (!jan) {
+                    // チェックサムNG → 次へ
+                    tryNext(i + 1);
+                    return;
+                  }
+                  // JAN確定
+                  dbgLog('[JAN確定] ' + jan + ' crop=' + c[0]);
+                  $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN確定: ' + jan + ' / Keepa取得中…</span>';
+                  var jh = document.getElementById('janHolder');
+                  if (jh) jh.value = jan;
+                  var jnv = document.getElementById('janNearVal');
+                  var jnw = document.getElementById('janNear');
+                  if (jnv) jnv.textContent = jan;
+                  if (jnw) jnw.style.display = '';
+                  setHeldJan(jan);
+                  if (janKind(jan) !== 'ISBN') fetchKeepa(jan);
+                  $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
+                    + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + c[0] + '）';
+                }).catch(function (e) {
+                  dbgLog('[miss] crop=' + c[0] + ' ' + (e && (e.name || e.message)));
+                  tryNext(i + 1); // 未検出・エラーともに次へ
+                });
               }
-              // JAN確定：直接DOM書き込み（フェイルセーフ）→ 通常フロー
-              dbgLog('[JAN確定] ' + jan);
-              $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN確定: ' + jan + ' / Keepa取得中…</span>';
-              var jh = document.getElementById('janHolder');
-              if (jh) { jh.value = jan; }
-              var jnv = document.getElementById('janNearVal');
-              var jnw = document.getElementById('janNear');
-              if (jnv) { jnv.textContent = jan; }
-              if (jnw) { jnw.style.display = ''; }
-              setHeldJan(jan);
-              if (jan && janKind(jan) !== 'ISBN') {
-                dbgLog('[fetchKeepa] ' + jan);
-                fetchKeepa(jan);
-              }
-              $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
-                + ' ' + jan + '&nbsp;— 写真から自動検出しました';
+              tryNext(0);
             }).catch(function (e) {
-              // NotFoundException = バーコード未検出、それ以外はエラー
-              var isNotFound = e && (e.name === 'NotFoundException' || /not found/i.test(e.message || ''));
-              dbgLog('[decode失敗] ' + (e && (e.name || e.message)));
-              $('aiStatus').innerHTML = isNotFound
-                ? '<span class="ai-badge ai-lo">🔍 バーコード未検出</span>'
-                : '<span class="ai-badge ai-lo">🔍 ZXingエラー: ' + (e && e.message || '') + '</span>';
+              dbgLog('[ZXing読込失敗] ' + (e && e.message));
+              $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 ZXing読込失敗</span>';
             });
           } catch (onloadErr) {
-            dbgLog('[img.onload内エラー] ' + onloadErr.message);
-            $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 画像処理エラー: ' + onloadErr.message + '</span>';
+            dbgLog('[onloadエラー] ' + onloadErr.message);
+            $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 エラー: ' + onloadErr.message + '</span>';
           }
         };
         img.onerror = function () {
@@ -1877,9 +1901,8 @@
           URL.revokeObjectURL(url);
         };
         img.src = url;
-        dbgLog('[開始] img.src 設定完了 → onload待機');
       } catch (outerErr) {
-        dbgLog('[tryJanFromPhoto エラー] ' + outerErr.message);
+        dbgLog('[エラー] ' + outerErr.message);
         try { $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 エラー: ' + outerErr.message + '</span>'; } catch(x){}
       }
     }
