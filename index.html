@@ -1468,11 +1468,37 @@
         if (janKind(jan) === 'ISBN') { fetchOpenBd(jan); }
         else { obEl.style.display = 'none'; _openBdLastIsbn = ''; _currentBookInfo = null; }
       }
-      // Keepa：JAN商品のみ照会。ISBNはopenBD優先のためスキップ（二重表示を防ぐ）
+      // Keepa：JAN → 詳細カード表示。ISBN → API呼ばずリンクのみ表示（詳細カードは非表示）
       var keepaEl = document.getElementById('keepaSuggest');
       if (keepaEl) {
-        if (jan && janKind(jan) !== 'ISBN') { fetchKeepa(jan); }
-        else { keepaEl.style.display = 'none'; _keepaLastJan = ''; }
+        if (jan && janKind(jan) !== 'ISBN') {
+          fetchKeepa(jan);
+        } else if (jan) {
+          // ISBN: Keepa詳細カードは出さない。リンクボタンのみ keepaSuggest に直接描画
+          _keepaLastJan = '';
+          keepaEl.innerHTML = '';
+          keepaEl.style.display = '';
+          var isbnRow = document.createElement('div');
+          isbnRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;';
+          var isbnAmz = document.createElement('a');
+          isbnAmz.className = 'keepa-open-link';
+          isbnAmz.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(jan);
+          isbnAmz.target = '_blank';
+          isbnAmz.rel = 'noopener noreferrer';
+          isbnAmz.textContent = 'Amazonで開く';
+          isbnRow.appendChild(isbnAmz);
+          var isbnKpa = document.createElement('a');
+          isbnKpa.className = 'keepa-open-link';
+          isbnKpa.href = 'https://keepa.com/#!search/5-' + jan;
+          isbnKpa.target = '_blank';
+          isbnKpa.rel = 'noopener noreferrer';
+          isbnKpa.textContent = 'Keepaで開く';
+          isbnRow.appendChild(isbnKpa);
+          keepaEl.appendChild(isbnRow);
+        } else {
+          keepaEl.style.display = 'none';
+          _keepaLastJan = '';
+        }
       }
     }
 
@@ -1583,25 +1609,6 @@
         refreshAmzCatGuess();
       };
       card.appendChild(btn);
-      // Amazon / Keepa リンク（ISBN で検索。Keepaカードは非表示のため代替導線として配置）
-      var isbnLinkRow = document.createElement('div');
-      isbnLinkRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;';
-      var isbnAmzLink = document.createElement('a');
-      isbnAmzLink.className = 'keepa-open-link';
-      isbnAmzLink.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(isbn);
-      isbnAmzLink.target = '_blank';
-      isbnAmzLink.rel = 'noopener noreferrer';
-      isbnAmzLink.textContent = 'Amazonで開く';
-      isbnLinkRow.appendChild(isbnAmzLink);
-      var isbnKeepaLink = document.createElement('a');
-      isbnKeepaLink.className = 'keepa-open-link';
-      // Keepa は ISBN（EAN-13）を product コードとして検索できる
-      isbnKeepaLink.href = 'https://keepa.com/#!search/5-' + isbn;
-      isbnKeepaLink.target = '_blank';
-      isbnKeepaLink.rel = 'noopener noreferrer';
-      isbnKeepaLink.textContent = 'Keepaで開く';
-      isbnLinkRow.appendChild(isbnKeepaLink);
-      card.appendChild(isbnLinkRow);
       obEl.appendChild(card);
       // 本・漫画カテゴリ選択中のとき attrsBox ＋ 商品名 / 検索KW へ自動流し込み（既入力は温存、空欄のみ補完）
       var catEl = $('category');
