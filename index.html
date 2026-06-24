@@ -1814,59 +1814,57 @@
             var h = Math.round(natH * w / natW);
             dbgLog('[画像サイズ] ' + natW + 'x' + natH + ' → ' + w + 'x' + h);
             $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 画像OK ' + w + 'x' + h + ' / ZXing読込中…</span>';
+            // canvas → JPEG dataURL → Image要素 → decodeFromImageElement
             var cv = document.createElement('canvas');
             cv.width = w; cv.height = h;
             cv.getContext('2d').drawImage(img, 0, 0, w, h);
             URL.revokeObjectURL(url);
-            dbgLog('[ZXingロード開始]');
+            var dataUrl = cv.toDataURL('image/jpeg', 0.9);
+            var tmpImg = new Image();
+            tmpImg.src = dataUrl; // dataURLは同期的にロードされる
+            dbgLog('[ZXingロード開始] dataUrl長さ=' + dataUrl.length);
             loadZXing().then(function (ZX) {
-              try {
-                dbgLog('[ZXingロード完了]');
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing完了 / デコード中…</span>';
-                var hints = new Map();
-                hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,
-                  [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A]);
-                hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-                var reader = new ZX.BrowserMultiFormatReader(hints, 150);
-                var result = null;
-                var decodeErr = null;
-                try { result = reader.decodeFromCanvas(cv); } catch (e) { decodeErr = e; }
-                dbgLog('[decode結果] text=' + (result && result.text) + ' err=' + (decodeErr && decodeErr.message));
-                if (!result) {
-                  $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出</span>';
-                  return;
-                }
-                var raw = String(result.text || '').replace(/[^0-9]/g, '');
-                var jan = normalizeJan(raw);
-                dbgLog('[チェックサム] raw=' + raw + ' → jan=' + jan);
-                if (!jan) {
-                  $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 チェックサムNG raw=' + raw + '</span>';
-                  return;
-                }
-                // JAN確定：直接DOM書き込み（フェイルセーフ）→ 通常フロー
-                dbgLog('[JAN確定] ' + jan + ' DOM直書き + setHeldJan実行');
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN確定: ' + jan + ' / Keepa取得中…</span>';
-                var jh = document.getElementById('janHolder');
-                if (jh) { jh.value = jan; }
-                var jnv = document.getElementById('janNearVal');
-                var jnw = document.getElementById('janNear');
-                if (jnv) { jnv.textContent = jan; }
-                if (jnw) { jnw.style.display = ''; }
-                setHeldJan(jan);
-                // Keepa直呼び（JAN確定済みのときのみ）
-                if (jan && janKind(jan) !== 'ISBN') {
-                  dbgLog('[fetchKeepa] ' + jan);
-                  fetchKeepa(jan);
-                }
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
-                  + ' ' + jan + '&nbsp;— 写真から自動検出しました';
-              } catch (inner) {
-                dbgLog('[ZXing内部エラー] ' + inner.message);
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 ZXing内部エラー: ' + inner.message + '</span>';
+              dbgLog('[ZXingロード完了]');
+              $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing完了 / デコード中…</span>';
+              var hints = new Map();
+              hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,
+                [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A]);
+              hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+              var reader = new ZX.BrowserMultiFormatReader(hints, 150);
+              // decodeFromImageElement: Image要素を受け取りPromiseを返す
+              return reader.decodeFromImageElement(tmpImg);
+            }).then(function (result) {
+              var raw = String(result.text || '').replace(/[^0-9]/g, '');
+              dbgLog('[decode結果] text=' + result.text + ' raw=' + raw);
+              var jan = normalizeJan(raw);
+              dbgLog('[チェックサム] raw=' + raw + ' → jan=' + jan);
+              if (!jan) {
+                $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 チェックサムNG raw=' + raw + '</span>';
+                return;
               }
+              // JAN確定：直接DOM書き込み（フェイルセーフ）→ 通常フロー
+              dbgLog('[JAN確定] ' + jan);
+              $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN確定: ' + jan + ' / Keepa取得中…</span>';
+              var jh = document.getElementById('janHolder');
+              if (jh) { jh.value = jan; }
+              var jnv = document.getElementById('janNearVal');
+              var jnw = document.getElementById('janNear');
+              if (jnv) { jnv.textContent = jan; }
+              if (jnw) { jnw.style.display = ''; }
+              setHeldJan(jan);
+              if (jan && janKind(jan) !== 'ISBN') {
+                dbgLog('[fetchKeepa] ' + jan);
+                fetchKeepa(jan);
+              }
+              $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
+                + ' ' + jan + '&nbsp;— 写真から自動検出しました';
             }).catch(function (e) {
-              dbgLog('[ZXingロード失敗] ' + (e && e.message));
-              $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 ZXing読込失敗: ' + (e && e.message || '') + '</span>';
+              // NotFoundException = バーコード未検出、それ以外はエラー
+              var isNotFound = e && (e.name === 'NotFoundException' || /not found/i.test(e.message || ''));
+              dbgLog('[decode失敗] ' + (e && (e.name || e.message)));
+              $('aiStatus').innerHTML = isNotFound
+                ? '<span class="ai-badge ai-lo">🔍 バーコード未検出</span>'
+                : '<span class="ai-badge ai-lo">🔍 ZXingエラー: ' + (e && e.message || '') + '</span>';
             });
           } catch (onloadErr) {
             dbgLog('[img.onload内エラー] ' + onloadErr.message);
