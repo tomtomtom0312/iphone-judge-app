@@ -1,4 +1,5 @@
-// Vercel サーバーレス関数: JAN(EAN) → Keepa 商品情報
+// Vercel サーバーレス関数: JAN(EAN) または ASIN → Keepa 商品情報
+// 受付: ?jan={8/13桁} または ?asin={10桁英数字}
 // 返却: { title, asin, category, newPrice, salesRank, monthlySold, tokensLeft } | { error }
 // セキュリティ: KEEPA_API_KEY は Vercel 環境変数のみ。ブラウザには出さない
 // 中古価格は取得・返却しない（csv[2]以降の中古インデックスは無視）
@@ -17,9 +18,12 @@ function latestFromCsv(arr) {
 }
 
 export default async function handler(req, res) {
-  const jan = (req.query.jan || '').replace(/[^0-9]/g, '');
-  if (!jan || (jan.length !== 8 && jan.length !== 13)) {
-    return res.status(400).json({ error: 'JANコードが不正です（8桁または13桁）' });
+  const jan  = (req.query.jan  || '').replace(/[^0-9]/g, '');
+  const asin = (req.query.asin || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  const validJan  = jan.length === 8 || jan.length === 13;
+  const validAsin = /^[A-Z0-9]{10}$/.test(asin);
+  if (!validJan && !validAsin) {
+    return res.status(400).json({ error: 'jan（8/13桁）またはasin（10桁英数字）が必要です' });
   }
 
   const key = process.env.KEEPA_API_KEY;
@@ -30,11 +34,14 @@ export default async function handler(req, res) {
 
   let data;
   try {
+    const lookupParam = validJan
+      ? ('&code=' + jan)    // JAN/EAN コードで検索
+      : ('&asin=' + asin);  // ASIN で検索（キーワード検索結果から渡す場合）
     const url = 'https://api.keepa.com/product'
       + '?key=' + encodeURIComponent(key)
-      + '&domain=5'     // Amazon.co.jp
-      + '&code=' + jan  // EAN/JAN コード
-      + '&stats=90';    // 月間販売数(monthlySold)取得に必要
+      + '&domain=5'         // Amazon.co.jp
+      + lookupParam
+      + '&stats=90';        // 月間販売数取得に必要
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     data = await r.json();
@@ -93,8 +100,8 @@ export default async function handler(req, res) {
 
   // デバッグログ（Vercel Functions ログで確認。問題解消後に削除可）
   console.log('[keepa] basic'
-    + ' jan=' + jan
-    + ' asin=' + p.asin
+    + ' lookup=' + (validJan ? 'jan:' + jan : 'asin:' + asin)
+    + ' result_asin=' + p.asin
     + ' newPrice=' + newPrice
     + ' salesRank=' + salesRank
     + ' p.monthlySold=' + p.monthlySold
