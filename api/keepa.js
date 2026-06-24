@@ -76,11 +76,20 @@ export default async function handler(req, res) {
   // （p.salesRankReference はカテゴリIDであり順位数値ではないため使わない）
   const salesRank = latestFromCsv(p.csv && p.csv[3]);
 
-  // 月間ドロップ数: stats.salesRankDrops30 = 30日間の BSR 下降回数
-  // Keepa UI の「N ドロップ/月」と同じ値。-1 は未計測 → null
-  const salesRankDrops30 = (p.stats && typeof p.stats.salesRankDrops30 === 'number')
-    ? p.stats.salesRankDrops30 : -1;
-  const monthlySold = salesRankDrops30 >= 0 ? salesRankDrops30 : null;
+  // 月間販売数（優先1）: p.monthlySold = Keepa 推計の月販個数（Keepa画面の黄色線に相当）
+  // -1 は未推計（商品種別・データ不足）→ null
+  const monthlySoldUnits = (typeof p.monthlySold === 'number' && p.monthlySold >= 0)
+    ? p.monthlySold : null;
+
+  // 月間販売数（優先2）: stats.salesRankDrops30 = 30日間 BSR 下降回数（ドロップ/月）
+  // Keepa UI で「N ドロップ/月」と表示される値。-1 は未計測 → null
+  const dropsPerMonth = (p.stats && typeof p.stats.salesRankDrops30 === 'number' && p.stats.salesRankDrops30 >= 0)
+    ? p.stats.salesRankDrops30 : null;
+
+  // monthlySoldType: 'units'（個数）/ 'drops'（ドロップ）/ null（未取得）
+  const monthlySold     = monthlySoldUnits !== null ? monthlySoldUnits : dropsPerMonth;
+  const monthlySoldType = monthlySoldUnits !== null ? 'units'
+    : dropsPerMonth !== null ? 'drops' : null;
 
   // デバッグログ（Vercel Functions ログで確認。問題解消後に削除可）
   console.log('[keepa]'
@@ -91,17 +100,20 @@ export default async function handler(req, res) {
     + ' csv[3]last=' + (p.csv && p.csv[3] && p.csv[3][p.csv[3].length - 1])
     + ' newPrice=' + newPrice
     + ' salesRank=' + salesRank
-    + ' salesRankDrops30=' + salesRankDrops30
+    + ' p.monthlySold=' + p.monthlySold
+    + ' salesRankDrops30=' + (p.stats && p.stats.salesRankDrops30)
+    + ' monthlySoldType=' + monthlySoldType
     + ' tokensLeft=' + data.tokensLeft
   );
 
   return res.status(200).json({
-    title:       p.title || '',
-    asin:        p.asin  || '',
-    category:    category,
-    newPrice:    newPrice,
-    salesRank:   salesRank,
-    monthlySold: monthlySold,
-    tokensLeft:  data.tokensLeft
+    title:          p.title || '',
+    asin:           p.asin  || '',
+    category:       category,
+    newPrice:       newPrice,
+    salesRank:      salesRank,
+    monthlySold:    monthlySold,
+    monthlySoldType: monthlySoldType,  // 'units' | 'drops' | null
+    tokensLeft:     data.tokensLeft
   });
 }

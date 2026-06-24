@@ -1711,8 +1711,12 @@
         ? '¥' + info.newPrice.toLocaleString('ja-JP') : '未取得'));
       lines.push('ランキング: ' + (info.salesRank != null
         ? info.salesRank.toLocaleString('ja-JP') + '位' : '未取得'));
-      lines.push('月間ドロップ数: ' + (info.monthlySold != null
-        ? info.monthlySold + 'ドロップ/月' : 'Keepaで確認'));
+      var monthlySoldText = info.monthlySold != null
+        ? (info.monthlySoldType === 'units'
+            ? info.monthlySold + '個/月'
+            : info.monthlySold + 'ドロップ/月')
+        : '未取得';
+      lines.push('月販: ' + monthlySoldText);
       lines.forEach(function(line) {
         var row = document.createElement('p');
         row.style.margin = '0 0 2px';
