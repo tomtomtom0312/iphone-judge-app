@@ -529,6 +529,8 @@
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
+    <!-- デバッグパネル（原因調査用・後で削除） -->
+    <div id="debugPanel" style="display:none; margin:8px 0; padding:8px; background:#0a0a0a; border:1px solid #f59e0b; border-radius:8px; font-size:11px; font-family:monospace; color:#fcd34d; line-height:1.6; white-space:pre-wrap; word-break:break-all; max-height:220px; overflow-y:auto;"></div>
     <div class="crop-stage" id="cropStage" style="display:none;">
       <img id="cropImg" alt="プレビュー" />
       <div class="crop-frame"></div>
@@ -897,6 +899,16 @@
   <script>
     var $ = function (id) { return document.getElementById(id); };
     var yen = function (n) { return Math.round(n).toLocaleString('ja-JP') + '円'; };
+
+    // デバッグパネル（画面上にログ表示）- 調査完了後に削除
+    function dbgLog(msg) {
+      console.log(msg);
+      var panel = document.getElementById('debugPanel');
+      if (!panel) return;
+      panel.style.display = 'block';
+      panel.textContent += (new Date().toTimeString().slice(0,8)) + ' ' + msg + '\n';
+      panel.scrollTop = panel.scrollHeight;
+    }
 
     /* ============================================================
        販路レジストリ
@@ -1415,22 +1427,22 @@
     }
     function setHeldJan(v) {
       v = String(v == null ? '' : v).replace(/[ 　]/g, '').trim();
-      console.log('[setHeldJan] v=' + v);
+      dbgLog('[setHeldJan] v=' + v);
       var h = document.getElementById('janHolder');
-      console.log('[setHeldJan] janHolder存在=' + !!h + ' 現在値=' + (h && h.value));
+      dbgLog('[setHeldJan] janHolder存在=' + !!h + ' 現在値=' + (h && h.value));
       if (h && h.value !== v) h.value = v;
       var aux = document.querySelector('#attrsBox [data-attr="jan"]');
-      console.log('[setHeldJan] aux存在=' + !!aux + ' 現在値=' + (aux && aux.value));
+      dbgLog('[setHeldJan] aux存在=' + !!aux);
       if (aux && aux.value !== v) { aux.value = v; aux.dispatchEvent(new Event('input')); }
       var kind = janKind(v);
       var cat  = normCategory($('category') && $('category').value);
-      console.log('[setHeldJan] janKind=' + kind + ' category=' + cat);
+      dbgLog('[setHeldJan] janKind=' + kind + ' category=' + cat);
       if (kind === 'ISBN' && cat !== 'book') {
-        console.log('[setHeldJan] ISBNのためカテゴリをbookに切替');
+        dbgLog('[setHeldJan] ISBNのためカテゴリをbookに切替');
         $('category').value = 'book';
         onCategoryChange();
       }
-      console.log('[setHeldJan] updateJanNear 呼び出し');
+      dbgLog('[setHeldJan] updateJanNear呼出');
       updateJanNear();
     }
     // 商品名近くの JAN/ISBN ミラー表示を更新（保持値 janHolder を表示）。単品モードでは常に表示（カテゴリ非依存）
@@ -1442,14 +1454,14 @@
     }
     function updateJanNear() {
       var wrap = document.getElementById('janNear');
-      console.log('[updateJanNear] janNear存在=' + !!wrap);
+      dbgLog('[updateJanNear] janNear存在=' + !!wrap);
       if (!wrap) return;
       var jan = getHeldJan();
       var cat = normCategory($('category').value);
-      console.log('[updateJanNear] jan=' + jan + ' cat=' + cat);
+      dbgLog('[updateJanNear] jan=' + jan + ' cat=' + cat);
       var kind = (cat === 'book') ? janKind(jan) : '';
       var shown = jan ? (kind ? jan + '（' + kind + '）' : jan) : '未取得';
-      console.log('[updateJanNear] janNearVal.textContent →' + shown);
+      dbgLog('[updateJanNear] 表示=' + shown);
       document.getElementById('janNearVal').textContent = shown;
       // 本・漫画カテゴリのとき「JANコピー」→「ISBNコピー」に切り替え
       var copyJanBtn = document.getElementById('copyJanNearBtn');
@@ -1474,7 +1486,7 @@
       var obEl = document.getElementById('openBdSuggest');
       if (obEl) {
         if (janKind(jan) === 'ISBN') {
-          console.log('[updateJanNear] → fetchOpenBd(' + jan + ')');
+          dbgLog('[updateJanNear] → fetchOpenBd(' + jan + ')');
           fetchOpenBd(jan);
         } else {
           obEl.style.display = 'none'; _openBdLastIsbn = ''; _currentBookInfo = null;
@@ -1482,9 +1494,10 @@
       }
       // Keepa：JAN → 詳細カード表示。ISBN → API呼ばずリンクのみ表示（詳細カードは非表示）
       var keepaEl = document.getElementById('keepaSuggest');
+      dbgLog('[updateJanNear] keepaEl存在=' + !!keepaEl + ' jan=' + jan + ' kind=' + janKind(jan));
       if (keepaEl) {
         if (jan && janKind(jan) !== 'ISBN') {
-          console.log('[updateJanNear] → fetchKeepa(' + jan + ')');
+          dbgLog('[updateJanNear] → fetchKeepa(' + jan + ')');
           fetchKeepa(jan);
         } else if (jan) {
           // ISBN: Keepa詳細カードは出さない。リンクボタンのみ keepaSuggest に直接描画
@@ -1783,8 +1796,8 @@
     // 見つかれば setHeldJan() 経由で既存 Keepa/openBD フローへ自動接続する。
     // 未検出・ZXing失敗はすべて無視し、通常のAI認識ボタン操作へ自然にフォールバック。
     function tryJanFromPhoto(file) {
-      console.log('[開始] tryJanFromPhoto heldJan=' + getHeldJan() + ' file=' + (file && file.name));
-      if (getHeldJan()) { console.log('[開始] 既存JAN有りのためスキップ'); return; }
+      dbgLog('[開始] heldJan=' + getHeldJan() + ' file=' + (file && file.name));
+      if (getHeldJan()) { dbgLog('[開始] 既存JAN有りのためスキップ'); return; }
       var url = URL.createObjectURL(file);
       var img = new Image();
       img.onload = function () {
@@ -1792,14 +1805,14 @@
         var natH = img.naturalHeight || img.height;
         var w = Math.min(natW, 1920);
         var h = Math.round(natH * w / natW);
-        console.log('[開始] 画像サイズ ' + natW + 'x' + natH + ' → canvas ' + w + 'x' + h);
+        dbgLog('[画像サイズ] ' + natW + 'x' + natH + ' → ' + w + 'x' + h);
         var cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
         cv.getContext('2d').drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(url);
-        console.log('[ZXingロード開始]');
+        dbgLog('[ZXingロード開始]');
         loadZXing().then(function (ZX) {
-          console.log('[ZXingロード完了]');
+          dbgLog('[ZXingロード完了]');
           var hints = new Map();
           hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,
             [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A]);
@@ -1808,22 +1821,22 @@
           var result;
           var decodeErr = null;
           try { result = reader.decodeFromCanvas(cv); } catch (e) { decodeErr = e; }
-          console.log('[decode結果] text=' + (result && result.text) + ' err=' + (decodeErr && decodeErr.message));
-          if (!result) { console.log('[decode結果] バーコード未検出'); return; }
+          dbgLog('[decode結果] text=' + (result && result.text) + ' err=' + (decodeErr && decodeErr.message));
+          if (!result) { dbgLog('[decode結果] バーコード未検出'); return; }
           var raw = String(result.text || '').replace(/[^0-9]/g, '');
           var jan = normalizeJan(raw);
-          console.log('[チェックサム] raw=' + raw + ' → jan=' + jan);
-          if (!jan) { console.log('[チェックサム] 不正のためスキップ'); return; }
-          console.log('[setHeldJan] ' + jan);
+          dbgLog('[チェックサム] raw=' + raw + ' → jan=' + jan);
+          if (!jan) { dbgLog('[チェックサム] 不正のためスキップ'); return; }
+          dbgLog('[setHeldJan呼出] ' + jan);
           setHeldJan(jan);
           $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">JAN検出</span>'
             + esc(jan) + '&nbsp;— 写真からバーコードを自動検出しました';
         }).catch(function (e) {
-          console.error('[ZXingロード完了] エラー:', e && e.message);
+          dbgLog('[ZXingロード失敗] ' + (e && e.message));
         });
       };
       img.onerror = function () {
-        console.error('[開始] 画像読み込みエラー');
+        dbgLog('[画像読込エラー]');
         URL.revokeObjectURL(url);
       };
       img.src = url;
