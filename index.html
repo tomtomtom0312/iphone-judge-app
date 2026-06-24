@@ -1702,14 +1702,17 @@
       keepaLink.textContent = 'Keepaで開く';
       linkRow.appendChild(keepaLink);
       card.appendChild(linkRow);
-      // メタ情報（カテゴリ・新品最安値・ランキング・月間販売数）
+      // メタ情報（カテゴリ・新品最安値・ランキング・月間ドロップ数）
       var metaEl = document.createElement('div');
       metaEl.className = 'keepa-card-meta';
       var lines = [];
-      if (info.category)    lines.push('カテゴリ: ' + info.category);
-      if (info.newPrice != null)    lines.push('新品最安値: ¥' + info.newPrice.toLocaleString('ja-JP'));
-      if (info.salesRank != null)   lines.push('ランキング: ' + info.salesRank.toLocaleString('ja-JP') + '位');
-      if (info.monthlySold != null) lines.push('月間販売数: 約' + info.monthlySold.toLocaleString('ja-JP') + '件');
+      if (info.category) lines.push('カテゴリ: ' + info.category);
+      lines.push('新品最安値: ' + (info.newPrice != null
+        ? '¥' + info.newPrice.toLocaleString('ja-JP') : '未取得'));
+      lines.push('ランキング: ' + (info.salesRank != null
+        ? info.salesRank.toLocaleString('ja-JP') + '位' : '未取得'));
+      lines.push('月間ドロップ数: ' + (info.monthlySold != null
+        ? info.monthlySold + 'ドロップ/月' : 'Keepaで確認'));
       lines.forEach(function(line) {
         var row = document.createElement('p');
         row.style.margin = '0 0 2px';

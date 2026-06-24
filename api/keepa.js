@@ -72,20 +72,27 @@ export default async function handler(req, res) {
     category = p.productGroup;
   }
 
-  // 月間販売数: product 直下の monthlySold が正しい位置（stats オブジェクトではない）
-  // -1 は「推定不可」なので null 扱い
-  const rawMonthlySold = p.monthlySold != null ? p.monthlySold
-    : (p.stats && p.stats.monthlySold != null ? p.stats.monthlySold : null);
-  const monthlySold = (rawMonthlySold != null && rawMonthlySold >= 0) ? rawMonthlySold : null;
+  // 売れ筋ランキング: csv[3] = Sales Rank 履歴から最新値を取得
+  // （p.salesRankReference はカテゴリIDであり順位数値ではないため使わない）
+  const salesRank = latestFromCsv(p.csv && p.csv[3]);
 
-  // デバッグログ（Vercel Functions ログで確認。本番確認後に削除可）
-  console.log('[keepa] jan=' + jan
+  // 月間ドロップ数: stats.salesRankDrops30 = 30日間の BSR 下降回数
+  // Keepa UI の「N ドロップ/月」と同じ値。-1 は未計測 → null
+  const salesRankDrops30 = (p.stats && typeof p.stats.salesRankDrops30 === 'number')
+    ? p.stats.salesRankDrops30 : -1;
+  const monthlySold = salesRankDrops30 >= 0 ? salesRankDrops30 : null;
+
+  // デバッグログ（Vercel Functions ログで確認。問題解消後に削除可）
+  console.log('[keepa]'
+    + ' jan=' + jan
     + ' asin=' + p.asin
-    + ' tokensConsumed=' + data.tokensConsumed
-    + ' p.monthlySold=' + p.monthlySold
-    + ' p.stats.monthlySold=' + (p.stats && p.stats.monthlySold)
-    + ' newPrice(raw csv[0]末尾)=' + (p.csv && p.csv[0] && p.csv[0][p.csv[0].length - 1])
-    + ' newPrice(computed)=' + newPrice
+    + ' csv[0]last=' + (p.csv && p.csv[0] && p.csv[0][p.csv[0].length - 1])
+    + ' csv[1]last=' + (p.csv && p.csv[1] && p.csv[1][p.csv[1].length - 1])
+    + ' csv[3]last=' + (p.csv && p.csv[3] && p.csv[3][p.csv[3].length - 1])
+    + ' newPrice=' + newPrice
+    + ' salesRank=' + salesRank
+    + ' salesRankDrops30=' + salesRankDrops30
+    + ' tokensLeft=' + data.tokensLeft
   );
 
   return res.status(200).json({
@@ -93,8 +100,8 @@ export default async function handler(req, res) {
     asin:        p.asin  || '',
     category:    category,
     newPrice:    newPrice,
-    salesRank:   (p.salesRankReference > 0) ? p.salesRankReference : null,
+    salesRank:   salesRank,
     monthlySold: monthlySold,
-    tokensLeft:  data.tokensLeft   // デバッグ用（フロントでは表示しない）
+    tokensLeft:  data.tokensLeft
   });
 }
