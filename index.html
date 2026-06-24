@@ -1809,34 +1809,56 @@
             dbgLog('[画像サイズ] ' + natW + 'x' + natH);
             URL.revokeObjectURL(url);
 
-            // クロップ定義: [label, x割合, y割合, w割合, h割合]
-            // バーコードが右・中央・下に多い前提で右/中央優先
+            // クロップ定義: [label, xStart割合, yStart割合, width割合, height割合]
+            // 右20-30%の幅で切り出すと1920pxへの拡大率が2〜3倍になりバーコードが大きくなる
+            // 縦は25%ストリップに分割して上下余白を除去
             var crops = [
-              ['右60%',       0.40, 0.00, 0.60, 1.00],
-              ['右60%下半分', 0.40, 0.45, 0.60, 0.55],
-              ['下半分',      0.00, 0.50, 1.00, 0.50],
-              ['下3分の1',    0.00, 0.67, 1.00, 0.33],
-              ['中央下',      0.20, 0.50, 0.60, 0.50],
-              ['全体',        0.00, 0.00, 1.00, 1.00],
-              ['左60%',       0.00, 0.00, 0.60, 1.00],
+              // 右30%幅 × 縦4分割（約1.6倍拡大）
+              ['右30%-下25%',   0.70, 0.75, 0.30, 0.25],
+              ['右30%-中下25%', 0.70, 0.50, 0.30, 0.25],
+              ['右30%-中上25%', 0.70, 0.25, 0.30, 0.25],
+              ['右30%-上25%',   0.70, 0.00, 0.30, 0.25],
+              // 右20%幅 × 縦4分割（約2.4倍拡大）
+              ['右20%-下25%',   0.80, 0.75, 0.20, 0.25],
+              ['右20%-中下25%', 0.80, 0.50, 0.20, 0.25],
+              ['右20%-中上25%', 0.80, 0.25, 0.20, 0.25],
+              ['右20%-上25%',   0.80, 0.00, 0.20, 0.25],
+              // 中央40%幅 × 縦4分割（約1.2倍拡大）
+              ['中央-下25%',    0.30, 0.75, 0.40, 0.25],
+              ['中央-中下25%',  0.30, 0.50, 0.40, 0.25],
+              ['中央-中上25%',  0.30, 0.25, 0.40, 0.25],
+              ['中央-上25%',    0.30, 0.00, 0.40, 0.25],
+              // フォールバック: 全幅・全体
+              ['全体-下33%',    0.00, 0.67, 1.00, 0.33],
+              ['全体',          0.00, 0.00, 1.00, 1.00],
             ];
 
-            // canvas crop → JPEG dataURL → Image → decodeFromImageElement
-            function makeCropImg(c) {
-              var sx = Math.round(natW * c[1]);
-              var sy = Math.round(natH * c[2]);
-              var sw = Math.max(1, Math.round(natW * c[3]));
-              var sh = Math.max(1, Math.round(natH * c[4]));
-              // 短辺が1920未満なら拡大してバーコードを大きく見せる
-              var scale = Math.min(1920 / sw, 1920 / sh);
-              var dw = Math.max(1, Math.round(sw * scale));
-              var dh = Math.max(1, Math.round(sh * scale));
-              var cv2 = document.createElement('canvas');
-              cv2.width = dw; cv2.height = dh;
-              cv2.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
-              var tmpImg = new Image();
-              tmpImg.src = cv2.toDataURL('image/jpeg', 0.92);
-              return tmpImg;
+            // canvas crop → PNG dataURL → tmpImg.onload 待機 → decodeFromImageElement
+            // ※ Safari では dataURL設定直後に decodeFromImageElement を呼ぶと
+            //   waitImageLoad の load リスナーが間に合わないため onload を明示的に待つ
+            function cropAndDecode(reader, c) {
+              return new Promise(function (resolve, reject) {
+                var sx = Math.round(natW * c[1]);
+                var sy = Math.round(natH * c[2]);
+                var sw = Math.max(1, Math.round(natW * c[3]));
+                var sh = Math.max(1, Math.round(natH * c[4]));
+                // 幅基準で拡大（最大3倍・1920px上限）→ バーコードを大きく描画
+                var scale = Math.min(1920 / sw, 1920 / sh, 3);
+                var dw = Math.max(1, Math.round(sw * scale));
+                var dh = Math.max(1, Math.round(sh * scale));
+                var cv2 = document.createElement('canvas');
+                cv2.width = dw; cv2.height = dh;
+                cv2.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+                // PNG: ロスレスでJPEGアーティファクトなし → バーコードエッジが鮮明
+                var dataUrl = cv2.toDataURL('image/png');
+                var tmpImg = new Image();
+                tmpImg.onload = function () {
+                  // onload 確認後に decode（Safari の非同期 load 対策）
+                  reader.decodeFromImageElement(tmpImg).then(resolve).catch(reject);
+                };
+                tmpImg.onerror = function () { reject(new Error('crop img load error')); };
+                tmpImg.src = dataUrl;
+              });
             }
 
             $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing読込中…</span>';
@@ -1848,28 +1870,23 @@
               hints.set(ZX.DecodeHintType.TRY_HARDER, true);
               var reader = new ZX.BrowserMultiFormatReader(hints, 150);
 
-              // 再帰でクロップを順番に試す
+              // クロップを順番に試す（再帰）
               function tryNext(i) {
                 if (i >= crops.length) {
-                  dbgLog('[全クロップ失敗] バーコード未検出');
+                  dbgLog('[全クロップ失敗] ' + crops.length + '領域で未検出');
                   $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出（全' + crops.length + '領域）</span>';
                   return;
                 }
                 var c = crops[i];
                 dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0]);
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 デコード中… ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')</span>';
-                reader.decodeFromImageElement(makeCropImg(c)).then(function (result) {
+                $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')…</span>';
+                cropAndDecode(reader, c).then(function (result) {
                   var raw = String(result.text || '').replace(/[^0-9]/g, '');
                   var jan = normalizeJan(raw);
-                  dbgLog('[decode] crop=' + c[0] + ' text=' + result.text + ' jan=' + jan);
-                  if (!jan) {
-                    // チェックサムNG → 次へ
-                    tryNext(i + 1);
-                    return;
-                  }
+                  dbgLog('[decode] ' + c[0] + ' text=' + result.text + ' jan=' + jan);
+                  if (!jan) { tryNext(i + 1); return; } // チェックサムNG → 次へ
                   // JAN確定
-                  dbgLog('[JAN確定] ' + jan + ' crop=' + c[0]);
-                  $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN確定: ' + jan + ' / Keepa取得中…</span>';
+                  dbgLog('[JAN確定] ' + jan + ' (' + c[0] + ')');
                   var jh = document.getElementById('janHolder');
                   if (jh) jh.value = jan;
                   var jnv = document.getElementById('janNearVal');
@@ -1881,8 +1898,8 @@
                   $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
                     + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + c[0] + '）';
                 }).catch(function (e) {
-                  dbgLog('[miss] crop=' + c[0] + ' ' + (e && (e.name || e.message)));
-                  tryNext(i + 1); // 未検出・エラーともに次へ
+                  dbgLog('[miss] ' + c[0] + ' ' + (e && (e.name || e.message)));
+                  tryNext(i + 1);
                 });
               }
               tryNext(0);
