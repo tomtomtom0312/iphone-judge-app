@@ -471,6 +471,7 @@
     .keepa-card-apply { display: block; width: 100%; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-size: 14px; font-weight: 700; cursor: pointer; }
     .keepa-asin-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
     .keepa-copy-asin { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 11px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+    .keepa-open-link { display: inline-block; height: 26px; line-height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 600; text-decoration: none; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -1665,6 +1666,24 @@
       }(info.asin));
       asinRow.appendChild(copyBtn);
       card.appendChild(asinRow);
+      // 外部リンク行（Amazon / Keepa で開く）
+      var linkRow = document.createElement('div');
+      linkRow.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
+      var amzLink = document.createElement('a');
+      amzLink.className = 'keepa-open-link';
+      amzLink.href = 'https://www.amazon.co.jp/dp/' + info.asin;
+      amzLink.target = '_blank';
+      amzLink.rel = 'noopener noreferrer';
+      amzLink.textContent = 'Amazonで開く';
+      linkRow.appendChild(amzLink);
+      var keepaLink = document.createElement('a');
+      keepaLink.className = 'keepa-open-link';
+      keepaLink.href = 'https://keepa.com/#!product/5-' + info.asin;
+      keepaLink.target = '_blank';
+      keepaLink.rel = 'noopener noreferrer';
+      keepaLink.textContent = 'Keepaで開く';
+      linkRow.appendChild(keepaLink);
+      card.appendChild(linkRow);
       // メタ情報（カテゴリ・新品最安値・ランキング・月間販売数）
       var metaEl = document.createElement('div');
       metaEl.className = 'keepa-card-meta';
