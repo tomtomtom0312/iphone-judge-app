@@ -1770,37 +1770,49 @@
     // 見つかれば setHeldJan() 経由で既存 Keepa/openBD フローへ自動接続する。
     // 未検出・ZXing失敗はすべて無視し、通常のAI認識ボタン操作へ自然にフォールバック。
     function tryJanFromPhoto(file) {
-      if (getHeldJan()) return; // 手入力済み／スキャン済みJANは上書きしない
+      console.log('[tryJanFromPhoto] 開始 heldJan=' + getHeldJan() + ' file=' + (file && file.name));
+      if (getHeldJan()) { console.log('[tryJanFromPhoto] 既存JAN有りのためスキップ'); return; }
       var url = URL.createObjectURL(file);
       var img = new Image();
       img.onload = function () {
-        // 1920px上限にリサイズ（iPhoneの高解像写真対策・処理負荷低減）
         var natW = img.naturalWidth  || img.width;
         var natH = img.naturalHeight || img.height;
         var w = Math.min(natW, 1920);
         var h = Math.round(natH * w / natW);
+        console.log('[tryJanFromPhoto] 画像サイズ natW=' + natW + ' natH=' + natH + ' → canvas ' + w + 'x' + h);
         var cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
         cv.getContext('2d').drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(url);
+        console.log('[tryJanFromPhoto] ZXing ロード開始');
         loadZXing().then(function (ZX) {
+          console.log('[tryJanFromPhoto] ZXing ロード完了 decode 実行');
           var hints = new Map();
           hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,
             [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A]);
-          hints.set(ZX.DecodeHintType.TRY_HARDER, true); // 回転・傾き補正を有効化
+          hints.set(ZX.DecodeHintType.TRY_HARDER, true);
           var reader = new ZX.BrowserMultiFormatReader(hints, 150);
           var result;
-          try { result = reader.decodeFromCanvas(cv); } catch (e) {}
-          if (!result) return; // 見つからなければ何もしない
+          var decodeErr = null;
+          try { result = reader.decodeFromCanvas(cv); } catch (e) { decodeErr = e; }
+          console.log('[tryJanFromPhoto] decode結果 result=' + (result && result.text) + ' err=' + (decodeErr && decodeErr.message));
+          if (!result) { console.log('[tryJanFromPhoto] バーコード未検出'); return; }
           var raw = String(result.text || '').replace(/[^0-9]/g, '');
-          var jan = normalizeJan(raw); // チェックサム検証・13桁正規化
-          if (!jan) return;
-          setHeldJan(jan); // Keepa/openBD まで既存フローが全部動く
+          var jan = normalizeJan(raw);
+          console.log('[tryJanFromPhoto] raw=' + raw + ' normalizeJan→' + jan);
+          if (!jan) { console.log('[tryJanFromPhoto] チェックサム不正のためスキップ'); return; }
+          console.log('[tryJanFromPhoto] JAN確定:' + jan + ' setHeldJan 実行');
+          setHeldJan(jan);
           $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">JAN検出</span>'
             + esc(jan) + '&nbsp;— 写真からバーコードを自動検出しました';
-        }).catch(function () {}); // ZXing読み込み失敗は黙って無視
+        }).catch(function (e) {
+          console.error('[tryJanFromPhoto] ZXing エラー:', e && e.message);
+        });
       };
-      img.onerror = function () { URL.revokeObjectURL(url); };
+      img.onerror = function () {
+        console.error('[tryJanFromPhoto] 画像読み込みエラー');
+        URL.revokeObjectURL(url);
+      };
       img.src = url;
     }
 
