@@ -3800,7 +3800,8 @@
     $('resetShipBtn').addEventListener('click', resetShipping);
     $('csvBtn').addEventListener('click', exportCsv);
 
-    // --- 為替自動取得（Frankfurter API: 無料・キー不要・CORS対応） ---
+    // --- 為替自動取得（Frankfurter v2 API: 無料・キー不要・CORS対応） ---
+    // レスポンス形式: [{"date":"...","base":"USD","quote":"JPY","rate":161.67}]
     var EX_RATE_KEY = 'judgeExRate_USD';
     function restoreRateFetchedAt() {
       try {
@@ -3815,19 +3816,30 @@
       btn.disabled = true;
       btn.textContent = '取得中…';
       $('rateFetchedAt').textContent = '';
-      fetch('https://api.frankfurter.app/latest?from=' + cur + '&to=JPY')
-        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      fetch('https://api.frankfurter.dev/v2/rates?base=' + cur + '&quotes=JPY')
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
         .then(function (data) {
-          var r = data && data.rates && data.rates.JPY;
-          if (!r) throw new Error('no rate');
+          // v2レスポンスは配列: [{"date":"...","base":"USD","quote":"JPY","rate":161.67}]
+          var item = Array.isArray(data) ? data[0] : null;
+          var r = item && item.rate;
+          if (!r) throw new Error('rate field not found in response: ' + JSON.stringify(data));
           $('rate').value = Math.round(r * 100) / 100;
           calc(); saveMarketSettings();
           var ts = nowLabel();
           localStorage.setItem(EX_RATE_KEY, JSON.stringify({ rate: r, cur: cur, fetchedAt: ts }));
-          $('rateFetchedAt').textContent = '取得: ' + ts;
+          $('rateFetchedAt').textContent = '取得: ' + ts + '（' + cur + '/JPY=' + (Math.round(r * 100) / 100) + '）';
         })
-        .catch(function () {
-          $('rateFetchedAt').textContent = '取得失敗（手入力値を維持）';
+        .catch(function (e) {
+          console.error('[為替取得エラー]', e && e.message ? e.message : e);
+          var msg = '取得失敗（手入力値を維持）';
+          if (e && e.message) {
+            if (e.message.indexOf('HTTP') === 0) msg = '取得失敗: サーバーエラー ' + e.message;
+            else if (e.message.indexOf('fetch') !== -1 || e.message.indexOf('Failed') !== -1) msg = '取得失敗: ネットワーク接続を確認してください';
+          }
+          $('rateFetchedAt').textContent = msg;
         })
         .then(function () {
           btn.disabled = false;
