@@ -6,12 +6,12 @@
 export const config = { maxDuration: 15 };
 
 // Keepa csv 形式: [keepaMinute1, value1, keepaMinute2, value2, ...]
-// 末尾ペアが最新。値は全通貨 ×100 で保存（JPY: 15000 → stored 1500000 → ÷100 = ¥15,000）
-// -1 = 在庫なし / 取り扱いなし → null として扱う
+// 末尾ペアが最新。-1 = 在庫なし / 取り扱いなし → null として扱う
+// JPY は整数通貨のため実円価格をそのまま格納（÷100 不要）
 function latestFromCsv(arr) {
   if (!Array.isArray(arr) || arr.length < 2) return null;
   for (let i = arr.length - 1; i >= 1; i -= 2) {
-    if (arr[i] > 0) return Math.round(arr[i] / 100);
+    if (arr[i] > 0) return arr[i];  // JPY: ÷100 しない
   }
   return null;
 }
@@ -72,9 +72,21 @@ export default async function handler(req, res) {
     category = p.productGroup;
   }
 
-  // 月間販売数 (stats=90 で取得。-1 や未対応カテゴリは null)
-  const monthlySold = (p.stats && p.stats.monthlySold != null && p.stats.monthlySold >= 0)
-    ? p.stats.monthlySold : null;
+  // 月間販売数: product 直下の monthlySold が正しい位置（stats オブジェクトではない）
+  // -1 は「推定不可」なので null 扱い
+  const rawMonthlySold = p.monthlySold != null ? p.monthlySold
+    : (p.stats && p.stats.monthlySold != null ? p.stats.monthlySold : null);
+  const monthlySold = (rawMonthlySold != null && rawMonthlySold >= 0) ? rawMonthlySold : null;
+
+  // デバッグログ（Vercel Functions ログで確認。本番確認後に削除可）
+  console.log('[keepa] jan=' + jan
+    + ' asin=' + p.asin
+    + ' tokensConsumed=' + data.tokensConsumed
+    + ' p.monthlySold=' + p.monthlySold
+    + ' p.stats.monthlySold=' + (p.stats && p.stats.monthlySold)
+    + ' newPrice(raw csv[0]末尾)=' + (p.csv && p.csv[0] && p.csv[0][p.csv[0].length - 1])
+    + ' newPrice(computed)=' + newPrice
+  );
 
   return res.status(200).json({
     title:       p.title || '',
