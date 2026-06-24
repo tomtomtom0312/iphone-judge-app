@@ -1415,16 +1415,22 @@
     }
     function setHeldJan(v) {
       v = String(v == null ? '' : v).replace(/[ 　]/g, '').trim();
+      console.log('[setHeldJan] v=' + v);
       var h = document.getElementById('janHolder');
+      console.log('[setHeldJan] janHolder存在=' + !!h + ' 現在値=' + (h && h.value));
       if (h && h.value !== v) h.value = v;
-      // 補助項目JAN欄が存在すれば同期（無ければ何もしない＝カテゴリ非依存）。値が同じなら dispatch せずループを防ぐ
       var aux = document.querySelector('#attrsBox [data-attr="jan"]');
+      console.log('[setHeldJan] aux存在=' + !!aux + ' 現在値=' + (aux && aux.value));
       if (aux && aux.value !== v) { aux.value = v; aux.dispatchEvent(new Event('input')); }
-      // ISBN(978/979)13桁検出時：カテゴリが「本・漫画」でない場合のみ自動切り替え（通常JANは対象外）
-      if (janKind(v) === 'ISBN' && normCategory($('category').value) !== 'book') {
+      var kind = janKind(v);
+      var cat  = normCategory($('category') && $('category').value);
+      console.log('[setHeldJan] janKind=' + kind + ' category=' + cat);
+      if (kind === 'ISBN' && cat !== 'book') {
+        console.log('[setHeldJan] ISBNのためカテゴリをbookに切替');
         $('category').value = 'book';
         onCategoryChange();
       }
+      console.log('[setHeldJan] updateJanNear 呼び出し');
       updateJanNear();
     }
     // 商品名近くの JAN/ISBN ミラー表示を更新（保持値 janHolder を表示）。単品モードでは常に表示（カテゴリ非依存）
@@ -1436,12 +1442,14 @@
     }
     function updateJanNear() {
       var wrap = document.getElementById('janNear');
+      console.log('[updateJanNear] janNear存在=' + !!wrap);
       if (!wrap) return;
       var jan = getHeldJan();
       var cat = normCategory($('category').value);
-      // 本・漫画カテゴリのときだけ ISBN/JAN を併記（表示専用。コピー/検索/保存はコード本体のみ）
+      console.log('[updateJanNear] jan=' + jan + ' cat=' + cat);
       var kind = (cat === 'book') ? janKind(jan) : '';
       var shown = jan ? (kind ? jan + '（' + kind + '）' : jan) : '未取得';
+      console.log('[updateJanNear] janNearVal.textContent →' + shown);
       document.getElementById('janNearVal').textContent = shown;
       // 本・漫画カテゴリのとき「JANコピー」→「ISBNコピー」に切り替え
       var copyJanBtn = document.getElementById('copyJanNearBtn');
@@ -1465,13 +1473,18 @@
       // openBD：ISBN(978/979)のときだけ書籍情報を取得（カテゴリ問わず）
       var obEl = document.getElementById('openBdSuggest');
       if (obEl) {
-        if (janKind(jan) === 'ISBN') { fetchOpenBd(jan); }
-        else { obEl.style.display = 'none'; _openBdLastIsbn = ''; _currentBookInfo = null; }
+        if (janKind(jan) === 'ISBN') {
+          console.log('[updateJanNear] → fetchOpenBd(' + jan + ')');
+          fetchOpenBd(jan);
+        } else {
+          obEl.style.display = 'none'; _openBdLastIsbn = ''; _currentBookInfo = null;
+        }
       }
       // Keepa：JAN → 詳細カード表示。ISBN → API呼ばずリンクのみ表示（詳細カードは非表示）
       var keepaEl = document.getElementById('keepaSuggest');
       if (keepaEl) {
         if (jan && janKind(jan) !== 'ISBN') {
+          console.log('[updateJanNear] → fetchKeepa(' + jan + ')');
           fetchKeepa(jan);
         } else if (jan) {
           // ISBN: Keepa詳細カードは出さない。リンクボタンのみ keepaSuggest に直接描画
