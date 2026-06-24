@@ -464,6 +464,13 @@
     }
     .fetch-rate-btn:disabled { opacity: .4; cursor: default; }
     .rate-fetched-at { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 16px; }
+    /* Keepa 商品候補カード（openbd-card と同パターン） */
+    .keepa-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 8px; }
+    .keepa-card-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 0 0 6px; line-height: 1.4; }
+    .keepa-card-meta { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.9; }
+    .keepa-card-apply { display: block; width: 100%; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .keepa-asin-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .keepa-copy-asin { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 11px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -594,6 +601,8 @@
       </div>
       <!-- openBD書籍候補カード（ISBN取得時のみ表示）。JS側で動的に組み立て。タップで商品名/検索KWに反映（自動上書きしない） -->
       <div id="openBdSuggest" style="display:none;"></div>
+      <!-- Keepa商品候補カード（JAN・ISBN全ジャンル対象。キーはVercel API route経由。中古価格は表示しない） -->
+      <div id="keepaSuggest" style="display:none;"></div>
     </div>
     <!-- コピー導線：各サイトの検索欄へ貼り付け用（商品名／検索キーワード）。空値は壊さない -->
     <div class="field" style="margin-bottom:8px;">
@@ -1458,6 +1467,12 @@
         if (janKind(jan) === 'ISBN') { fetchOpenBd(jan); }
         else { obEl.style.display = 'none'; _openBdLastIsbn = ''; _currentBookInfo = null; }
       }
+      // Keepa：JAN・ISBN 問わず全ジャンル照会（Amazon登録商品全般対応）
+      var keepaEl = document.getElementById('keepaSuggest');
+      if (keepaEl) {
+        if (jan) { fetchKeepa(jan); }
+        else { keepaEl.style.display = 'none'; _keepaLastJan = ''; }
+      }
     }
 
     // openBDタイトルから巻数を抽出。1〜99のみ採用（年号・大号数の誤検知排除）。「第N巻」は明示的なので範囲外も許容
@@ -1587,6 +1602,98 @@
           refreshAmzCatGuess();
         }
       }
+    }
+
+    // Keepa API: JAN → 商品名/ASIN/カテゴリ/新品最安値/ランキング/月間販売数
+    // /api/keepa 経由（KEEPA_API_KEY はブラウザに出さない）。中古価格は取得・表示しない
+    var _keepaCache  = {};   // jan → レスポンスオブジェクト or null（not found / error）
+    var _keepaLastJan = '';  // 現在リクエスト中 or 最後に描画した JAN（重複防止）
+
+    function fetchKeepa(jan) {
+      var el = document.getElementById('keepaSuggest');
+      if (!el) return;
+      if (_keepaCache.hasOwnProperty(jan)) { _renderKeepa(jan); return; }
+      if (_keepaLastJan === jan) return;
+      _keepaLastJan = jan;
+      el.style.display = '';
+      el.innerHTML = '<p style="margin:4px 0 0;font-size:12px;color:var(--muted);">Amazon照会中…</p>';
+      fetch('/api/keepa?jan=' + encodeURIComponent(jan))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          _keepaCache[jan] = (data && data.title) ? data : null;
+          if (_keepaLastJan === jan) _renderKeepa(jan);
+        })
+        .catch(function() {
+          _keepaCache[jan] = null;
+          if (_keepaLastJan === jan) _renderKeepa(jan);
+        });
+    }
+
+    function _renderKeepa(jan) {
+      var info = _keepaCache[jan];
+      var el = document.getElementById('keepaSuggest');
+      if (!el) return;
+      el.style.display = '';
+      el.innerHTML = '';
+      if (!info || !info.title) {
+        var msg = document.createElement('p');
+        msg.style.cssText = 'margin:4px 0 0;font-size:12px;color:var(--muted);';
+        msg.textContent = 'Amazon登録なし';
+        el.appendChild(msg);
+        return;
+      }
+      var card = document.createElement('div');
+      card.className = 'keepa-card';
+      // 商品名
+      var titleEl = document.createElement('p');
+      titleEl.className = 'keepa-card-title';
+      titleEl.textContent = info.title;
+      card.appendChild(titleEl);
+      // ASIN行（ASIN文字列 ＋ コピーボタン）
+      var asinRow = document.createElement('div');
+      asinRow.className = 'keepa-asin-row';
+      var asinSpan = document.createElement('span');
+      asinSpan.style.cssText = 'font-size:12px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      asinSpan.textContent = 'ASIN: ' + info.asin;
+      asinRow.appendChild(asinSpan);
+      var copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'keepa-copy-asin';
+      copyBtn.textContent = 'ASINコピー';
+      (function(asin) {
+        copyBtn.onclick = function() { copyTextWithToast(asin, 'ASIN'); };
+      }(info.asin));
+      asinRow.appendChild(copyBtn);
+      card.appendChild(asinRow);
+      // メタ情報（カテゴリ・新品最安値・ランキング・月間販売数）
+      var metaEl = document.createElement('div');
+      metaEl.className = 'keepa-card-meta';
+      var lines = [];
+      if (info.category)    lines.push('カテゴリ: ' + info.category);
+      if (info.newPrice != null)    lines.push('新品最安値: ¥' + info.newPrice.toLocaleString('ja-JP'));
+      if (info.salesRank != null)   lines.push('ランキング: ' + info.salesRank.toLocaleString('ja-JP') + '位');
+      if (info.monthlySold != null) lines.push('月間販売数: 約' + info.monthlySold.toLocaleString('ja-JP') + '件');
+      lines.forEach(function(line) {
+        var row = document.createElement('p');
+        row.style.margin = '0 0 2px';
+        row.textContent = line;
+        metaEl.appendChild(row);
+      });
+      card.appendChild(metaEl);
+      // 反映ボタン（商品名・検索KW を上書き）
+      var applyBtn = document.createElement('button');
+      applyBtn.type = 'button';
+      applyBtn.className = 'keepa-card-apply';
+      applyBtn.textContent = '商品名・検索KWに反映';
+      (function(title) {
+        applyBtn.onclick = function() {
+          if ($('memo'))     $('memo').value     = title;
+          if ($('searchKw')) $('searchKw').value = title;
+          refreshAmzCatGuess();
+        };
+      }(info.title));
+      card.appendChild(applyBtn);
+      el.appendChild(card);
     }
 
     // AI認識結果から JAN/ISBN らしき番号を拾う（jan/barcode/isbn/code を許容）。8/10/13桁を採用、12桁(UPC-A)は先頭0で13桁化。該当なしは ''
