@@ -332,6 +332,18 @@
     .hist-edit { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
     .hist-del { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
+    /* 履歴カード 状態セレクタ */
+    .hist-status-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .hist-status-sel {
+      flex: 1; height: 36px; border-radius: 8px;
+      background: #0d1117; color: var(--muted);
+      border: 1px solid var(--line);
+      font-size: 12px; padding: 0 8px; cursor: pointer;
+    }
+    .hist-status-sel[data-status="仕入れ候補"] { color: #fbbf24; border-color: rgba(251,191,36,.5); }
+    .hist-status-sel[data-status="仕入れ済み"] { color: #4ade80; border-color: rgba(74,222,128,.5); }
+    .hist-status-sel[data-status="スルー"]     { color: #f87171; border-color: rgba(248,113,113,.4); }
+
     /* 履歴カード内の相場確認リンク（eBay Sold / メルカリ / Google） */
     .hist-search { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .hist-search-link {
@@ -3602,6 +3614,19 @@
       renderHistory();
     }
 
+    // 履歴カード状態（attrs.status）をDOMを再描画せずに localStorage だけ更新
+    function setEntryStatus(id, status) {
+      var list = getHistory();
+      for (var i = 0; i < list.length; i++) {
+        if (String(list[i].id) === String(id)) {
+          if (!list[i].attrs) list[i].attrs = {};
+          list[i].attrs.status = status;
+          break;
+        }
+      }
+      setHistory(list);
+    }
+
     function clearAll() {
       if (!getHistory().length) return;
       if (!confirm('全ての履歴を削除しますか？')) return;
@@ -3690,6 +3715,18 @@
       return (val && String(val).trim())
         ? '<button type="button" class="hist-copy-btn" data-copy="' + esc(String(val).trim()) + '">' + label + 'コピー</button>'
         : '';
+    }
+
+    var STATUS_OPTS = ['未確認', '仕入れ候補', '仕入れ済み', 'スルー'];
+    function statusSelHtml(id, current) {
+      var st = (current && STATUS_OPTS.indexOf(current) >= 0) ? current : '未確認';
+      var opts = STATUS_OPTS.map(function(s) {
+        return '<option value="' + s + '"' + (s === st ? ' selected' : '') + '>' + s + '</option>';
+      }).join('');
+      return '<div class="hist-status-row">' +
+        '<span>状態：</span>' +
+        '<select class="hist-status-sel" data-id="' + id + '" data-status="' + st + '">' + opts + '</select>' +
+        '</div>';
     }
 
     function renderHistory() {
@@ -3810,6 +3847,7 @@
             '</div>' +
             searchHtml +
             copyHtml +
+            statusSelHtml(e.id, e.attrs && e.attrs.status) +
             '<div class="hist-btns">' +
               '<button class="hist-edit" data-id="' + e.id + '">編集</button>' +
               '<button class="hist-del" data-id="' + e.id + '">削除</button>' +
@@ -3843,6 +3881,17 @@
       var copies = $('histList').querySelectorAll('.hist-copy-btn');
       for (var cb = 0; cb < copies.length; cb++) {
         copies[cb].addEventListener('click', onCopyClick);
+      }
+      // 状態セレクタ配線（change で localStorage 更新のみ・DOM 再描画なし）
+      var stSels = $('histList').querySelectorAll('.hist-status-sel');
+      for (var ss = 0; ss < stSels.length; ss++) {
+        stSels[ss].addEventListener('click', function(ev) { ev.stopPropagation(); });
+        stSels[ss].addEventListener('change', function(ev) {
+          ev.stopPropagation();
+          var v = this.value;
+          this.setAttribute('data-status', v);
+          setEntryStatus(this.getAttribute('data-id'), v);
+        });
       }
 
       // 履歴カードのタップ → 詳細モーダル
