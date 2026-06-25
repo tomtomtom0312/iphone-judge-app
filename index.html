@@ -1793,9 +1793,16 @@
               .then(function(detail) {
                 if (getHeldJan()) return;
                 var key = '__name__' + top.asin;
+                var ean = (detail && detail.ean) ? detail.ean : '';
                 _keepaCache[key] = (detail && detail.title) ? detail : { title: top.title, asin: top.asin, category: top.category || '', newPrice: null, salesRank: null, monthlySold: null, monthlySoldType: null };
                 _renderKeepa(key);
-                syncCurrent(); // ASIN確定 → 自動保存済み行を更新
+                // EAN取得かつJAN未取得の場合、JAN補完（既存JAN取得が優先・req10）
+                if (ean && !getHeldJan()) {
+                  dbgLog('[Keepa name fallback] EAN取得 jan=' + ean + ' → JAN補完');
+                  if (!_keepaCache.hasOwnProperty(ean)) _keepaCache[ean] = _keepaCache[key]; // JAN経路でfetchKeepaが重複コールしないようキャッシュ
+                  setHeldJan(ean); // JANコピー・近接表示・履歴janフィールドへ反映
+                }
+                syncCurrent(); // ASIN/JAN確定 → 自動保存済み行を更新
               })
               .catch(function() {
                 if (getHeldJan()) return;

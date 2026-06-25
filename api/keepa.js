@@ -17,6 +17,23 @@ function latestFromCsv(arr) {
   return null;
 }
 
+// EAN-13 チェックディジット検証
+function ean13Valid(s) {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += parseInt(s[i]) * (i % 2 === 0 ? 1 : 3);
+  return (10 - (sum % 10)) % 10 === parseInt(s[12]);
+}
+
+// eanList から有効な13桁JAN/EANを抽出（192始まり除外・チェックディジット検証・日本JAN優先）
+function extractJan(eanList) {
+  if (!Array.isArray(eanList) || eanList.length === 0) return '';
+  const valid = eanList
+    .map(e => String(e || '').replace(/[^0-9]/g, ''))
+    .filter(e => e.length === 13 && !e.startsWith('192') && ean13Valid(e));
+  const jpJan = valid.find(e => e.startsWith('45') || e.startsWith('49'));
+  return jpJan || valid[0] || '';
+}
+
 export default async function handler(req, res) {
   const jan  = (req.query.jan  || '').replace(/[^0-9]/g, '');
   const asin = (req.query.asin || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
@@ -98,10 +115,13 @@ export default async function handler(req, res) {
   const monthlySoldType = monthlySoldUnits !== null ? 'units'
     : dropsPerMonth !== null ? 'drops' : null;
 
+  const ean = extractJan(p.eanList);
+
   // デバッグログ（Vercel Functions ログで確認。問題解消後に削除可）
   console.log('[keepa] basic'
     + ' lookup=' + (validJan ? 'jan:' + jan : 'asin:' + asin)
     + ' result_asin=' + p.asin
+    + ' ean=' + ean
     + ' newPrice=' + newPrice
     + ' salesRank=' + salesRank
     + ' p.monthlySold=' + p.monthlySold
@@ -130,6 +150,7 @@ export default async function handler(req, res) {
     salesRank:      salesRank,
     monthlySold:    monthlySold,
     monthlySoldType: monthlySoldType,  // 'units' | 'drops' | null
+    ean:            ean,               // 有効なJAN/EAN（見つからない場合は ''）
     tokensLeft:     data.tokensLeft
   });
 }
