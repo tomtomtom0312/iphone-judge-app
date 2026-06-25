@@ -531,6 +531,7 @@
         <button type="button" id="fabCopyJanBtn"  style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📋 JANコピー</button>
       </div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:8px;">
+        <button type="button" id="fabReloadBtn" aria-label="更新" title="更新（再読み込み）" style="border:none; border-radius:50%; width:48px; height:48px; background:#374151; color:#fff; font-size:22px; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.3); cursor:pointer;">🔄</button>
         <button type="button" id="fabSaveBtn" aria-label="下書き保存" title="下書き保存" style="border:none; border-radius:50%; width:48px; height:48px; background:#1d4ed8; color:#fff; font-size:22px; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.3); cursor:pointer;">💾</button>
         <button type="button" id="fabClearBtn" aria-label="クリア" title="クリア" style="border:none; border-radius:50%; width:48px; height:48px; background:#dc2626; color:#fff; font-size:22px; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.3); cursor:pointer;">🧹</button>
       </div>
@@ -2662,6 +2663,7 @@
       if (jnw) jnw.style.display = '';  // wrap は表示のまま（「未取得」を見せる）
     }
     $('fabClearBtn').addEventListener('click', function () { closeFabMenu(); clearCurrentForm(); });
+    $('fabReloadBtn').addEventListener('click', function () { window.location.reload(); });
     // FAB コピー系（メニューを閉じずに連続コピー可能）
     $('fabCopyMemoBtn').addEventListener('click', function () { copyTextWithToast($('memo').value, '商品名'); });
     $('fabCopyKwBtn').addEventListener('click',   function () { copyTextWithToast($('searchKw').value, '検索KW'); });
