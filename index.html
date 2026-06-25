@@ -2345,6 +2345,7 @@
     var _attrsBeforePhoto = {};
     var _attrsBeforePhotoCategory = '';
     var captureMode = 'single'; // 'single' = 単品判定 / 'burst' = 連続撮影
+    var _autoAiPending = false; // 写真選択後に商品AIを自動実行するフラグ（cimg.onload で消費）
 
     var CROP_INSET = 0.08;  // ガイド枠のインセット（CSS .crop-frame の inset:8% と一致させる）
     var WORK_MAX = 2000;    // 作業用に読み込む画像の最大辺（メモリ・処理を軽く保つ）
@@ -2481,6 +2482,13 @@
             showCropUI(true);
             cropLayout();
             currentPhoto = cropRender(THUMB_PX); // 初期（中央）サムネ。未AIの手動保存でも写真が残る
+            // 写真選択直後に商品認識AIを自動実行（JANフォールバックと並行）
+            if (_autoAiPending) {
+              _autoAiPending = false;
+              currentAiImage = cropRender(768);
+              dbgLog('[商品AI] 自動実行（写真選択直後・JAN検出と並行）');
+              recognize();
+            }
           };
           cimg.src = work;
         };
@@ -2496,6 +2504,8 @@
       var file = e.target.files[0];
       dbgLog('[handlePhotoFile] ファイル選択 file=' + (file && file.name));
       if (!file) return;
+      // 単品モードは画像ロード完了後に商品AIを自動実行（cimg.onload で消費）
+      if (captureMode === 'single') _autoAiPending = true;
       loadForCrop(file); // sync でリセット・クロップ準備
       // setTimeout(0)で loadForCrop の sync 処理が完了してから JAN 検出開始
       setTimeout(function () { tryJanFromPhoto(file); }, 0);
