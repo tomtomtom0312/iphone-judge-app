@@ -1736,6 +1736,10 @@
     // /api/keepa 経由（KEEPA_API_KEY はブラウザに出さない）。中古価格は取得・表示しない
     var _keepaCache  = {};   // jan → レスポンスオブジェクト or null（not found / error）
     var _keepaLastJan = '';  // 現在リクエスト中 or 最後に描画した JAN（重複防止）
+    var _currentFormAsin = '';  // 現在フォームで有効なASIN（JAN経路・name fallback経路共通）
+    var _aiProductName = '';    // AI認識の商品名（JAN未検出時のKeepa fallback用）
+    var _aiSearchKw = '';       // AI認識のsearchKw（productName失敗時の2nd try用）
+    var _janNotFound = false;   // JAN検出が「未検出」と確定したフラグ
 
     function fetchKeepa(jan) {
       var el = document.getElementById('keepaSuggest');
@@ -1755,6 +1759,56 @@
           _keepaCache[jan] = null;
           if (_keepaLastJan === jan) _renderKeepa(jan);
         });
+    }
+
+    // JANなし商品用：AI認識の productName/searchKw でKeepa検索 → ASIN取得 → カード表示
+    function tryKeepaByName(productName, searchKw) {
+      if (getHeldJan()) return; // JAN取得済みなら不要
+      if (!productName) return;
+      dbgLog('[Keepa name fallback] start productName=' + productName.slice(0, 40));
+      var el = document.getElementById('keepaSuggest');
+      if (el) { el.style.display = ''; el.innerHTML = '<p style="margin:4px 0 0;font-size:12px;color:var(--muted);">商品名でAmazon検索中…</p>'; }
+
+      function fetchByKeyword(keyword, isSearchKw) {
+        dbgLog('[Keepa name fallback] ' + (isSearchKw ? 'searchKwで検索中' : 'productNameで検索中') + ' q=' + keyword.slice(0, 40));
+        fetch('/api/keepa-search?q=' + encodeURIComponent(keyword))
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (getHeldJan()) return; // JAN取得済みになったら中断
+            if (!data.results || data.results.length === 0) {
+              dbgLog('[Keepa name fallback] 候補取得失敗 results=0 keyword=' + (isSearchKw ? 'searchKw' : 'productName'));
+              if (!isSearchKw && searchKw && searchKw !== productName) {
+                fetchByKeyword(searchKw, true);
+              } else {
+                dbgLog('[Keepa name fallback] 候補取得失敗 終了');
+                if (el) el.innerHTML = '<p style="margin:4px 0 0;font-size:12px;color:var(--muted);">Amazon登録なし</p>';
+              }
+              return;
+            }
+            var top = data.results[0];
+            dbgLog('[Keepa name fallback] 候補取得成功 asin=' + top.asin + ' title=' + (top.title || '').slice(0, 40));
+            if (el) el.innerHTML = '<p style="margin:4px 0 0;font-size:12px;color:var(--muted);">Amazon照会中…</p>';
+            fetch('/api/keepa?asin=' + encodeURIComponent(top.asin))
+              .then(function(r) { return r.json(); })
+              .then(function(detail) {
+                if (getHeldJan()) return;
+                var key = '__name__' + top.asin;
+                _keepaCache[key] = (detail && detail.title) ? detail : { title: top.title, asin: top.asin, category: top.category || '', newPrice: null, salesRank: null, monthlySold: null, monthlySoldType: null };
+                _renderKeepa(key);
+              })
+              .catch(function() {
+                if (getHeldJan()) return;
+                var key = '__name__' + top.asin;
+                _keepaCache[key] = { title: top.title, asin: top.asin, category: top.category || '', newPrice: null, salesRank: null, monthlySold: null, monthlySoldType: null };
+                _renderKeepa(key);
+              });
+          })
+          .catch(function(e) {
+            dbgLog('[Keepa name fallback] 検索エラー ' + (e && e.message || ''));
+            if (el && !getHeldJan()) el.innerHTML = '<p style="margin:4px 0 0;font-size:12px;color:var(--muted);">Keepa検索エラー</p>';
+          });
+      }
+      fetchByKeyword(productName, false);
     }
 
     function _renderKeepa(jan) {
@@ -1822,6 +1876,7 @@
       card.appendChild(applyBtn);
       el.appendChild(card);
       refreshFormSearchIcons(info.asin); // ASIN確定 → K ボタンを有効化
+      _currentFormAsin = info.asin || ''; // onSearchClick でJAN経路・name fallback経路共通で使用
       // コピーエリアに ASINコピーを表示
       var caBtn = document.getElementById('copyAsinBtn');
       if (caBtn) caBtn.style.display = '';
@@ -1895,6 +1950,9 @@
               function onJanNotFound(reason) {
                 dbgLog('[JAN未検出] ' + reason);
                 $('janStatus').innerHTML = '<span class="ai-badge ai-lo">JAN未検出</span>';
+                _janNotFound = true;
+                // AI認識がすでに完了していれば、productNameでKeepa検索（race対応）
+                if (_aiProductName && !getHeldJan()) tryKeepaByName(_aiProductName, _aiSearchKw);
                 // デバッグパネルに失敗画像を表示（iOS: 長押し→写真に保存 / PC: 右クリック保存）
                 var panel = document.getElementById('debugPanel');
                 if (!panel) return;
@@ -2465,6 +2523,7 @@
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false;
       var reader = new FileReader();
       reader.onload = function (ev) {
         var image = new Image();
@@ -2667,6 +2726,7 @@
       // 4. aiStatus / janStatus クリア
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false;
 
       // 5. Keepa / openBD カード
       var ke = $('keepaSuggest');
@@ -2879,6 +2939,10 @@
           // 商品名（日本語）と検索KW（eBay/メルカリ/スニダン向け英語優先）を自動入力（後から上書き可能）
           $('memo').value = composeName(j);
           if ($('searchKw')) $('searchKw').value = (j.searchKw || '').trim();
+          // Keepa name fallback 用に保持（JAN未検出が確定済みなら即検索、未確定なら onJanNotFound から起動）
+          _aiProductName = j.productName || '';
+          _aiSearchKw = (j.searchKw || '').trim();
+          if (_janNotFound && !getHeldJan()) tryKeepaByName(_aiProductName, _aiSearchKw);
 
           // 推定ランクを状態セレクトへ反映（無ければ現状維持）
           var mapped = RANK_TO_CONDITION[currentRank];
@@ -4376,9 +4440,9 @@
         } else {
           q = site.preferJan ? (rJan || rKw || rMemo) : (rKw || rMemo || rJan); // Amazon=JAN優先 / 他=KW→商品名→JAN
         }
-      } else if ((site.asinUrl || site.asinOnly) && ((_keepaCache[getHeldJan()] || {}).asin || '').trim()) {
-        // フォーム: ASIN取得済み → Amazon/Keepa 直リンク
-        var _fAsin = (_keepaCache[getHeldJan()] || {}).asin || '';
+      } else if ((site.asinUrl || site.asinOnly) && (_currentFormAsin || (_keepaCache[getHeldJan()] || {}).asin || '').trim()) {
+        // フォーム: ASIN取得済み（JAN経路・name fallback経路どちらも対応）→ Amazon/Keepa 直リンク
+        var _fAsin = _currentFormAsin || (_keepaCache[getHeldJan()] || {}).asin || '';
         var u2 = site.asinUrl(_fAsin);
         var w2 = searchWindows[site.windowName];
         if (w2 && !w2.closed) { try { w2.location.href = u2; w2.focus(); return; } catch (e3) {} }
