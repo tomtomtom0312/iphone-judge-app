@@ -1902,7 +1902,8 @@
                 body: JSON.stringify({ image: imgData })
               }).then(function (r) { return r.json(); }).then(function (data) {
                 dbgLog('[Claude Vision] jan=' + (data.jan || '') + ' err=' + (data.error || ''));
-                var jan = normalizeJan(String(data.jan || '').replace(/[^0-9]/g, ''));
+                // filterJan: 192...除外 + checksum 検証（filterJan は img.onload スコープで定義済み）
+                var jan = filterJan(String(data.jan || '').replace(/[^0-9]/g, ''));
                 if (jan) {
                   commitJan(jan, 'AI-Vision');
                 } else {
@@ -1972,6 +1973,40 @@
               return gc;
             }
 
+            // canvas を指定角度（0/90/180/270）だけ回転した新しい canvas を返す
+            function rotateCanvas(src, deg) {
+              if (!deg) return src;
+              var w = src.width, h = src.height;
+              var cv = document.createElement('canvas');
+              cv.width  = (deg === 90 || deg === 270) ? h : w;
+              cv.height = (deg === 90 || deg === 270) ? w : h;
+              var ctx = cv.getContext('2d');
+              ctx.translate(cv.width / 2, cv.height / 2);
+              ctx.rotate(deg * Math.PI / 180);
+              ctx.drawImage(src, -w / 2, -h / 2);
+              return cv;
+            }
+
+            // JAN 優先スコア: 978/979(ISBN)=3 > 45/49系JAN=2 > その他=1
+            function scoreJan(jan) {
+              if (/^97[89]/.test(jan)) return 3;
+              if (/^4[59]/.test(jan)) return 2;
+              return 1;
+            }
+
+            // 数字列 → 有効JAN or null（192...除外 + checksum 検証済み normalizeJan を使用）
+            function filterJan(raw) {
+              var jan = normalizeJan(raw);
+              if (!jan) return null;
+              if (/^192/.test(jan)) { dbgLog('[除外] 192系コード ' + jan); return null; }
+              return jan;
+            }
+            // ZXing decode result → 有効JAN or null
+            function tryExtractJan(result) {
+              if (!result) return null;
+              return filterJan(String(result.text || '').replace(/[^0-9]/g, ''));
+            }
+
             $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing読込中…</span>';
             loadZXing().then(function (ZX) {
               dbgLog('[ZXingロード完了]');
@@ -1982,7 +2017,6 @@
               ]);
               hints.set(ZX.DecodeHintType.TRY_HARDER, true);
 
-              // 同期デコード: MultiFormatReader → BinaryBitmap → HTMLCanvasElementLuminanceSource
               var hasSyncApi = !!(ZX.HTMLCanvasElementLuminanceSource && ZX.HybridBinarizer
                                   && ZX.BinaryBitmap && ZX.MultiFormatReader);
               dbgLog('[同期API] ' + (hasSyncApi ? '利用可' : '非対応'));
@@ -1997,7 +2031,6 @@
                 } catch (e) { return null; }
               }
 
-              // 非同期デコード: canvas → PNG → tmpImg.onload → decodeFromImageElement
               var reader = new ZX.BrowserMultiFormatReader(hints, 150);
               function asyncDecode(canvas) {
                 return new Promise(function (resolve, reject) {
@@ -2010,43 +2043,83 @@
                 });
               }
 
-              function extractJan(result) {
-                if (!result) return null;
-                var raw = String(result.text || '').replace(/[^0-9]/g, '');
-                return normalizeJan(raw) || null;
+              // 全crop を試した後、最優先候補を採用する（greedy first ではなく score 優先）
+              var bestCandidate = { jan: '', priority: 0, label: '' };
+              var committed = false;
+              function tryCommit(jan, label) {
+                if (committed) return;
+                committed = true;
+                dbgLog('[確定] ' + jan + ' ' + label);
+                commitJan(jan, label);
+              }
+              function updateBest(jan, label) {
+                var sc = scoreJan(jan);
+                if (sc > bestCandidate.priority) {
+                  bestCandidate = { jan: jan, priority: sc, label: label };
+                  dbgLog('[候補] ' + jan + ' score=' + sc + ' ' + label);
+                }
+                return sc;
+              }
+
+              // 非同期デコード: 0° → 180° の順に試して nextFn へ進む
+              function tryAsyncWithRotation(canvas, label, nextFn) {
+                asyncDecode(canvas).then(function (r) {
+                  if (committed) return;
+                  var jan = tryExtractJan(r);
+                  if (jan) {
+                    var sc = updateBest(jan, label + '/r0');
+                    if (sc >= 3) { tryCommit(bestCandidate.jan, bestCandidate.label); return; }
+                  }
+                  asyncDecode(rotateCanvas(canvas, 180)).then(function (r2) {
+                    if (committed) return;
+                    var jan2 = tryExtractJan(r2);
+                    if (jan2) {
+                      var sc2 = updateBest(jan2, label + '/r180');
+                      if (sc2 >= 3) { tryCommit(bestCandidate.jan, bestCandidate.label); return; }
+                    }
+                    nextFn();
+                  }).catch(function () { if (!committed) nextFn(); });
+                }).catch(function (e) {
+                  if (committed) return;
+                  dbgLog('[miss] ' + label + ' ' + (e && (e.name || e.message)));
+                  nextFn();
+                });
               }
 
               function tryNext(i) {
+                if (committed) return;
                 if (i >= crops.length) {
-                  dbgLog('[ZXing全失敗] → Claude Vision フォールバック');
-                  tryClaudeVision();
+                  if (bestCandidate.jan) {
+                    dbgLog('[ベスト採用] score=' + bestCandidate.priority + ' ' + bestCandidate.label);
+                    tryCommit(bestCandidate.jan, bestCandidate.label);
+                  } else {
+                    dbgLog('[ZXing全失敗] → Claude Vision フォールバック');
+                    tryClaudeVision();
+                  }
                   return;
                 }
                 var c = crops[i];
                 var cr = makeCropCanvas(c);
-                var sizeLabel = cr.dw + 'x' + cr.dh + '(' + cr.scale.toFixed(1) + 'x)';
-                dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0] + ' ' + sizeLabel);
-                dbgImg(cr.canvas, c[0] + ' ' + sizeLabel);
+                var sl = cr.dw + 'x' + cr.dh + '(' + cr.scale.toFixed(1) + 'x)';
+                dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0] + ' ' + sl);
+                dbgImg(cr.canvas, c[0] + ' ' + sl);
                 $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')…</span>';
 
-                // 1. 同期デコード（カラー）
-                var jan = extractJan(syncDecode(cr.canvas));
-                if (jan) { commitJan(jan, c[0] + '/sync'); return; }
+                // 同期: 0°/180°/90°/270° × カラー + グレー（速い）
+                var ROTS = [0, 180, 90, 270];
+                for (var ri = 0; ri < ROTS.length; ri++) {
+                  if (committed) return;
+                  var rotC = rotateCanvas(cr.canvas, ROTS[ri]);
+                  var jan = tryExtractJan(syncDecode(rotC));
+                  if (!jan) jan = tryExtractJan(syncDecode(toGrayCanvas(rotC)));
+                  if (jan) {
+                    var sc = updateBest(jan, c[0] + '/sync/r' + ROTS[ri]);
+                    if (sc >= 3) { tryCommit(jan, c[0] + '/sync/r' + ROTS[ri]); return; }
+                  }
+                }
 
-                // 2. 同期デコード（グレースケール+コントラスト強調）
-                jan = extractJan(syncDecode(toGrayCanvas(cr.canvas)));
-                if (jan) { commitJan(jan, c[0] + '/sync-gray'); return; }
-
-                // 3. 非同期 decodeFromImageElement（カラー）
-                asyncDecode(cr.canvas).then(function (result) {
-                  var jan = extractJan(result);
-                  dbgLog('[async] ' + c[0] + ' text=' + (result && result.text) + ' jan=' + jan);
-                  if (jan) { commitJan(jan, c[0] + '/async'); return; }
-                  tryNext(i + 1);
-                }).catch(function (e) {
-                  dbgLog('[miss] ' + c[0] + ' ' + (e && (e.name || e.message)));
-                  tryNext(i + 1);
-                });
+                // 非同期: 0° + 180°
+                tryAsyncWithRotation(cr.canvas, c[0] + '/async', function () { tryNext(i + 1); });
               }
               tryNext(0);
             }).catch(function (e) {
