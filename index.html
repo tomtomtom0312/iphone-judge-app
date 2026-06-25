@@ -203,6 +203,7 @@
       background: #0d1117; border: 1px solid var(--line);
       border-radius: 12px; padding: 10px; margin-bottom: 10px;
     }
+    .hist-item--candidate { border-left: 3px solid rgba(251,191,36,.55); }
     .hist-top-row { display: flex; gap: 12px; align-items: flex-start; }
     .hist-item img {
       width: 48px; height: 48px; object-fit: cover;
@@ -322,6 +323,9 @@
     .rank-ジャンク { background: rgba(220,38,38,.18); color: #f87171; }
     .b-draft { background: rgba(154,167,178,.18); color: var(--muted); }
     .b-none { background: rgba(154,167,178,.18); color: var(--muted); }
+    .b-draft-vis { background:rgba(217,119,6,.18); color:#fbbf24; }
+    .badge-jan   { font-size:11px; padding:2px 7px; border-radius:999px; background:rgba(99,102,241,.18); color:#a5b4fc; font-weight:600; }
+    .badge-hiroi { font-size:11px; padding:2px 7px; border-radius:999px; background:rgba(22,163,74,.18); color:#4ade80; font-weight:600; }
     .v-none.modal-verdict { font-size: 18px; font-weight: 700; }
 
     /* 履歴アイテムの名称・操作ボタン */
@@ -3775,6 +3779,8 @@
       var html = filtered.map(function (e) {
         var draft = e.draft || e.profit == null;   // 売価未入力のドラフト
         var sym = e.symbol || '$';                 // 旧データ互換
+        var entryStatus = (e.attrs && e.attrs.status) || '未確認';
+        var candidateCls = entryStatus === '仕入れ候補' ? ' hist-item--candidate' : '';
         var img = e.photo
           ? '<img src="' + e.photo + '" alt="">'
           : '<img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22%3E%3C/svg%3E" alt="">';
@@ -3787,8 +3793,8 @@
           ? '<span class="vbadge b-draft">売価未入力</span>'
           : (e.verdict ? '<span class="vbadge b-l' + (+e.level || 3) + '">' + esc(e.verdict) + '</span>' : '');
         var memoTag = (e.marketMemo && String(e.marketMemo).trim()) ? '<span class="memo-tag">相場メモあり</span>' : '';
-        // 下書き（売価未入力）を一目で分かるよう、既存の淡色バッジ b-draft を流用して付与
-        var draftTag = draft ? '<span class="vbadge b-draft">📝 下書き</span>' : '';
+        // 下書きはアンバー色で目立たせる（C）
+        var draftTag = draft ? '<span class="vbadge b-draft-vis">📝 下書き</span>' : '';
 
         // 利益（独立行で目立たせる。ドラフトは未入力表示）
         var profitHtml = draft
@@ -3797,9 +3803,11 @@
 
         // 原価利益率（表示のみ・利益÷原価×100）＋注意バッジ。保存済み profit/cost から算出。原価0/欠落は付けない
         var costRoi = '';
+        var highRoiBadge = '';
         if (!draft && e.profit != null && (+e.cost) > 0) {
           var histRoi = Math.round(e.profit / (+e.cost) * 100);
           costRoi = ' ・ 原価利益率' + histRoi + '%' + roiBadge(histRoi);
+          if (histRoi >= 100) highRoiBadge = '<span class="badge-hiroi">高利益率</span>'; // B
         }
         // メタ行（売価USD・状態・利益率／原価円・原価利益率・発送）。ドラフトは伏せる
         var meta = draft
@@ -3841,6 +3849,7 @@
         var hKw = (e.searchKw || '').trim();
         var hMemo = (e.memo || '').trim();
         var hJan = String((e.attrs && e.attrs.jan) || e.jan || '').replace(/[^0-9]/g, '').trim(); // 補助項目JAN優先・無ければ保持JAN(e.jan)
+        var janBadge = hJan ? '<span class="badge-jan">' + (e.category === 'book' ? 'ISBNあり' : 'JANあり') + '</span>' : ''; // D
         var searchHtml = (hKw || hMemo || hJan)
           ? '<div class="hist-search" data-kw="' + esc(hKw) + '" data-memo="' + esc(hMemo) + '" data-jan="' + esc(hJan) + '" data-category="' + esc(e.category || '') + '">' +
               searchIconsHtml('search-icon') +
@@ -3865,7 +3874,7 @@
           : '';
 
         return '' +
-          '<div class="hist-item" data-id="' + e.id + '">' +
+          '<div class="hist-item' + candidateCls + '" data-id="' + e.id + '">' +
             '<div class="hist-top-row">' +
               img +
               '<div class="hist-info">' +
@@ -3876,6 +3885,8 @@
                   draftTag +
                   vBadge +
                   memoTag +
+                  janBadge +
+                  highRoiBadge +
                 '</div>' +
                 histAttrLine(e) +
                 '<div class="hist-meta">' + meta + '</div>' +
