@@ -1756,9 +1756,10 @@
         });
         // 商品名・検索KW（空欄のみ補完。ユーザー入力は温存）
         if (info.title) {
-          var memoEl = $('memo'), kwEl = $('searchKw');
-          if (memoEl && !memoEl.value.trim()) memoEl.value = info.title;
-          if (kwEl   && !kwEl.value.trim())   kwEl.value   = info.title;
+          var memoEl = $('memo'), kwEl = $('searchKw'), obFilled = false;
+          if (memoEl && !memoEl.value.trim()) { memoEl.value = info.title; obFilled = true; }
+          if (kwEl   && !kwEl.value.trim())   { kwEl.value   = info.title; obFilled = true; }
+          if (obFilled) dbgLog('[OpenBD title] 商品名・検索KWに反映');
           refreshAmzCatGuess();
         }
       }
@@ -1920,6 +1921,13 @@
       }(info.title));
       card.appendChild(applyBtn);
       el.appendChild(card);
+      // 商品名・検索KW（空欄のみ補完。ユーザー入力・AI入力は温存）
+      if (info.title) {
+        var _km = $('memo'), _kk = $('searchKw'), _kf = false;
+        if (_km && !_km.value.trim()) { _km.value = info.title; _kf = true; }
+        if (_kk && !_kk.value.trim()) { _kk.value = info.title; _kf = true; }
+        if (_kf) { dbgLog('[Keepa title] 商品名・検索KWに反映'); refreshAmzCatGuess(); }
+      }
       refreshFormSearchIcons(info.asin); // ASIN確定 → K ボタンを有効化
       _currentFormAsin = info.asin || ''; // onSearchClick でJAN経路・name fallback経路共通で使用
       applyCategoryIfAllowed(keepaCatToStolyCategory(info.category), 'Keepa category', info.category || '(不明)');
