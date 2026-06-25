@@ -3587,7 +3587,8 @@
         domShip: num('domShip'),
         domChannel: $('domChannel').value,   // 国内販路（mercari/amazon/other）
         domAmzCat: $('domAmzCat').value,      // Amazonカテゴリ（Amazon時のみ意味を持つ）
-        domFeeRate: num('domFeeRate')         // 国内手数料率（%）
+        domFeeRate: num('domFeeRate'),         // 国内手数料率（%）
+        asin: (_keepaCache[_jan] && _keepaCache[_jan].asin) ? _keepaCache[_jan].asin : ''
       };
       recompute(e); // profit/margin/level/verdict/draft ＋ 再計算パラメータを確定
       return e;
@@ -3863,6 +3864,8 @@
         var copyBtns =
           copyBtnHtml('商品名', e.memo) +
           copyBtnHtml('検索KW', e.searchKw) +
+          (!isBox ? copyBtnHtml(e.category === 'book' ? 'ISBN' : 'JAN', hJan) : '') +
+          copyBtnHtml('ASIN', e.asin) +
           (isSingle ? copyBtnHtml('カード名', a.cardName) : '') +
           (isSingle ? copyBtnHtml('型番', a.modelNo) : '') +
           (isSingle && a.language !== '不明' ? copyBtnHtml('言語', a.language) : '') +
