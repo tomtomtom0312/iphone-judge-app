@@ -1740,6 +1740,7 @@
     var _aiProductName = '';    // AI認識の商品名（JAN未検出時のKeepa fallback用）
     var _aiSearchKw = '';       // AI認識のsearchKw（productName失敗時の2nd try用）
     var _janNotFound = false;   // JAN検出が「未検出」と確定したフラグ
+    var _userSetCategory = false; // ユーザーが手動でカテゴリを変更した場合true（AI自動反映を抑制）
 
     function fetchKeepa(jan) {
       var el = document.getElementById('keepaSuggest');
@@ -2533,7 +2534,7 @@
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false;
       var reader = new FileReader();
       reader.onload = function (ev) {
         var image = new Image();
@@ -2736,7 +2737,7 @@
       // 4. aiStatus / janStatus クリア
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false;
 
       // 5. Keepa / openBD カード
       var ke = $('keepaSuggest');
@@ -2925,10 +2926,14 @@
           // 認識結果を保持（保存時に履歴へ載せる）
           // 反映前に「現在画面」の補助項目入力値を取得（「再調整→AI認識」経路では手入力が画面に残っている）
           var screenAttrs = readAttrs($('attrsBox'));
-          // 手動でカテゴリを選んでいる場合（その他以外）はAI結果のカテゴリで上書きしない。未選択(その他)のみAIカテゴリを採用
-          var manualCat = normCategory(currentCategory);
-          currentCategory = (manualCat !== 'other') ? manualCat : normCategory(j.category);
-          $('category').value = currentCategory; // 手動選択がない場合のみAIカテゴリをUIへ反映
+          // _userSetCategoryフラグがない場合のみAIカテゴリを採用（手動変更済みなら上書きしない）
+          var aiCat = normCategory(j.category);
+          if (!_userSetCategory && aiCat && aiCat !== 'other') {
+            var prevCat = currentCategory;
+            currentCategory = aiCat;
+            $('category').value = currentCategory;
+            if (currentCategory !== prevCat) dbgLog('[AI category] ' + j.category + ' -> ' + categoryLabel(currentCategory));
+          }
           currentRank = j.estimatedRank || '';
           currentAi = pickAi(j);
           var aiAttrs = attrsFromRecognition(currentCategory, j);
@@ -2939,6 +2944,7 @@
           currentAttrs = mergeAiAttrs(userBase, aiAttrs);   // AIをベースに、手入力(userBase)の非空値で上書き＝手入力優先
           _attrsBeforePhoto = {}; _attrsBeforePhotoCategory = ''; // 退避は次に持ち越さない
           renderAttrs($('attrsBox'), currentCategory, currentAttrs); // 手入力を含む merged attrs を渡す
+          syncCopyJanBtnLabel(); refreshAmzCatGuess(); updateTopJanScanBtn(); // カテゴリ反映後の副作用を同期
           // AI認識でJAN/ISBNらしき番号が取れ、かつ未取得のときだけ保持値に採用（手動入力は上書きしない／商品名・カテゴリ・検索KWには触れない）
           if (!getHeldJan()) {
             var aiJan = pickAiJanCode(j);
@@ -3611,6 +3617,7 @@
       refreshAmzCatGuess(); // 上の商品カテゴリの変更をAmazonカテゴリ推定へ連動
       updateTopJanScanBtn(); // カテゴリ変更に応じて上部JANボタンの表示を同期
     }
+    $('category').addEventListener('change', function(e) { if (e.isTrusted) _userSetCategory = true; }); // ユーザー手動変更のみ検出（isTrusted=falseのコード変更は除外）
     $('category').addEventListener('change', onCategoryChange);
     $('category').addEventListener('change', updateTopJanScanBtn); // カテゴリ変更で必ず上部JANボタンを同期（onCategoryChangeの途中失敗に依存しない）
     // 設定（販路ごと）→ 再計算＋保存
