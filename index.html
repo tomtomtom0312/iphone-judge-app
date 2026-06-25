@@ -466,6 +466,7 @@
     .search-icon.site-google   { background: #1a73e8; color: #fff; border-color: #1a73e8; }
     .search-icon.site-ebay     { background: #2e7d32; color: #fff; border-color: #2e7d32; }
     .search-icon.site-snkrdunk { background: #6d28d9; color: #fff; border-color: #6d28d9; }
+    .search-icon.site-keepa    { background: #f97316; color: #fff; border-color: #f97316; }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -3850,10 +3851,14 @@
         var hKw = (e.searchKw || '').trim();
         var hMemo = (e.memo || '').trim();
         var hJan = String((e.attrs && e.attrs.jan) || e.jan || '').replace(/[^0-9]/g, '').trim(); // 補助項目JAN優先・無ければ保持JAN(e.jan)
+        var hAsin = (e.asin || '').trim();
         var janBadge = hJan ? '<span class="badge-jan">' + (e.category === 'book' ? 'ISBNあり' : 'JANあり') + '</span>' : ''; // D
-        var searchHtml = (hKw || hMemo || hJan)
-          ? '<div class="hist-search" data-kw="' + esc(hKw) + '" data-memo="' + esc(hMemo) + '" data-jan="' + esc(hJan) + '" data-category="' + esc(e.category || '') + '">' +
-              searchIconsHtml('search-icon') +
+        var keepaIconHtml = hAsin
+          ? '<button type="button" class="search-icon site-keepa" data-site="keepa" aria-label="Keepaで価格確認" title="Keepaで価格確認">K</button>'
+          : '';
+        var searchHtml = (hKw || hMemo || hJan || hAsin)
+          ? '<div class="hist-search" data-kw="' + esc(hKw) + '" data-memo="' + esc(hMemo) + '" data-jan="' + esc(hJan) + '" data-category="' + esc(e.category || '') + '" data-asin="' + esc(hAsin) + '">' +
+              searchIconsHtml('search-icon') + keepaIconHtml +
             '</div>'
           : '';
 
@@ -4256,9 +4261,10 @@
     // 各サイトに windowName（固定ウィンドウ名）を持たせ、同じサイトは常に同じタブを再利用 → タブ増殖を防ぐ。
     // ※既存のURL仕様は変更しない（eBayはSold/Completed、メルカリはkeyword、Googleはq）。url(k) は encodeURIComponent 済みの文字列を受け取る。
     var searchSites = [
-      // Amazon は Keepa/ASIN 未実装のため検索語で開く。preferJan: JAN/ISBN→検索KW→商品名（フォームのみ。下の onSearchClick で処理）
+      // Amazon: ASINあり→商品ページ直リンク（asinUrl）/ なし→キーワード検索（url）。preferJan: JAN優先（フォームのみ）
       // 表示順：Amazon / メルカリ / Google / eBay / スニダン（アイコン a / メ / G / e / S）
       { key: 'amazon', label: 'Amazon', icon: 'a', windowName: 'shumi_amazon', preferJan: true,
+        asinUrl: function(a) { return 'https://www.amazon.co.jp/dp/' + a; },
         url: function (k) { return 'https://www.amazon.co.jp/s?k=' + k; } },
       { key: 'mercari', label: 'メルカリ', icon: 'メ', windowName: 'shumi_mercari', janFallback: true,
         url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
@@ -4270,7 +4276,10 @@
         url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } },
       // スニダンは検索KW→商品名を優先。両方空なら JAN/ISBN をフォールバック利用（janFallback）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
       { key: 'snkrdunk', label: 'スニダン', icon: 'S', windowName: 'shumi_snkrdunk', janFallback: true,
-        url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } }
+        url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } },
+      // Keepa: ASINがある履歴カードにのみ表示（asinOnly=true → searchIconsHtml では省略）
+      { key: 'keepa', label: 'Keepa', icon: 'K', windowName: 'shumi_keepa', asinOnly: true,
+        asinUrl: function(a) { return 'https://keepa.com/#!product/5-' + a; } }
     ];
     function findSearchSite(key) {
       for (var i = 0; i < searchSites.length; i++) { if (searchSites[i].key === key) return searchSites[i]; }
@@ -4282,9 +4291,9 @@
         return '<button type="button" class="' + cls + '" data-site="' + s.key + '">' + esc(s.label) + '</button>';
       }).join('');
     }
-    // 相場検索の丸アイコンボタンHTML（文字は icon のみ。aria-label/title でサイト名を補う）。クリックは onSearchClick を流用
+    // 相場検索の丸アイコンボタンHTML（文字は icon のみ。asinOnly サイトは履歴カード個別で追加するため除外）
     function searchIconsHtml(cls) {
-      return searchSites.map(function (s) {
+      return searchSites.filter(function(s) { return !s.asinOnly; }).map(function (s) {
         var lab = esc(s.label) + 'で相場検索';
         return '<button type="button" class="' + cls + ' site-' + s.key + '" data-site="' + s.key + '" aria-label="' + lab + '" title="' + lab + '">'
           + esc(s.icon || s.label.charAt(0)) + '</button>';
@@ -4304,11 +4313,21 @@
       var row = btn.closest('.hist-search');
       var q, msgEl = null;
       if (row) {
-        // 履歴カード：data-kw（検索KW）/ data-memo（商品名）/ data-jan（JAN/ISBN）/ data-category から優先順で決定
+        // 履歴カード：data-kw（検索KW）/ data-memo（商品名）/ data-jan（JAN/ISBN）/ data-category / data-asin から優先順で決定
         var rKw = (row.getAttribute('data-kw') || '').trim();
         var rMemo = (row.getAttribute('data-memo') || '').trim();
         var rJan = (row.getAttribute('data-jan') || '').trim();
         var rCat = (row.getAttribute('data-category') || '');
+        var rAsin = (row.getAttribute('data-asin') || '').trim();
+        // ASINあり: Amazon→商品ページ直リンク / Keepa→Keepaページ直リンク（即 open して return）
+        if (rAsin && site.asinUrl) {
+          var aUrl = site.asinUrl(rAsin);
+          var aw = searchWindows[site.windowName];
+          if (aw && !aw.closed) { try { aw.location.href = aUrl; aw.focus(); return; } catch (e2) {} }
+          searchWindows[site.windowName] = window.open(aUrl, site.windowName);
+          return;
+        }
+        if (site.asinOnly) return; // Keepa は ASIN なしでは何もしない
         // 本・漫画 + ISBN（978/979）の場合、AmazonはISBN検索を優先（他サイト・他カテゴリは既存ロジックのまま）
         if (site.key === 'amazon' && rCat === 'book' && /^97[89]/.test(rJan)) {
           q = rJan;
