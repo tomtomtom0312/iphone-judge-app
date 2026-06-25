@@ -4266,9 +4266,9 @@
       // eBay: 検索KW → 商品名 → JAN/ISBN（janFallback）。JANより英語商品名・型番検索の方が実用的
       { key: 'ebay', label: 'eBay Sold', icon: 'e', windowName: 'shumi_ebay', janFallback: true,
         url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } },
-      // スニダンは検索KW→商品名を優先。両方空なら JAN/ISBN をフォールバック利用（janFallback）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
+      // スニダン: 検索KW → 商品名 → JAN/ISBN（janFallback）。トレカBOX・スニーカー・ホビー向け
       { key: 'snkrdunk', label: 'スニダン', icon: 'S', windowName: 'shumi_snkrdunk', janFallback: true,
-        url: function (k) { return 'https://snkrdunk.com/search?keyword=' + k; } },
+        url: function (k) { return 'https://snkrdunk.com/search/result?keyword=' + k; } },
       // Keepa: ASINがある履歴カードにのみ表示（asinOnly=true → searchIconsHtml では省略）
       { key: 'keepa', label: 'Keepa', icon: 'K', windowName: 'shumi_keepa', asinOnly: true,
         asinUrl: function(a) { return 'https://keepa.com/#!product/5-' + a; } }
