@@ -593,10 +593,17 @@
       <select id="burstCategoryHint">
         <option value="">AIにおまかせ</option>
         <!-- <option value="iPhone">iPhone</option> 運用優先度低のため非表示（将来復活可） -->
-        <option value="trading_card_single">トレカ単品</option>
-        <option value="trading_card_box">トレカBOX</option>
-        <option value="figure">フィギュア</option>
-        <option value="other">その他</option>
+        <option value="book">📚 本</option>
+        <option value="toy">🧸 おもちゃ</option>
+        <option value="trading_card_box">🎴 トレカBOX</option>
+        <option value="trading_card_single">🃏 トレカ単品</option>
+        <option value="figure">🧍 フィギュア</option>
+        <option value="game_console">🎮 ゲーム機本体</option>
+        <option value="game_software">💿 ゲームソフト</option>
+        <option value="game_accessory">🎮 ゲーム周辺機器</option>
+        <option value="dvd">📀 DVD</option>
+        <option value="electronics">📷 家電＆カメラ</option>
+        <option value="other">📦 その他</option>
       </select>
     </div>
     <div class="burst-status" id="burstStatus"></div>
@@ -608,14 +615,25 @@
       <label>カテゴリ（手動選択・写真なしでも可）</label>
       <select id="category">
         <!-- <option value="iPhone">iPhone</option> 運用優先度低のため非表示（将来復活可） -->
-        <option value="trading_card_box">トレカBOX</option>
-        <option value="trading_card_single">トレカ単品</option>
-        <option value="figure">フィギュア</option>
-        <option value="game_software">ゲームソフト</option>
-        <option value="game_console">ゲーム機本体</option>
-          <option value="game_accessory">ゲーム周辺機器</option>
-        <option value="book">本・漫画</option>
-        <option value="other" selected>その他</option>
+        <option value="book">📚 本</option>
+        <option value="toy">🧸 おもちゃ</option>
+        <option value="trading_card_box">🎴 トレカBOX</option>
+        <option value="trading_card_single">🃏 トレカ単品</option>
+        <option value="figure">🧍 フィギュア</option>
+        <option value="game_console">🎮 ゲーム機本体</option>
+        <option value="game_software">💿 ゲームソフト</option>
+        <option value="game_accessory">🎮 ゲーム周辺機器</option>
+        <option value="dvd">📀 DVD</option>
+        <option value="diy">🔨 DIY・工具・ガーデン</option>
+        <option value="sports">🏃 スポーツ＆アウトドア</option>
+        <option value="drugstore">💊 ドラッグストア</option>
+        <option value="beauty">💄 ビューティー</option>
+        <option value="pet">🐶 ペット用品</option>
+        <option value="home">🏠 ホーム＆キッチン</option>
+        <option value="electronics">📷 家電＆カメラ</option>
+        <option value="stationery">📝 文房具・オフィス用品</option>
+        <option value="music">🎸 楽器・音響機器</option>
+        <option value="other" selected>📦 その他</option>
       </select>
     </div>
     <div class="field">
@@ -874,14 +892,25 @@
           <label>カテゴリ</label>
           <select id="eCategory">
             <!-- <option value="iPhone">iPhone</option> 運用優先度低のため非表示（将来復活可） -->
-            <option value="trading_card_single">トレカ単品</option>
-            <option value="trading_card_box">トレカBOX</option>
-            <option value="figure">フィギュア</option>
-            <option value="game_software">ゲームソフト</option>
-            <option value="game_console">ゲーム機本体</option>
-          <option value="game_accessory">ゲーム周辺機器</option>
-            <option value="book">本・漫画</option>
-            <option value="other">その他</option>
+            <option value="book">📚 本</option>
+            <option value="toy">🧸 おもちゃ</option>
+            <option value="trading_card_box">🎴 トレカBOX</option>
+            <option value="trading_card_single">🃏 トレカ単品</option>
+            <option value="figure">🧍 フィギュア</option>
+            <option value="game_console">🎮 ゲーム機本体</option>
+            <option value="game_software">💿 ゲームソフト</option>
+            <option value="game_accessory">🎮 ゲーム周辺機器</option>
+            <option value="dvd">📀 DVD</option>
+            <option value="diy">🔨 DIY・工具・ガーデン</option>
+            <option value="sports">🏃 スポーツ＆アウトドア</option>
+            <option value="drugstore">💊 ドラッグストア</option>
+            <option value="beauty">💄 ビューティー</option>
+            <option value="pet">🐶 ペット用品</option>
+            <option value="home">🏠 ホーム＆キッチン</option>
+            <option value="electronics">📷 家電＆カメラ</option>
+            <option value="stationery">📝 文房具・オフィス用品</option>
+            <option value="music">🎸 楽器・音響機器</option>
+            <option value="other">📦 その他</option>
           </select>
         </div>
         <div class="field">
@@ -1050,15 +1079,26 @@
        APIの category enum（CATEGORY_VALUES）とキーを一致させること。
        ============================================================ */
     var CATEGORIES = {
-      iPhone:              'iPhone',
-      trading_card_single: 'トレカ単品',
-      trading_card_box:    'トレカBOX',
-      figure:              'フィギュア',
-      game_software:       'ゲームソフト',
-      game_console:        'ゲーム機本体',
-      game_accessory:   'ゲーム周辺機器',
-      book:                '本・漫画',
-      other:               'その他'
+      iPhone:              'iPhone',           // 後方互換（ドロップダウンは非表示）
+      book:                '📚 本',
+      toy:                 '🧸 おもちゃ',
+      trading_card_box:    '🎴 トレカBOX',
+      trading_card_single: '🃏 トレカ単品',
+      figure:              '🧍 フィギュア',
+      game_console:        '🎮 ゲーム機本体',
+      game_software:       '💿 ゲームソフト',
+      game_accessory:      '🎮 ゲーム周辺機器',
+      dvd:                 '📀 DVD',
+      diy:                 '🔨 DIY・工具・ガーデン',
+      sports:              '🏃 スポーツ＆アウトドア',
+      drugstore:           '💊 ドラッグストア',
+      beauty:              '💄 ビューティー',
+      pet:                 '🐶 ペット用品',
+      home:                '🏠 ホーム＆キッチン',
+      electronics:         '📷 家電＆カメラ',
+      stationery:          '📝 文房具・オフィス用品',
+      music:               '🎸 楽器・音響機器',
+      other:               '📦 その他'
     };
     function categoryLabel(v) { return CATEGORIES[v] || 'その他'; }
     function normCategory(v) { return CATEGORIES[v] ? v : 'other'; }
@@ -1067,10 +1107,23 @@
     function keepaCatToStolyCategory(keepaCat) {
       if (!keepaCat) return '';
       if (/トレーディングカード|ブースターパック/.test(keepaCat)) return 'trading_card_box';
-      if (/^おもちゃ.*ゲーム/.test(keepaCat)) return 'trading_card_box'; // おもちゃ > ゲーム 経路
-      if (/フィギュア/.test(keepaCat)) return 'figure';
-      if (/本|コミック|雑誌/.test(keepaCat)) return 'book';
-      if (/ゲームソフト|ゲーム機|家庭用ゲーム/.test(keepaCat)) return 'game_software';
+      if (/^おもちゃ.*ゲーム/.test(keepaCat))                      return 'trading_card_box';
+      if (/フィギュア/.test(keepaCat))                              return 'figure';
+      if (/本|コミック|雑誌/.test(keepaCat))                        return 'book';
+      if (/DVD|ブルーレイ/.test(keepaCat))                          return 'dvd';
+      if (/ゲームソフト|家庭用ゲームソフト/.test(keepaCat))         return 'game_software';
+      if (/ゲーム機|家庭用ゲーム本体/.test(keepaCat))               return 'game_console';
+      if (/ゲーム周辺機器/.test(keepaCat))                          return 'game_accessory';
+      if (/DIY|工具|ガーデン/.test(keepaCat))                       return 'diy';
+      if (/スポーツ|アウトドア/.test(keepaCat))                     return 'sports';
+      if (/ドラッグストア|医薬品/.test(keepaCat))                   return 'drugstore';
+      if (/ビューティー|コスメ/.test(keepaCat))                     return 'beauty';
+      if (/ペット/.test(keepaCat))                                   return 'pet';
+      if (/ホーム|キッチン/.test(keepaCat))                         return 'home';
+      if (/家電|カメラ/.test(keepaCat))                             return 'electronics';
+      if (/文房具|オフィス/.test(keepaCat))                         return 'stationery';
+      if (/楽器|音響/.test(keepaCat))                               return 'music';
+      if (/おもちゃ/.test(keepaCat))                                return 'toy'; // 上記より後（ゲーム/フィギュア等を先に判定）
       return '';
     }
     // _userSetCategoryを考慮してカテゴリを自動反映する共通ヘルパー
@@ -3534,10 +3587,12 @@
     });
 
     // 国内手数料率の仮テーブル（Amazonは自己発送向けの概算。手入力で上書き可）
+    // カテゴリ別・国内手数料率の既定値（暫定。本/ゲームソフト/ゲーム周辺機器のみ15%、他は10%）
+    var CATEGORY_DOM_FEE = { book: 15, game_software: 15, game_accessory: 15 };
     var DOM_FEE_RATES = {
       mercari: 10,
       other: 10,
-      amazon: { book: 15.4, game_software: 15.4, toy: 10, hobby: 10, game_console: 10, other: 10 }
+      amazon: { book: 15, game_software: 15, toy: 10, hobby: 10, game_console: 10, other: 10 }
     };
     function domDefaultFeeRate(channel, amzCat) {
       if (channel === 'amazon') {
@@ -3561,12 +3616,13 @@
     function amzCatFromCategory(cat) {
       if (cat === 'figure') return 'hobby';
       if (cat === 'game_software') return 'game_software';
-      if (cat === 'game_console') return 'game_console'; // ゲーム機本体は10%系（DOM_FEE_RATES.amazon.game_console）
-      if (cat === 'game_accessory') return 'game_software'; // 周辺機器は15%系。手数料テーブルは増やさず game_software に寄せる
-      if (cat === 'book') return 'book'; // 本・漫画は15.4%系（DOM_FEE_RATES.amazon.book・テーブルは既存利用で変更なし）
-      if (cat === 'trading_card_box' || cat === 'trading_card_single') return 'hobby'; // 安全側（手数料10%）
+      if (cat === 'game_console') return 'game_console';
+      if (cat === 'game_accessory') return 'game_software'; // 周辺機器は15%系: game_software に寄せる
+      if (cat === 'book') return 'book';
+      if (cat === 'trading_card_box' || cat === 'trading_card_single') return 'hobby';
+      if (cat === 'toy') return 'toy';
       if (cat === 'iPhone') return 'other';
-      return null; // その他 → カテゴリからは推定しない
+      return null; // 新カテゴリ（dvd/diy等）はAmzCatから推定しない
     }
     // 総合推定：商品名/検索KWを最優先 → 無ければ上の商品カテゴリから
     function guessAmzCatCombined() {
@@ -3658,7 +3714,10 @@
       renderAttrs($('attrsBox'), currentCategory, currentAttrs);
       syncCopyJanBtnLabel(); // カテゴリ変更時にコピーボタン文言を直接更新
       syncCurrent(); // 自動保存済みなら現在行へ反映（未保存なら何もしない）
-      refreshAmzCatGuess(); // 上の商品カテゴリの変更をAmazonカテゴリ推定へ連動
+      // 国内手数料率をカテゴリ既定値へ（手入力で上書き可）
+      $('domFeeRate').value = CATEGORY_DOM_FEE[currentCategory] || 10;
+      compareCalc();
+      refreshAmzCatGuess(); // 上の商品カテゴリの変更をAmazonカテゴリ推定へ連動（Amazon選択時は上書きされる）
       updateTopJanScanBtn(); // カテゴリ変更に応じて上部JANボタンの表示を同期
     }
     $('category').addEventListener('change', function(e) { if (e.isTrusted) _userSetCategory = true; }); // ユーザー手動変更のみ検出（isTrusted=falseのコード変更は除外）
