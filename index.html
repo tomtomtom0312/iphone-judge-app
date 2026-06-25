@@ -1795,12 +1795,14 @@
                 var key = '__name__' + top.asin;
                 _keepaCache[key] = (detail && detail.title) ? detail : { title: top.title, asin: top.asin, category: top.category || '', newPrice: null, salesRank: null, monthlySold: null, monthlySoldType: null };
                 _renderKeepa(key);
+                syncCurrent(); // ASIN確定 → 自動保存済み行を更新
               })
               .catch(function() {
                 if (getHeldJan()) return;
                 var key = '__name__' + top.asin;
                 _keepaCache[key] = { title: top.title, asin: top.asin, category: top.category || '', newPrice: null, salesRank: null, monthlySold: null, monthlySoldType: null };
                 _renderKeepa(key);
+                syncCurrent(); // ASIN確定 → 自動保存済み行を更新
               });
           })
           .catch(function(e) {
@@ -3675,7 +3677,7 @@
         domChannel: $('domChannel').value,   // 国内販路（mercari/amazon/other）
         domAmzCat: $('domAmzCat').value,      // Amazonカテゴリ（Amazon時のみ意味を持つ）
         domFeeRate: num('domFeeRate'),         // 国内手数料率（%）
-        asin: (_keepaCache[_jan] && _keepaCache[_jan].asin) ? _keepaCache[_jan].asin : ''
+        asin: (_keepaCache[_jan] && _keepaCache[_jan].asin) ? _keepaCache[_jan].asin : (_currentFormAsin || '')
       };
       recompute(e); // profit/margin/level/verdict/draft ＋ 再計算パラメータを確定
       return e;
@@ -3684,6 +3686,7 @@
     // 現在のエントリを履歴へ upsert（currentEntryId があれば上書き＝重複防止、無ければ新規）
     function upsertCurrent() {
       var e = buildCurrentEntry();
+      if (e.asin) dbgLog('[saveHistory] asin=' + e.asin);
       var list = getHistory();
       var idx = -1;
       if (currentEntryId) {
@@ -4531,7 +4534,7 @@
         copyTextWithToast(getHeldJan(), _lbl);
       });
       var ab = $('copyAsinBtn'); if (ab) ab.addEventListener('click', function () {
-        var _asin = (_keepaCache[getHeldJan()] || {}).asin || '';
+        var _asin = _currentFormAsin || (_keepaCache[getHeldJan()] || {}).asin || '';
         if (_asin) copyTextWithToast(_asin, 'ASIN');
       });
       // 保持用 janHolder の input（fabスキャンの dispatch 等）で近接表示＋補助項目JAN欄へ同期
