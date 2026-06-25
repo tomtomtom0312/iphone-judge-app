@@ -951,6 +951,14 @@
       var wrap = document.getElementById('debugWrap');
       if (wrap) wrap.style.display = '';
     }
+    function dbgClose() {
+      var p = document.getElementById('debugPanel');
+      var b = document.getElementById('debugToggleBtn');
+      if (p && p.style.display === 'block') {
+        p.style.display = 'none';
+        if (b) b.textContent = '🔧 デバッグを見る';
+      }
+    }
     function dbgLog(msg) {
       console.log(msg);
       var panel = document.getElementById('debugPanel');
@@ -1808,6 +1816,7 @@
                   $('janStatus').innerHTML = '<span class="ai-badge ai-hi">✅ KeepaからJAN補完済み</span>';
                 }
                 syncCurrent(); // ASIN/JAN確定 → 自動保存済み行を更新
+                dbgClose(); // Keepa取得成功 → デバッグパネルを閉じる
               })
               .catch(function() {
                 if (getHeldJan()) return;
@@ -1815,6 +1824,7 @@
                 _keepaCache[key] = { title: top.title, asin: top.asin, category: top.category || '', newPrice: null, salesRank: null, monthlySold: null, monthlySoldType: null };
                 _renderKeepa(key);
                 syncCurrent(); // ASIN確定 → 自動保存済み行を更新
+                dbgClose(); // Keepa取得成功（詳細取得失敗も検索結果ベースで補完）→ 閉じる
               });
           })
           .catch(function(e) {
@@ -2985,6 +2995,7 @@
             html += '<br><span class="ai-badge ai-hi">自動保存済み</span>売価・原価は後から入力できます（履歴へ反映）';
           }
           $('aiStatus').innerHTML = html;
+          dbgClose(); // AI認識成功 → デバッグパネルを閉じる（エラー/未開封時は開いたまま）
           setCropCollapsed(true); // 認識できたら画像を畳んで判定結果を近づける（トグルで再表示可）
         })
         .catch(function (e) {
@@ -3973,10 +3984,10 @@
         var _km = e.keepa;
         if (_km) {
           var _kParts = [];
-          if (_km.salesRank != null) _kParts.push('ランキング ' + _km.salesRank.toLocaleString('ja-JP') + '位');
-          if (_km.monthlySold != null && _km.monthlySoldType === 'units') _kParts.push('月販 ' + _km.monthlySold.toLocaleString('ja-JP') + '個');
-          else if (_km.monthlySold != null) _kParts.push('ドロップ ' + _km.monthlySold.toLocaleString('ja-JP') + '回/月');
-          var _kRankLine = _kParts.length ? '<span class="keepa-rank-line">' + esc(_kParts.join(' ・ ')) + '</span>' : '';
+          if (_km.salesRank != null) _kParts.push('🏆' + _km.salesRank.toLocaleString('ja-JP') + '位');
+          if (_km.monthlySold != null && _km.monthlySoldType === 'units') _kParts.push('📦' + _km.monthlySold.toLocaleString('ja-JP') + '/月');
+          else if (_km.monthlySold != null) _kParts.push('⬇' + _km.monthlySold.toLocaleString('ja-JP') + '/月');
+          var _kRankLine = _kParts.length ? '<span class="keepa-rank-line">' + esc(_kParts.join('　')) + '</span>' : '';
           var _kCatLine  = _km.category ? '<span class="keepa-cat-line">' + esc(_km.category) + '</span>' : '';
           if (_kRankLine || _kCatLine) keepaMetaHtml = '<div class="hist-keepa-meta">' + _kRankLine + _kCatLine + '</div>';
         }
