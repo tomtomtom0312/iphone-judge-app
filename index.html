@@ -1827,6 +1827,8 @@
     var _aiSearchKw = '';       // AI認識のsearchKw（productName失敗時の2nd try用）
     var _janNotFound = false;   // JAN検出が「未検出」と確定したフラグ
     var _userSetCategory = false; // ユーザーが手動でカテゴリを変更した場合true（AI自動反映を抑制）
+    var _memoUserTouched = false; // ユーザーが商品名欄を直接入力済みtrue（AI/Keepa自動反映を抑制）
+    var _kwUserTouched   = false; // ユーザーが検索KW欄を直接入力済みtrue（AI/Keepa自動反映を抑制）
 
     function fetchKeepa(jan) {
       var el = document.getElementById('keepaSuggest');
@@ -2630,7 +2632,7 @@
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false;
       var reader = new FileReader();
       reader.onload = function (ev) {
         var image = new Image();
@@ -2833,7 +2835,7 @@
       // 4. aiStatus / janStatus クリア
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false;
 
       // 5. Keepa / openBD カード
       var ke = $('keepaSuggest');
@@ -3028,7 +3030,11 @@
             var prevCat = currentCategory;
             currentCategory = aiCat;
             $('category').value = currentCategory;
-            if (currentCategory !== prevCat) dbgLog('[AI category] ' + j.category + ' -> ' + categoryLabel(currentCategory));
+            if (currentCategory !== prevCat) {
+              dbgLog('[AI category] ' + j.category + ' -> ' + categoryLabel(currentCategory));
+              $('domFeeRate').value = CATEGORY_DOM_FEE[currentCategory] || 10;
+              compareCalc();
+            }
           }
           currentRank = j.estimatedRank || '';
           currentAi = pickAi(j);
@@ -3048,12 +3054,18 @@
           }
           updateTopJanScanBtn(); // AI認識でカテゴリが変わったら上部JANボタンの表示を同期
 
-          // 商品名（日本語）と検索KW（eBay/メルカリ/スニダン向け英語優先）を自動入力（後から上書き可能）
-          $('memo').value = composeName(j);
-          if ($('searchKw')) $('searchKw').value = (j.searchKw || '').trim();
-          // Keepa name fallback 用に保持（JAN未検出が確定済みなら即検索、未確定なら onJanNotFound から起動）
+          // 商品名・検索KW：手入力済みでなければAI結果を反映（手入力優先。Keepa/OpenBDはAI未入力分のみ補完）
           _aiProductName = j.productName || '';
           _aiSearchKw = (j.searchKw || '').trim();
+          var _aiComposedName = composeName(j);
+          if (_aiComposedName && !_memoUserTouched) {
+            $('memo').value = _aiComposedName;
+            dbgLog('[AI memo] ' + _aiComposedName.slice(0, 40));
+          }
+          if (_aiSearchKw && !_kwUserTouched && $('searchKw')) {
+            $('searchKw').value = _aiSearchKw;
+            dbgLog('[AI searchKw] ' + _aiSearchKw.slice(0, 40));
+          }
           if (_janNotFound && !getHeldJan()) tryKeepaByName(_aiProductName, _aiSearchKw);
 
           // 推定ランクを状態セレクトへ反映（無ければ現状維持）
@@ -3659,6 +3671,9 @@
     ['memo', 'searchKw'].forEach(function (id) {
       $(id).addEventListener('input', refreshAmzCatGuess);
     });
+    // ユーザーが直接入力した場合のみフラグをセット（コードからの書き込みは e.isTrusted=false なので除外）
+    $('memo').addEventListener('input',     function(e) { if (e.isTrusted) _memoUserTouched = true; });
+    $('searchKw').addEventListener('input', function(e) { if (e.isTrusted) _kwUserTouched   = true; });
 
     // 履歴カード用：保存済みエントリから国内/eBay比較を算出（compareCalc と同一式・同一しきい値）。
     // eBay利益は保存済み e.profit を流用（カードの利益表示と一致）。国内データ無し/ドラフトは null＝未計算。
