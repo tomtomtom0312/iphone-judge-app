@@ -1063,6 +1063,28 @@
     function categoryLabel(v) { return CATEGORIES[v] || 'その他'; }
     function normCategory(v) { return CATEGORIES[v] ? v : 'other'; }
 
+    // Keepaカテゴリ文字列 → セトリーナカテゴリキー（マッチしない場合は ''）
+    function keepaCatToStolyCategory(keepaCat) {
+      if (!keepaCat) return '';
+      if (/トレーディングカード|ブースターパック/.test(keepaCat)) return 'trading_card_box';
+      if (/^おもちゃ.*ゲーム/.test(keepaCat)) return 'trading_card_box'; // おもちゃ > ゲーム 経路
+      if (/フィギュア/.test(keepaCat)) return 'figure';
+      if (/本|コミック|雑誌/.test(keepaCat)) return 'book';
+      if (/ゲームソフト|ゲーム機|家庭用ゲーム/.test(keepaCat)) return 'game_software';
+      return '';
+    }
+    // _userSetCategoryを考慮してカテゴリを自動反映する共通ヘルパー
+    function applyCategoryIfAllowed(cat, logPrefix, logSrc) {
+      if (_userSetCategory || !cat || cat === 'other') return;
+      var prev = currentCategory;
+      currentCategory = cat;
+      $('category').value = cat;
+      if (cat !== prev) {
+        dbgLog('[' + logPrefix + '] ' + logSrc + ' -> ' + categoryLabel(cat));
+        onCategoryChange();
+      }
+    }
+
     // AI状態ランク（S/A/B/C/D/ジャンク）→ 既存の商品状態セレクト値へのマッピング
     var RANK_TO_CONDITION = {
       'S': '新品同様', 'A': '美品', 'B': '良品',
@@ -1510,6 +1532,7 @@
     }
     function setHeldJan(v) {
       v = String(v == null ? '' : v).replace(/[ 　]/g, '').trim();
+      if (v) _userSetCategory = false; // 新JAN/ISBN取得 → カテゴリ自動反映を許可
       dbgLog('[setHeldJan] v=' + v);
       var h = document.getElementById('janHolder');
       dbgLog('[setHeldJan] janHolder存在=' + !!h + ' 現在値=' + (h && h.value));
@@ -1521,9 +1544,7 @@
       var cat  = normCategory($('category') && $('category').value);
       dbgLog('[setHeldJan] janKind=' + kind + ' category=' + cat);
       if (kind === 'ISBN' && cat !== 'book') {
-        dbgLog('[setHeldJan] ISBNのためカテゴリをbookに切替');
-        $('category').value = 'book';
-        onCategoryChange();
+        applyCategoryIfAllowed('book', 'OpenBD category', 'ISBN検出');
       }
       dbgLog('[setHeldJan] updateJanNear呼出');
       updateJanNear();
@@ -1901,6 +1922,7 @@
       el.appendChild(card);
       refreshFormSearchIcons(info.asin); // ASIN確定 → K ボタンを有効化
       _currentFormAsin = info.asin || ''; // onSearchClick でJAN経路・name fallback経路共通で使用
+      applyCategoryIfAllowed(keepaCatToStolyCategory(info.category), 'Keepa category', info.category || '(不明)');
       // コピーエリアに ASINコピーを表示
       var caBtn = document.getElementById('copyAsinBtn');
       if (caBtn) caBtn.style.display = '';
