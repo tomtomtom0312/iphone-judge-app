@@ -1974,15 +1974,19 @@
             }
 
             // canvas を指定角度（0/90/180/270）だけ回転した新しい canvas を返す
+            // 任意角度（度数）で回転した canvas を返す。斜め角度でもクリッピングしない
             function rotateCanvas(src, deg) {
               if (!deg) return src;
+              var rad = deg * Math.PI / 180;
+              var sin = Math.abs(Math.sin(rad));
+              var cos = Math.abs(Math.cos(rad));
               var w = src.width, h = src.height;
               var cv = document.createElement('canvas');
-              cv.width  = (deg === 90 || deg === 270) ? h : w;
-              cv.height = (deg === 90 || deg === 270) ? w : h;
+              cv.width  = Math.round(w * cos + h * sin);
+              cv.height = Math.round(w * sin + h * cos);
               var ctx = cv.getContext('2d');
               ctx.translate(cv.width / 2, cv.height / 2);
-              ctx.rotate(deg * Math.PI / 180);
+              ctx.rotate(rad);
               ctx.drawImage(src, -w / 2, -h / 2);
               return cv;
             }
@@ -2105,8 +2109,9 @@
                 dbgImg(cr.canvas, c[0] + ' ' + sl);
                 $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')…</span>';
 
-                // 同期: 0°/180°/90°/270° × カラー + グレー（速い）
-                var ROTS = [0, 180, 90, 270];
+                // 同期: 90°刻み + ±15°/±30°/±45° × カラー + グレー（全て同期・高速）
+                // 90°刻みを先に試し、斜め角度は後半で試す
+                var ROTS = [0, 180, 90, 270, 15, -15, 30, -30, 45, -45];
                 for (var ri = 0; ri < ROTS.length; ri++) {
                   if (committed) return;
                   var rotC = rotateCanvas(cr.canvas, ROTS[ri]);
