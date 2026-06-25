@@ -332,6 +332,15 @@
     .hist-edit { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
     .hist-del { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
+    /* 履歴 状態フィルター */
+    .hist-filter { display:flex; gap:6px; overflow-x:auto; padding:2px 0 8px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .hist-filter::-webkit-scrollbar { display:none; }
+    .hist-filter-btn {
+      flex-shrink:0; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:600;
+      background:transparent; color:var(--muted); border:1px solid var(--line); cursor:pointer;
+    }
+    .hist-filter-btn.active { background:rgba(37,99,235,.18); color:#93c5fd; border-color:rgba(37,99,235,.5); }
+
     /* 履歴カード 状態セレクタ */
     .hist-status-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
     .hist-status-sel {
@@ -812,6 +821,13 @@
         <button class="csv-btn" id="csvBtn">CSV出力</button>
         <button class="clear-btn" id="clearAllBtn">全削除</button>
       </div>
+    </div>
+    <div class="hist-filter" id="histFilter">
+      <button class="hist-filter-btn active" data-filter="">すべて</button>
+      <button class="hist-filter-btn" data-filter="未確認">未確認</button>
+      <button class="hist-filter-btn" data-filter="仕入れ候補">候補</button>
+      <button class="hist-filter-btn" data-filter="仕入れ済み">仕入れ済み</button>
+      <button class="hist-filter-btn" data-filter="スルー">スルー</button>
     </div>
     <div id="histList"></div>
     <p class="hint" id="histEmpty">まだ履歴がありません。判定後に「履歴に保存」を押すと、ここに残ります。</p>
@@ -3719,6 +3735,20 @@
         : '';
     }
 
+    // 履歴フィルター（'' = すべて。STATUS_OPTS のいずれかで絞り込み）
+    var histFilterVal = '';
+    (function () {
+      var btns = document.querySelectorAll('#histFilter .hist-filter-btn');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function () {
+          histFilterVal = this.getAttribute('data-filter');
+          for (var j = 0; j < btns.length; j++) btns[j].classList.remove('active');
+          this.classList.add('active');
+          renderHistory();
+        });
+      }
+    })();
+
     var STATUS_OPTS = ['未確認', '仕入れ候補', '仕入れ済み', 'スルー'];
     function statusSelHtml(id, current) {
       var st = (current && STATUS_OPTS.indexOf(current) >= 0) ? current : '未確認';
@@ -3734,8 +3764,15 @@
     function renderHistory() {
       var list = getHistory();
       $('histCount').textContent = '(' + list.length + ' / ' + MAX_HIST + ')';
-      $('histEmpty').style.display = list.length ? 'none' : 'block';
-      var html = list.map(function (e) {
+      // フィルター適用（'' = すべて。未設定エントリは「未確認」扱い）
+      var filtered = histFilterVal
+        ? list.filter(function(e) {
+            var st = (e.attrs && e.attrs.status) || '未確認';
+            return st === histFilterVal;
+          })
+        : list;
+      $('histEmpty').style.display = filtered.length ? 'none' : 'block';
+      var html = filtered.map(function (e) {
         var draft = e.draft || e.profit == null;   // 売価未入力のドラフト
         var sym = e.symbol || '$';                 // 旧データ互換
         var img = e.photo
@@ -3884,7 +3921,7 @@
       for (var cb = 0; cb < copies.length; cb++) {
         copies[cb].addEventListener('click', onCopyClick);
       }
-      // 状態セレクタ配線（change で localStorage 更新のみ・DOM 再描画なし）
+      // 状態セレクタ配線（フィルター中は変更後に再描画してカードを自然に消す）
       var stSels = $('histList').querySelectorAll('.hist-status-sel');
       for (var ss = 0; ss < stSels.length; ss++) {
         stSels[ss].addEventListener('click', function(ev) { ev.stopPropagation(); });
@@ -3893,6 +3930,7 @@
           var v = this.value;
           this.setAttribute('data-status', v);
           setEntryStatus(this.getAttribute('data-id'), v);
+          if (histFilterVal) renderHistory(); // フィルター中は再描画
         });
       }
 
