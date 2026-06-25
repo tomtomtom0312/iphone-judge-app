@@ -456,6 +456,7 @@
     .jan-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 92vw; min-width: 220px; padding: 14px 22px; border-radius: 12px; color: #fff; font-size: 16px; font-weight: 700; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; cursor: pointer; }
     .jan-toast.is-success { background: #16a34a; }
     .jan-toast.is-fail { background: #ea580c; }
+    .jan-toast.is-info { background: #2563eb; }
     /* 相場検索の丸アイコンボタン（常時表示・横並び・折り返し可）。正式ロゴは使わず自作の文字アイコン。aria-label/title でサイト名を補う */
     .search-icons { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
     .search-icon { width: 42px; height: 42px; border-radius: 50%; border: 1px solid #d0d0d0; background: #fff; color: #111; font-size: 17px; font-weight: 800; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
@@ -467,6 +468,7 @@
     .search-icon.site-ebay     { background: #2e7d32; color: #fff; border-color: #2e7d32; }
     .search-icon.site-snkrdunk { background: #6d28d9; color: #fff; border-color: #6d28d9; }
     .search-icon.site-keepa    { background: #f97316; color: #fff; border-color: #f97316; }
+    .search-icon.site-keepa-disabled { background: #555; color: #999; border-color: #555; cursor: default; }
     .section-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
     .memo-tag {
       font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -624,7 +626,7 @@
     <!-- 商品名近くの JAN/ISBN ミラー表示（janHolder の値を表示）。単品モードでは常に表示（カテゴリ非依存） -->
     <div class="field" id="janNear" style="display:none; margin-bottom:8px;">
       <span class="section-label" style="margin:0;">JAN/ISBN：<span id="janNearVal">未取得</span></span>
-      <button type="button" id="copyJanNearBtn" class="hist-copy-btn">JANコピー</button>
+      <!-- JANコピーは下のコピーエリア（#copyJanBtn）に統合 -->
       <!-- JAN取得済みのときだけ表示する使い方ガイド（updateJanNear で表示切替）。文言のみ・処理には非依存 -->
       <p class="hint" id="janUsageHint" style="display:none; margin:6px 0 0;">JAN取得済み：Amazon検索・JANコピーに使えます。他サイトは商品名/検索KWが空ならJANで検索します。</p>
       <!-- カテゴリ候補（Step1・APIなし）：978/979(ISBN)かつカテゴリ未選択（その他）のときだけ表示。タップでカテゴリ反映（自動反映しない） -->
@@ -637,10 +639,12 @@
       <!-- Keepa商品候補カード（JAN・ISBN全ジャンル対象。キーはVercel API route経由。中古価格は表示しない） -->
       <div id="keepaSuggest" style="display:none;"></div>
     </div>
-    <!-- コピー導線：各サイトの検索欄へ貼り付け用（商品名／検索キーワード）。空値は壊さない -->
-    <div class="field" style="margin-bottom:8px;">
+    <!-- コピー導線：商品名・検索KW・JAN/ISBN（取得時のみ）・ASIN（取得時のみ）をまとめて表示。折り返しOK -->
+    <div class="field" style="margin-bottom:8px; display:flex; flex-wrap:wrap; gap:8px;">
       <button type="button" id="copyMemoBtn" class="hist-copy-btn">商品名コピー</button>
       <button type="button" id="copyKwBtn" class="hist-copy-btn">検索KWコピー</button>
+      <button type="button" id="copyJanBtn" class="hist-copy-btn" style="display:none;">JANコピー</button>
+      <button type="button" id="copyAsinBtn" class="hist-copy-btn" style="display:none;">ASINコピー</button>
     </div>
     <!-- 相場検索アイコン（常時表示・丸ボタン）。検索語の優先順は既存 onSearchClick を流用（AmazonはJAN優先、他は検索KW→商品名→JAN） -->
     <div class="field" style="margin-bottom:8px;">
@@ -1529,9 +1533,12 @@
       var shown = jan ? (kind ? jan + '（' + kind + '）' : jan) : '未取得';
       dbgLog('[updateJanNear] 表示=' + shown);
       document.getElementById('janNearVal').textContent = shown;
-      // 本・漫画カテゴリのとき「JANコピー」→「ISBNコピー」に切り替え
-      var copyJanBtn = document.getElementById('copyJanNearBtn');
-      if (copyJanBtn) copyJanBtn.textContent = (cat === 'book') ? 'ISBNコピー' : 'JANコピー';
+      // コピーエリアの JANコピーボタン：JAN取得済みのみ表示・本・漫画時は「ISBNコピー」に切替
+      var copyJanAreaBtn = document.getElementById('copyJanBtn');
+      if (copyJanAreaBtn) {
+        copyJanAreaBtn.textContent = (cat === 'book') ? 'ISBNコピー' : 'JANコピー';
+        copyJanAreaBtn.style.display = jan ? '' : 'none';
+      }
       var fabCopyJan = document.getElementById('fabCopyJanBtn');
       if (fabCopyJan) fabCopyJan.textContent = '📋 ' + ((cat === 'book') ? 'ISBNコピー' : 'JANコピー');
       wrap.style.display = '';
@@ -1775,14 +1782,6 @@
       asinSpan.style.cssText = 'font-size:12px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
       asinSpan.textContent = 'ASIN: ' + info.asin;
       asinRow.appendChild(asinSpan);
-      var copyBtn = document.createElement('button');
-      copyBtn.type = 'button';
-      copyBtn.className = 'keepa-copy-asin';
-      copyBtn.textContent = 'ASINコピー';
-      (function(asin) {
-        copyBtn.onclick = function() { copyTextWithToast(asin, 'ASIN'); };
-      }(info.asin));
-      asinRow.appendChild(copyBtn);
       card.appendChild(asinRow);
       // メタ情報（カテゴリ・新品最安値・ランキング・月間ドロップ数）
       var metaEl = document.createElement('div');
@@ -1820,7 +1819,10 @@
       }(info.title));
       card.appendChild(applyBtn);
       el.appendChild(card);
-      refreshFormSearchIcons(info.asin); // ASIN確定 → 丸ボタン行に Keepa ボタンを追加
+      refreshFormSearchIcons(info.asin); // ASIN確定 → K ボタンを有効化
+      // コピーエリアに ASINコピーを表示
+      var caBtn = document.getElementById('copyAsinBtn');
+      if (caBtn) caBtn.style.display = '';
     }
 
     // AI認識結果から JAN/ISBN らしき番号を拾う（jan/barcode/isbn/code を許容）。8/10/13桁を採用、12桁(UPC-A)は先頭0で13桁化。該当なしは ''
@@ -2666,8 +2668,10 @@
       var jnw = document.getElementById('janNear');
       if (jnw) jnw.style.display = '';  // wrap は表示のまま（「未取得」を見せる）
 
-      // 9. 丸アイコン行を ASIN なし状態にリセット（Keepa ボタンを除去）
+      // 9. 丸アイコン行を ASIN なし状態にリセット（K ボタンをグレーに）。ASINコピーも非表示
       refreshFormSearchIcons('');
+      var caBtn2 = document.getElementById('copyAsinBtn');
+      if (caBtn2) caBtn2.style.display = 'none';
     }
     $('fabClearBtn').addEventListener('click', function () { closeFabMenu(); clearCurrentForm(); });
     $('fabReloadBtn').addEventListener('click', function () { window.location.reload(); });
@@ -3484,7 +3488,7 @@
     // 手動カテゴリ選択（写真なしでも可）：補助項目を切替（既存入力＞AI生値で初期化）。編集モーダルの onEditCategoryChange と同作法
     // JANコピーボタンの文言を現在のカテゴリに合わせて直接更新（book→ISBNコピー、その他→JANコピー）
     function syncCopyJanBtnLabel() {
-      var cb = $('copyJanNearBtn');
+      var cb = $('copyJanBtn');
       if (cb) cb.textContent = (normCategory($('category').value) === 'book') ? 'ISBNコピー' : 'JANコピー';
     }
     function onCategoryChange() {
@@ -4252,12 +4256,14 @@
       { key: 'amazon', label: 'Amazon', icon: 'a', windowName: 'shumi_amazon', preferJan: true,
         asinUrl: function(a) { return 'https://www.amazon.co.jp/dp/' + a; },
         url: function (k) { return 'https://www.amazon.co.jp/s?k=' + k; } },
+      // メルカリ: 検索KW → 商品名 → JAN/ISBN（janFallback）。JANより商品名・KW検索の方がヒットしやすいため
       { key: 'mercari', label: 'メルカリ', icon: 'メ', windowName: 'shumi_mercari', janFallback: true,
         url: function (k) { return 'https://jp.mercari.com/search?keyword=' + k; } },
       // Google は COOP: same-origin-allow-popups のため、別タブだとタブ名再利用が効かず押すたびにタブが増える。
       // 回避策として sameTab=true → 現在のタブで開く（タブは増えない／ブラウザの「戻る」でアプリへ復帰）。
       { key: 'google', label: 'Google', icon: 'G', windowName: 'shumi_google', sameTab: true, janFallback: true,
         url: function (k) { return 'https://www.google.com/search?q=' + k; } },
+      // eBay: 検索KW → 商品名 → JAN/ISBN（janFallback）。JANより英語商品名・型番検索の方が実用的
       { key: 'ebay', label: 'eBay Sold', icon: 'e', windowName: 'shumi_ebay', janFallback: true,
         url: function (k) { return 'https://www.ebay.com/sch/i.html?_nkw=' + k + '&LH_Sold=1&LH_Complete=1'; } },
       // スニダンは検索KW→商品名を優先。両方空なら JAN/ISBN をフォールバック利用（janFallback）。検索URLは keyword 形式（snkrdunk.com/search?keyword=）
@@ -4282,14 +4288,15 @@
       var iconEl = $('searchIcons');
       if (!iconEl) return;
       iconEl.innerHTML = searchIconsHtml('search-icon');
-      if (asin) {
-        var kBtn = document.createElement('button');
-        kBtn.type = 'button'; kBtn.className = 'search-icon site-keepa';
-        kBtn.setAttribute('data-site', 'keepa');
-        kBtn.setAttribute('aria-label', 'Keepaで価格確認'); kBtn.setAttribute('title', 'Keepaで価格確認');
-        kBtn.textContent = 'K';
-        iconEl.appendChild(kBtn);
-      }
+      // K ボタンは常時表示。ASIN なし → グレー＋タップでトースト / ASIN あり → 有効
+      var kBtn = document.createElement('button');
+      kBtn.type = 'button';
+      kBtn.className = 'search-icon site-keepa' + (asin ? '' : ' site-keepa-disabled');
+      kBtn.setAttribute('data-site', 'keepa');
+      kBtn.setAttribute('aria-label', 'Keepaで価格確認');
+      kBtn.setAttribute('title', asin ? 'Keepaで価格確認' : 'ASIN取得後に有効');
+      kBtn.textContent = 'K';
+      iconEl.appendChild(kBtn);
       var icons = iconEl.querySelectorAll('.search-icon');
       for (var i = 0; i < icons.length; i++) { icons[i].addEventListener('click', onSearchClick); }
     }
@@ -4346,7 +4353,8 @@
         searchWindows[site.windowName] = window.open(u2, site.windowName);
         return;
       } else if (site.asinOnly) {
-        return; // Keepa: ASIN なしでは何もしない
+        showJanToast('ASIN取得後にKeepaを開けます', 'info', 2500);
+        return;
       } else if (site.key === 'amazon' && normCategory($('category').value) === 'book') {
         // 入力フォーム・本・漫画カテゴリ：ISBNがあればISBN優先、なければ検索KW→商品名
         var _heldJan = getHeldJan();
@@ -4422,9 +4430,13 @@
     (function () {
       var mb = $('copyMemoBtn'); if (mb) mb.addEventListener('click', function () { copyTextWithToast($('memo').value, '商品名'); });
       var kb = $('copyKwBtn');   if (kb) kb.addEventListener('click', function () { copyTextWithToast($('searchKw').value, '検索KW'); });
-      var jb = $('copyJanNearBtn'); if (jb) jb.addEventListener('click', function () { // 保持値（カテゴリ非依存）をコピー。ISBN/JAN で文言切り替え
+      var jb = $('copyJanBtn'); if (jb) jb.addEventListener('click', function () {
         var _lbl = (normCategory($('category').value) === 'book') ? 'ISBN' : 'JAN';
         copyTextWithToast(getHeldJan(), _lbl);
+      });
+      var ab = $('copyAsinBtn'); if (ab) ab.addEventListener('click', function () {
+        var _asin = (_keepaCache[getHeldJan()] || {}).asin || '';
+        if (_asin) copyTextWithToast(_asin, 'ASIN');
       });
       // 保持用 janHolder の input（fabスキャンの dispatch 等）で近接表示＋補助項目JAN欄へ同期
       var jh = $('janHolder'); if (jh) jh.addEventListener('input', function () { setHeldJan(jh.value); });
