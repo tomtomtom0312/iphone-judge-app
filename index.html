@@ -530,7 +530,7 @@
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
     <!-- デバッグパネル（原因調査用・後で削除） -->
-    <div id="debugPanel" style="display:none; margin:8px 0; padding:8px; background:#0a0a0a; border:1px solid #f59e0b; border-radius:8px; font-size:11px; font-family:monospace; color:#fcd34d; line-height:1.6; white-space:pre-wrap; word-break:break-all; max-height:220px; overflow-y:auto;"></div>
+    <div id="debugPanel" style="display:none; margin:8px 0; padding:8px; background:#0a0a0a; border:1px solid #f59e0b; border-radius:8px; font-size:11px; font-family:monospace; color:#fcd34d; line-height:1.6; max-height:420px; overflow-y:auto;"></div>
     <div class="crop-stage" id="cropStage" style="display:none;">
       <img id="cropImg" alt="プレビュー" />
       <div class="crop-frame"></div>
@@ -900,13 +900,39 @@
     var $ = function (id) { return document.getElementById(id); };
     var yen = function (n) { return Math.round(n).toLocaleString('ja-JP') + '円'; };
 
-    // デバッグパネル（画面上にログ表示）- 調査完了後に削除
+    // デバッグパネル（画面上にログ＋画像表示）- 調査完了後に削除
     function dbgLog(msg) {
       console.log(msg);
       var panel = document.getElementById('debugPanel');
       if (!panel) return;
       panel.style.display = 'block';
-      panel.textContent += (new Date().toTimeString().slice(0,8)) + ' ' + msg + '\n';
+      var d = document.createElement('div');
+      d.style.cssText = 'font-size:11px;color:#fcd34d;line-height:1.5;white-space:pre-wrap;word-break:break-all;';
+      d.textContent = (new Date().toTimeString().slice(0,8)) + ' ' + msg;
+      panel.appendChild(d);
+      panel.scrollTop = panel.scrollHeight;
+    }
+    // crop 画像をパネルに表示（サムネイル）
+    function dbgImg(srcCanvas, label) {
+      var panel = document.getElementById('debugPanel');
+      if (!panel) return;
+      panel.style.display = 'block';
+      // 表示用に横最大300pxのサムネイルを作る
+      var TH = 48, TW = Math.round(srcCanvas.width * TH / srcCanvas.height);
+      var tc = document.createElement('canvas');
+      tc.width = TW; tc.height = TH;
+      tc.getContext('2d').drawImage(srcCanvas, 0, 0, TW, TH);
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;align-items:center;gap:6px;margin:2px 0;';
+      var lbl = document.createElement('span');
+      lbl.style.cssText = 'font-size:10px;color:#94a3b8;min-width:80px;flex-shrink:0;';
+      lbl.textContent = label;
+      var img = document.createElement('img');
+      img.src = tc.toDataURL('image/jpeg', 0.8);
+      img.style.cssText = 'height:' + TH + 'px;width:' + TW + 'px;border:1px solid #374151;';
+      wrap.appendChild(lbl);
+      wrap.appendChild(img);
+      panel.appendChild(wrap);
       panel.scrollTop = panel.scrollHeight;
     }
 
@@ -1792,9 +1818,7 @@
       return (check === +d.charAt(12)) ? d : '';
     }
 
-    // 静止画JAN検出：写真撮影直後に1回だけ実行。EAN-13/UPC-A を ZXing で探索し
-    // 見つかれば setHeldJan() 経由で既存 Keepa/openBD フローへ自動接続する。
-    // 複数クロップを順番に試して最初に見つかった有効JANを採用する。
+    // 静止画JAN検出：写真撮影直後に1回だけ実行。複数クロップ・複数デコード方式を試す。
     function tryJanFromPhoto(file) {
       try {
         dbgLog('[開始] file=' + (file && file.name) + ' heldJan=' + getHeldJan());
@@ -1810,67 +1834,124 @@
             URL.revokeObjectURL(url);
 
             // クロップ定義: [label, xStart割合, yStart割合, width割合, height割合]
-            // 右20-30%の幅で切り出すと1920pxへの拡大率が2〜3倍になりバーコードが大きくなる
-            // 縦は25%ストリップに分割して上下余白を除去
+            // 全体・半分・四象限でまずバーコードがどの領域にあるか視覚的に確認できるようにする
             var crops = [
-              // 右30%幅 × 縦4分割（約1.6倍拡大）
-              ['右30%-下25%',   0.70, 0.75, 0.30, 0.25],
-              ['右30%-中下25%', 0.70, 0.50, 0.30, 0.25],
-              ['右30%-中上25%', 0.70, 0.25, 0.30, 0.25],
-              ['右30%-上25%',   0.70, 0.00, 0.30, 0.25],
-              // 右20%幅 × 縦4分割（約2.4倍拡大）
-              ['右20%-下25%',   0.80, 0.75, 0.20, 0.25],
-              ['右20%-中下25%', 0.80, 0.50, 0.20, 0.25],
-              ['右20%-中上25%', 0.80, 0.25, 0.20, 0.25],
-              ['右20%-上25%',   0.80, 0.00, 0.20, 0.25],
-              // 中央40%幅 × 縦4分割（約1.2倍拡大）
-              ['中央-下25%',    0.30, 0.75, 0.40, 0.25],
-              ['中央-中下25%',  0.30, 0.50, 0.40, 0.25],
-              ['中央-中上25%',  0.30, 0.25, 0.40, 0.25],
-              ['中央-上25%',    0.30, 0.00, 0.40, 0.25],
-              // フォールバック: 全幅・全体
-              ['全体-下33%',    0.00, 0.67, 1.00, 0.33],
-              ['全体',          0.00, 0.00, 1.00, 1.00],
+              ['全体',     0.00, 0.00, 1.00, 1.00],
+              ['左半分',   0.00, 0.00, 0.50, 1.00],
+              ['右半分',   0.50, 0.00, 0.50, 1.00],
+              ['上半分',   0.00, 0.00, 1.00, 0.50],
+              ['下半分',   0.00, 0.50, 1.00, 0.50],
+              ['左上',     0.00, 0.00, 0.50, 0.50],
+              ['右上',     0.50, 0.00, 0.50, 0.50],
+              ['左下',     0.00, 0.50, 0.50, 0.50],
+              ['右下',     0.50, 0.50, 0.50, 0.50],
+              ['右30%',    0.70, 0.00, 0.30, 1.00],
+              ['右30%下',  0.70, 0.50, 0.30, 0.50],
+              ['左30%',    0.00, 0.00, 0.30, 1.00],
+              ['左30%下',  0.00, 0.50, 0.30, 0.50],
+              ['中央帯',   0.20, 0.30, 0.60, 0.40],
             ];
 
-            // canvas crop → PNG dataURL → tmpImg.onload 待機 → decodeFromImageElement
-            // ※ Safari では dataURL設定直後に decodeFromImageElement を呼ぶと
-            //   waitImageLoad の load リスナーが間に合わないため onload を明示的に待つ
-            function cropAndDecode(reader, c) {
-              return new Promise(function (resolve, reject) {
-                var sx = Math.round(natW * c[1]);
-                var sy = Math.round(natH * c[2]);
-                var sw = Math.max(1, Math.round(natW * c[3]));
-                var sh = Math.max(1, Math.round(natH * c[4]));
-                // 幅基準で拡大（最大3倍・1920px上限）→ バーコードを大きく描画
-                var scale = Math.min(1920 / sw, 1920 / sh, 3);
-                var dw = Math.max(1, Math.round(sw * scale));
-                var dh = Math.max(1, Math.round(sh * scale));
-                var cv2 = document.createElement('canvas');
-                cv2.width = dw; cv2.height = dh;
-                cv2.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
-                // PNG: ロスレスでJPEGアーティファクトなし → バーコードエッジが鮮明
-                var dataUrl = cv2.toDataURL('image/png');
-                var tmpImg = new Image();
-                tmpImg.onload = function () {
-                  // onload 確認後に decode（Safari の非同期 load 対策）
-                  reader.decodeFromImageElement(tmpImg).then(resolve).catch(reject);
-                };
-                tmpImg.onerror = function () { reject(new Error('crop img load error')); };
-                tmpImg.src = dataUrl;
-              });
+            // crop canvas を作成（最大3倍・1920px上限で拡大）
+            function makeCropCanvas(c) {
+              var sx = Math.round(natW * c[1]);
+              var sy = Math.round(natH * c[2]);
+              var sw = Math.max(1, Math.round(natW * c[3]));
+              var sh = Math.max(1, Math.round(natH * c[4]));
+              var scale = Math.min(1920 / sw, 1920 / sh, 3);
+              var dw = Math.max(1, Math.round(sw * scale));
+              var dh = Math.max(1, Math.round(sh * scale));
+              var cv = document.createElement('canvas');
+              cv.width = dw; cv.height = dh;
+              cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+              return { canvas: cv, scale: scale, dw: dw, dh: dh };
+            }
+
+            // グレースケール+コントラスト引き伸ばし版を作成（min/max stretch）
+            function toGrayCanvas(src) {
+              var gc = document.createElement('canvas');
+              gc.width = src.width; gc.height = src.height;
+              var ctx = gc.getContext('2d');
+              ctx.drawImage(src, 0, 0);
+              var id = ctx.getImageData(0, 0, gc.width, gc.height);
+              var d = id.data;
+              var mn = 255, mx = 0;
+              var gs = new Uint8Array(d.length >> 2);
+              for (var i = 0; i < d.length; i += 4) {
+                var g = (0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]) | 0;
+                gs[i >> 2] = g;
+                if (g < mn) mn = g;
+                if (g > mx) mx = g;
+              }
+              var rng = mx - mn || 1;
+              for (var j = 0; j < gs.length; j++) {
+                var v = Math.min(255, ((gs[j] - mn) * 255 / rng) | 0);
+                d[j*4] = d[j*4+1] = d[j*4+2] = v;
+              }
+              ctx.putImageData(id, 0, 0);
+              return gc;
             }
 
             $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing読込中…</span>';
             loadZXing().then(function (ZX) {
               dbgLog('[ZXingロード完了]');
               var hints = new Map();
-              hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,
-                [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A]);
+              hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
+                ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A,
+                ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.EAN_8
+              ]);
               hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-              var reader = new ZX.BrowserMultiFormatReader(hints, 150);
 
-              // クロップを順番に試す（再帰）
+              // 同期デコード: MultiFormatReader → BinaryBitmap → HTMLCanvasElementLuminanceSource
+              var hasSyncApi = !!(ZX.HTMLCanvasElementLuminanceSource && ZX.HybridBinarizer
+                                  && ZX.BinaryBitmap && ZX.MultiFormatReader);
+              dbgLog('[同期API] ' + (hasSyncApi ? '利用可' : '非対応'));
+              function syncDecode(canvas) {
+                if (!hasSyncApi) return null;
+                try {
+                  var lum = new ZX.HTMLCanvasElementLuminanceSource(canvas);
+                  var bmp = new ZX.BinaryBitmap(new ZX.HybridBinarizer(lum));
+                  var mfr = new ZX.MultiFormatReader();
+                  mfr.setHints(hints);
+                  return mfr.decode(bmp);
+                } catch (e) { return null; }
+              }
+
+              // 非同期デコード: canvas → PNG dataURL → tmpImg.onload → decodeFromImageElement
+              var reader = new ZX.BrowserMultiFormatReader(hints, 150);
+              function asyncDecode(canvas) {
+                return new Promise(function (resolve, reject) {
+                  var tmpImg = new Image();
+                  tmpImg.onload = function () {
+                    reader.decodeFromImageElement(tmpImg).then(resolve).catch(reject);
+                  };
+                  tmpImg.onerror = function () { reject(new Error('img load error')); };
+                  tmpImg.src = canvas.toDataURL('image/png');
+                });
+              }
+
+              // text → 有効 JAN か null
+              function extractJan(result) {
+                if (!result) return null;
+                var raw = String(result.text || '').replace(/[^0-9]/g, '');
+                return normalizeJan(raw) || null;
+              }
+
+              // JAN 確定→ UI 反映・Keepa 呼出
+              function commitJan(jan, label) {
+                dbgLog('[JAN確定] ' + jan + ' (' + label + ')');
+                var jh = document.getElementById('janHolder');
+                if (jh) jh.value = jan;
+                var jnv = document.getElementById('janNearVal');
+                var jnw = document.getElementById('janNear');
+                if (jnv) jnv.textContent = jan;
+                if (jnw) jnw.style.display = '';
+                setHeldJan(jan);
+                if (janKind(jan) !== 'ISBN') fetchKeepa(jan);
+                $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
+                  + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + label + '）';
+              }
+
               function tryNext(i) {
                 if (i >= crops.length) {
                   dbgLog('[全クロップ失敗] ' + crops.length + '領域で未検出');
@@ -1878,25 +1959,27 @@
                   return;
                 }
                 var c = crops[i];
-                dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0]);
+                var cr = makeCropCanvas(c);
+                var sizeLabel = cr.dw + 'x' + cr.dh + '(' + cr.scale.toFixed(1) + 'x)';
+                dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0] + ' ' + sizeLabel);
+                // crop 画像をデバッグパネルに表示（ZXingに渡している画像を確認）
+                dbgImg(cr.canvas, c[0] + ' ' + sizeLabel);
                 $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')…</span>';
-                cropAndDecode(reader, c).then(function (result) {
-                  var raw = String(result.text || '').replace(/[^0-9]/g, '');
-                  var jan = normalizeJan(raw);
-                  dbgLog('[decode] ' + c[0] + ' text=' + result.text + ' jan=' + jan);
-                  if (!jan) { tryNext(i + 1); return; } // チェックサムNG → 次へ
-                  // JAN確定
-                  dbgLog('[JAN確定] ' + jan + ' (' + c[0] + ')');
-                  var jh = document.getElementById('janHolder');
-                  if (jh) jh.value = jan;
-                  var jnv = document.getElementById('janNearVal');
-                  var jnw = document.getElementById('janNear');
-                  if (jnv) jnv.textContent = jan;
-                  if (jnw) jnw.style.display = '';
-                  setHeldJan(jan);
-                  if (janKind(jan) !== 'ISBN') fetchKeepa(jan);
-                  $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
-                    + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + c[0] + '）';
+
+                // 1. 同期デコード（カラー）
+                var jan = extractJan(syncDecode(cr.canvas));
+                if (jan) { commitJan(jan, c[0] + '/sync'); return; }
+
+                // 2. 同期デコード（グレースケール+コントラスト強調）
+                jan = extractJan(syncDecode(toGrayCanvas(cr.canvas)));
+                if (jan) { commitJan(jan, c[0] + '/sync-gray'); return; }
+
+                // 3. 非同期 decodeFromImageElement（カラー）
+                asyncDecode(cr.canvas).then(function (result) {
+                  var jan = extractJan(result);
+                  dbgLog('[async] ' + c[0] + ' text=' + (result && result.text) + ' jan=' + jan);
+                  if (jan) { commitJan(jan, c[0] + '/async'); return; }
+                  tryNext(i + 1);
                 }).catch(function (e) {
                   dbgLog('[miss] ' + c[0] + ' ' + (e && (e.name || e.message)));
                   tryNext(i + 1);
