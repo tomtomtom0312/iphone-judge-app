@@ -3987,9 +3987,7 @@
           if (_km.salesRank != null) _kParts.push('🏆' + _km.salesRank.toLocaleString('ja-JP') + '位');
           if (_km.monthlySold != null && _km.monthlySoldType === 'units') _kParts.push('📦' + _km.monthlySold.toLocaleString('ja-JP') + '/月');
           else if (_km.monthlySold != null) _kParts.push('⬇' + _km.monthlySold.toLocaleString('ja-JP') + '/月');
-          var _kRankLine = _kParts.length ? '<span class="keepa-rank-line">' + esc(_kParts.join('　')) + '</span>' : '';
-          var _kCatLine  = _km.category ? '<span class="keepa-cat-line">' + esc(_km.category) + '</span>' : '';
-          if (_kRankLine || _kCatLine) keepaMetaHtml = '<div class="hist-keepa-meta">' + _kRankLine + _kCatLine + '</div>';
+          if (_kParts.length) keepaMetaHtml = '<div class="hist-keepa-meta"><span class="keepa-rank-line">' + esc(_kParts.join('　')) + '</span></div>';
         }
 
         // 相場確認アイコン：履歴の検索KW/商品名/JANから生成。優先順は onSearchClick が data-* を見て決定（AmazonはJAN優先、他はKW→商品名→JAN）。いずれも空なら非表示
