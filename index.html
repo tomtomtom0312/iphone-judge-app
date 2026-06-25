@@ -104,6 +104,10 @@
     .ai-hi { background: rgba(22,163,74,.18); color: #4ade80; }
     .ai-mid { background: rgba(217,119,6,.18); color: #fbbf24; }
     .ai-lo { background: rgba(220,38,38,.18); color: #f87171; }
+    /* 折りたたみトグルボタン共通（AI/取得結果・補助項目） */
+    .collapse-toggle { display:block; width:100%; text-align:left; background:none; border:none; padding:4px 0; font-size:13px; color:var(--muted); cursor:pointer; user-select:none; -webkit-user-select:none; }
+    .collapse-toggle:hover { color:var(--text); }
+    .collapse-content { margin-top:6px; }
 
     /* 主要入力（写真直下・現場で最初に入力する項目） */
     .primary-card { border-color: var(--accent); }
@@ -581,8 +585,13 @@
     <button class="ai-btn" id="aiBtn" style="display:none;" disabled>🤖 この位置でAI認識</button>
     <button class="ai-btn" id="cropReadjust" style="display:none;">🔓 画像位置を再調整</button>
     <button class="ai-btn" id="cropToggle" style="display:none;">🖼 画像を隠す</button>
-    <div class="ai-status" id="aiStatus"></div>
-    <div class="jan-status-line" id="janStatus"></div>
+    <div id="aiDetailPanel">
+      <button type="button" id="aiDetailToggle" class="collapse-toggle">▶ AI/取得結果</button>
+      <div id="aiDetailContent" class="collapse-content" style="display:none;">
+        <div class="ai-status" id="aiStatus"></div>
+        <div class="jan-status-line" id="janStatus"></div>
+      </div>
+    </div>
   </div>
 
   <!-- 連続撮影パネル（連続モードのみ表示） -->
@@ -719,16 +728,17 @@
     <p class="hint" id="aiHint">💡 Phase 2予定：写真から商品名・売価を自動入力（手入力で上書き可）。</p>
   </div>
 
-  <!-- カテゴリ別補助項目（相場検索ブロックは上の主要入力カードへ移動済み） -->
-  <div class="card single-only">
-    <div id="attrsBox" class="attrs-box"></div>
-  </div>
-
-  <!-- 音声で商品入力（iPhone標準キーボードのマイクで話して補助項目を一括反映） -->
-  <div class="card single-only" id="voiceInputCard">
-    <p class="section-label" style="margin-bottom:8px;">🎙 音声で商品入力</p>
-    <textarea id="voiceInputArea" rows="3" placeholder="例：ONE PIECE 1巻 初版 帯あり シュリンクあり 特典トレカ 9784088704166" style="margin-bottom:8px;"></textarea>
-    <button type="button" id="voiceApplyBtn" style="width:100%; padding:10px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-size:15px; font-weight:600; cursor:pointer;">音声入力を反映</button>
+  <!-- 補助項目・音声入力（折りたたみ） -->
+  <div class="card single-only" id="attrsVoiceCard">
+    <button type="button" id="attrsVoiceToggle" class="collapse-toggle">▶ 補助項目・音声入力</button>
+    <div id="attrsVoiceContent" class="collapse-content" style="display:none;">
+      <div id="attrsBox" class="attrs-box"></div>
+      <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--line);">
+        <p class="section-label" style="margin-bottom:8px;">🎙 音声で商品入力</p>
+        <textarea id="voiceInputArea" rows="3" placeholder="例：ONE PIECE 1巻 初版 帯あり シュリンクあり 特典トレカ 9784088704166" style="margin-bottom:8px;"></textarea>
+        <button type="button" id="voiceApplyBtn" style="width:100%; padding:10px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-size:15px; font-weight:600; cursor:pointer;">音声入力を反映</button>
+      </div>
+    </div>
   </div>
 
   <!-- 結果 -->
@@ -1473,6 +1483,42 @@
     var _openBdCache = {};      // isbn → { title, author, publisher, pubdate, isbn } または null（未収録）
     var _openBdLastIsbn = '';   // 現在フェッチ中 or 最後に表示した ISBN（重複リクエスト防止）
     var _currentBookInfo = null; // _renderOpenBd が最後に表示した書籍情報（buildCurrentEntry で参照。非ISBN/未取得は null）
+    var _aiConfidence = 0; // AI認識の確信度（折りたたみサマリー用。0=未実行）
+
+    // AI/取得結果パネルのサマリー行を更新（折りたたみ状態に合わせて ▶/▼ + 要約テキスト）
+    function refreshAiSummary() {
+      var toggle = document.getElementById('aiDetailToggle');
+      var content = document.getElementById('aiDetailContent');
+      if (!toggle || !content) return;
+      var isOpen = content.style.display !== 'none';
+      var parts = [];
+      if (_aiConfidence > 0) parts.push('AI' + Math.round(_aiConfidence * 100) + '%');
+      var jan = getHeldJan();
+      if (jan) {
+        parts.push('JANあり');
+        var kd = _keepaCache[jan] || _keepaCache['__name__' + jan];
+        if (kd && kd.title) parts.push('Keepa補完済み');
+      } else if (_janNotFound) {
+        parts.push('JAN未検出');
+      }
+      toggle.textContent = (isOpen ? '▼' : '▶') + ' AI/取得結果' + (parts.length ? '　' + parts.join('・') : '');
+    }
+
+    // 補助項目・音声入力パネルのサマリー行を更新
+    function refreshAttrsSummary() {
+      var toggle = document.getElementById('attrsVoiceToggle');
+      var content = document.getElementById('attrsVoiceContent');
+      if (!toggle || !content) return;
+      var isOpen = content.style.display !== 'none';
+      var parts = [categoryLabel(currentCategory)];
+      var jan = getHeldJan();
+      if (currentCategory === 'book') {
+        if (jan && /^97[89]/.test(jan)) parts.push('ISBNあり');
+        var vol = (currentAttrs || {}).volume || '';
+        if (vol) parts.push(vol + '巻');
+      }
+      toggle.textContent = (isOpen ? '▼' : '▶') + ' 補助項目・音声入力　' + parts.join(' / ');
+    }
 
     function ensureJanCamOverlay() {
       if (_janCam) return _janCam;
@@ -1687,6 +1733,8 @@
           _keepaLastJan = '';
         }
       }
+      refreshAiSummary();
+      refreshAttrsSummary();
     }
 
     // openBDタイトルから巻数を抽出。1〜99のみ採用（年号・大号数の誤検知排除）。「第N巻」は明示的なので範囲外も許容
@@ -1816,6 +1864,7 @@
         if (kwEl   && !_kwUserTouched)   { kwEl.value   = info.title; obFilled = true; }
         if (obFilled) { dbgLog('[OpenBD title] 商品名・検索KWに反映（AI上書き可）'); refreshAmzCatGuess(); }
       }
+      refreshAttrsSummary(); // OpenBD取得後に巻数などがセットされるのでサマリーを更新
     }
 
     // Keepa API: JAN → 商品名/ASIN/カテゴリ/新品最安値/ランキング/月間販売数
@@ -1989,6 +2038,7 @@
       // コピーエリアに ASINコピーを表示
       var caBtn = document.getElementById('copyAsinBtn');
       if (caBtn) caBtn.style.display = '';
+      refreshAiSummary(); // Keepa補完済みをサマリーへ反映
     }
 
     // AI認識結果から JAN/ISBN らしき番号を拾う（jan/barcode/isbn/code を許容）。8/10/13桁を採用、12桁(UPC-A)は先頭0で13桁化。該当なしは ''
@@ -2632,7 +2682,7 @@
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false; _aiConfidence = 0;
       var reader = new FileReader();
       reader.onload = function (ev) {
         var image = new Image();
@@ -2835,7 +2885,7 @@
       // 4. aiStatus / janStatus クリア
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false; _aiConfidence = 0;
 
       // 5. Keepa / openBD カード
       var ke = $('keepaSuggest');
@@ -2955,6 +3005,19 @@
       var text = ($('voiceInputArea').value || '').trim();
       if (!text) return;
       applyVoiceInput(text);
+    });
+
+    // 折りたたみトグル：AI/取得結果
+    $('aiDetailToggle').addEventListener('click', function () {
+      var c = $('aiDetailContent');
+      c.style.display = c.style.display !== 'none' ? 'none' : '';
+      refreshAiSummary();
+    });
+    // 折りたたみトグル：補助項目・音声入力
+    $('attrsVoiceToggle').addEventListener('click', function () {
+      var c = $('attrsVoiceContent');
+      c.style.display = c.style.display !== 'none' ? 'none' : '';
+      refreshAttrsSummary();
     });
 
     // --- AI商品認識（サーバーレス関数 /api/recognize 経由。APIキーはフロントに無し） ---
@@ -3090,6 +3153,7 @@
             html += '<br><span class="ai-badge ai-hi">自動保存済み</span>売価・原価は後から入力できます（履歴へ反映）';
           }
           $('aiStatus').innerHTML = html;
+          _aiConfidence = c; refreshAiSummary(); // サマリーに確信度を反映
           dbgClose(); // AI認識成功 → デバッグパネルを閉じる（エラー/未開封時は開いたまま）
           setCropCollapsed(true); // 認識できたら画像を畳んで判定結果を近づける（トグルで再表示可）
         })
@@ -3734,6 +3798,7 @@
       compareCalc();
       refreshAmzCatGuess(); // 上の商品カテゴリの変更をAmazonカテゴリ推定へ連動（Amazon選択時は上書きされる）
       updateTopJanScanBtn(); // カテゴリ変更に応じて上部JANボタンの表示を同期
+      refreshAttrsSummary();
     }
     $('category').addEventListener('change', function(e) { if (e.isTrusted) _userSetCategory = true; }); // ユーザー手動変更のみ検出（isTrusted=falseのコード変更は除外）
     $('category').addEventListener('change', onCategoryChange);
