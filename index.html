@@ -529,8 +529,11 @@
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
-    <!-- デバッグパネル（原因調査用・後で削除） -->
-    <div id="debugPanel" style="display:none; margin:8px 0; padding:8px; background:#0a0a0a; border:1px solid #f59e0b; border-radius:8px; font-size:11px; font-family:monospace; color:#fcd34d; line-height:1.6; max-height:420px; overflow-y:auto;"></div>
+    <!-- デバッグ折りたたみ（通常は非表示。ログがあるときだけトグルボタンが現れる） -->
+    <div id="debugWrap" style="display:none; margin:4px 0;">
+      <button id="debugToggleBtn" onclick="(function(){var p=document.getElementById('debugPanel');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'🔧 デバッグを隠す':'🔧 デバッグを見る';}).call(this)" style="background:none;border:1px solid #f59e0b;border-radius:6px;color:#f59e0b;font-size:10px;padding:2px 8px;cursor:pointer;">🔧 デバッグを見る</button>
+      <div id="debugPanel" style="display:none; margin:4px 0; padding:8px; background:#0a0a0a; border:1px solid #f59e0b; border-radius:8px; font-size:11px; font-family:monospace; color:#fcd34d; line-height:1.6; max-height:420px; overflow-y:auto;"></div>
+    </div>
     <div class="crop-stage" id="cropStage" style="display:none;">
       <img id="cropImg" alt="プレビュー" />
       <div class="crop-frame"></div>
@@ -900,40 +903,43 @@
     var $ = function (id) { return document.getElementById(id); };
     var yen = function (n) { return Math.round(n).toLocaleString('ja-JP') + '円'; };
 
-    // デバッグパネル（画面上にログ＋画像表示）- 調査完了後に削除
+    // デバッグパネル（通常は折りたたみ非表示。ログが出たときだけトグルボタンが現れる）
+    function _dbgShowWrap() {
+      var wrap = document.getElementById('debugWrap');
+      if (wrap) wrap.style.display = '';
+    }
     function dbgLog(msg) {
       console.log(msg);
       var panel = document.getElementById('debugPanel');
       if (!panel) return;
-      panel.style.display = 'block';
+      _dbgShowWrap(); // ラッパー（トグルボタン）を表示するだけ。パネル自体は開かない
       var d = document.createElement('div');
       d.style.cssText = 'font-size:11px;color:#fcd34d;line-height:1.5;white-space:pre-wrap;word-break:break-all;';
       d.textContent = (new Date().toTimeString().slice(0,8)) + ' ' + msg;
       panel.appendChild(d);
-      panel.scrollTop = panel.scrollHeight;
+      if (panel.style.display === 'block') panel.scrollTop = panel.scrollHeight;
     }
     // crop 画像をパネルに表示（サムネイル）
     function dbgImg(srcCanvas, label) {
       var panel = document.getElementById('debugPanel');
       if (!panel) return;
-      panel.style.display = 'block';
-      // 表示用に横最大300pxのサムネイルを作る
+      _dbgShowWrap();
       var TH = 48, TW = Math.round(srcCanvas.width * TH / srcCanvas.height);
       var tc = document.createElement('canvas');
       tc.width = TW; tc.height = TH;
       tc.getContext('2d').drawImage(srcCanvas, 0, 0, TW, TH);
-      var wrap = document.createElement('div');
-      wrap.style.cssText = 'display:flex;align-items:center;gap:6px;margin:2px 0;';
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin:2px 0;';
       var lbl = document.createElement('span');
       lbl.style.cssText = 'font-size:10px;color:#94a3b8;min-width:80px;flex-shrink:0;';
       lbl.textContent = label;
       var img = document.createElement('img');
       img.src = tc.toDataURL('image/jpeg', 0.8);
       img.style.cssText = 'height:' + TH + 'px;width:' + TW + 'px;border:1px solid #374151;';
-      wrap.appendChild(lbl);
-      wrap.appendChild(img);
-      panel.appendChild(wrap);
-      panel.scrollTop = panel.scrollHeight;
+      row.appendChild(lbl);
+      row.appendChild(img);
+      panel.appendChild(row);
+      if (panel.style.display === 'block') panel.scrollTop = panel.scrollHeight;
     }
 
     /* ============================================================
@@ -2517,15 +2523,57 @@
     });
     // FAB 下書き保存：既存 saveCurrent() を呼ぶだけ（売価なし下書き対応済み）
     $('fabSaveBtn').addEventListener('click', function () { closeFabMenu(); saveCurrent(); });
-    // FAB クリア：.jan-clear-btn をプログラムクリックで既存ロジックを再利用（本・漫画は全フィールドクリア、他はJAN+memo+searchKw）
+    // FAB クリア：現在の商品フォームを全リセットして次の商品へ
     function clearCurrentForm() {
-      var cb = document.querySelector('#attrsBox .jan-clear-btn');
-      if (cb) { cb.click(); return; }
-      // JAN欄がないカテゴリ用フォールバック
+      // 1. JAN / heldJan
+      setHeldJan('');
+      var jh = document.getElementById('janHolder');
+      if (jh) jh.value = '';
+      _keepaLastJan   = '';
+      _openBdLastIsbn = '';
+      _currentBookInfo = null;
+
+      // 2. カテゴリを「その他」へ戻し、attrsBox を再描画（AI自動判定結果もリセット）
+      currentCategory = 'other';
+      $('category').value = 'other';
+      renderAttrs($('attrsBox'), 'other', {});
+      currentAi    = null;
+      currentRank  = '';
+      currentAttrs = {};
+      currentEntryId = null;
+      domAmzCatTouched = false;
+
+      // 3. 商品名・検索KW・音声入力
       if ($('memo'))           $('memo').value = '';
       if ($('searchKw'))       $('searchKw').value = '';
       if ($('voiceInputArea')) $('voiceInputArea').value = '';
-      setHeldJan('');
+
+      // 4. aiStatus クリア
+      $('aiStatus').textContent = '';
+
+      // 5. Keepa / openBD カード
+      var ke = $('keepaSuggest');
+      if (ke) { ke.innerHTML = ''; ke.style.display = 'none'; }
+      var oe = $('openBdSuggest');
+      if (oe) { oe.innerHTML = ''; oe.style.display = 'none'; }
+
+      // 6. 画像プレビュー（クロップ台）
+      resetCrop();
+      currentPhoto = null; currentAiImage = null;
+
+      // 7. デバッグパネル（クロップ画像・ログ）を完全クリア
+      var dp = $('debugPanel');
+      if (dp) { while (dp.firstChild) dp.removeChild(dp.firstChild); dp.style.display = 'none'; }
+      var dw = $('debugWrap');
+      if (dw) dw.style.display = 'none';
+      var dtb = $('debugToggleBtn');
+      if (dtb) dtb.textContent = '🔧 デバッグを見る';
+
+      // 8. janNear 表示を「未取得」に戻す
+      var jnv = document.getElementById('janNearVal');
+      if (jnv) jnv.textContent = '未取得';
+      var jnw = document.getElementById('janNear');
+      if (jnw) jnw.style.display = '';  // wrap は表示のまま（「未取得」を見せる）
     }
     $('fabClearBtn').addEventListener('click', function () { closeFabMenu(); clearCurrentForm(); });
     // FAB コピー系（メニューを閉じずに連続コピー可能）
