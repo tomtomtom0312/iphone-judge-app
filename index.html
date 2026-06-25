@@ -2783,6 +2783,7 @@
     var AI_TIMEOUT_MS = 30000; // AI認識のタイムアウト（30秒）。これを過ぎたら必ずエラー表示に復帰する
     function recognize() {
       if (!currentAiImage) { $('aiStatus').textContent = '先に写真を撮ってください。'; return; }
+      dbgLog('[商品AI] 開始 categoryHint=' + (currentCategory || 'none'));
       var btn = $('aiBtn');
       var orig = btn.textContent;
       btn.disabled = true;
@@ -2804,24 +2805,28 @@
       })
         // JSON以外（ローカルの501/404のHTMLなど）でも落ちないよう text→parse
         .then(function (r) {
+          dbgLog('[商品AI] レスポンス HTTP ' + r.status);
           return r.text().then(function (t) {
             var j = {};
-            try { j = JSON.parse(t); } catch (e) {}
+            try { j = JSON.parse(t); } catch (e) { dbgLog('[商品AI] JSONパース失敗 raw=' + t.slice(0, 80)); }
             return { ok: r.ok, status: r.status, j: j };
           });
         })
         .then(function (res) {
           var j = res.j || {};
           if (res.status === 404 || res.status === 501) {
+            dbgLog('[商品AI] 未デプロイ HTTP=' + res.status);
             $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">未デプロイ</span>'
               + 'この環境にはAI関数(/api)がありません。AI認識はVercelデプロイ後に利用できます。';
             return;
           }
           if (!res.ok || j.error || !j.productName) {
+            dbgLog('[商品AI] エラー ok=' + res.ok + ' error=' + (j.error || '') + ' productName=' + (j.productName || ''));
             $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">エラー</span>'
               + esc(j.error || ('AI認識に失敗しました（HTTP ' + res.status + '）。'));
             return;
           }
+          dbgLog('[商品AI] 成功 category=' + j.category + ' productName=' + j.productName + ' searchKw=' + (j.searchKw || ''));
           sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           // 認識結果を保持（保存時に履歴へ載せる）
           // 反映前に「現在画面」の補助項目入力値を取得（「再調整→AI認識」経路では手入力が画面に残っている）
@@ -2875,11 +2880,13 @@
           $('aiStatus').innerHTML = html;
           setCropCollapsed(true); // 認識できたら画像を畳んで判定結果を近づける（トグルで再表示可）
         })
-        .catch(function () {
+        .catch(function (e) {
           if (timedOut) {
+            dbgLog('[商品AI] タイムアウト (' + (AI_TIMEOUT_MS/1000) + 's)');
             $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">タイムアウト</span>'
               + (AI_TIMEOUT_MS / 1000) + '秒以内に応答がありませんでした。電波の良い場所で再試行してください。';
           } else {
+            dbgLog('[商品AI] 通信エラー ' + (e && e.message || ''));
             $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">通信エラー</span>'
               + 'ネット接続を確認してください（AI認識はVercelデプロイ後に利用できます）。';
           }

@@ -137,10 +137,16 @@ export default async function handler(req, res) {
 
     const client = new Anthropic(); // ANTHROPIC_API_KEY を環境変数から自動読込
 
+    // tool_choice で特定ツールを強制呼び出し → 全 SDK バージョンで安定動作するJSON出力方式
     const response = await client.messages.create({
       model: 'claude-opus-4-8',
-      max_tokens: 500, // searchKw フィールド追加分を考慮して少し拡張
-      output_config: { format: { type: 'json_schema', schema: SCHEMA } },
+      max_tokens: 1024,
+      tools: [{
+        name: 'recognize_product',
+        description: '写真から判断した商品情報を報告する。画像内で最も大きく写っている主要商品1点を特定し、すべてのフィールドを埋めること。',
+        input_schema: SCHEMA
+      }],
+      tool_choice: { type: 'tool', name: 'recognize_product' },
       messages: [{
         role: 'user',
         content: [
@@ -170,18 +176,15 @@ export default async function handler(req, res) {
       }]
     });
 
-    if (response.stop_reason === 'refusal') {
-      res.status(200).json({ error: 'この画像は認識できませんでした。別の角度で撮り直してください。' });
+    // tool_choice: { type: 'tool' } で強制呼び出し → tool_use ブロックが必ず返る
+    const toolBlock = response.content.find(b => b.type === 'tool_use' && b.name === 'recognize_product');
+    if (!toolBlock || !toolBlock.input) {
+      const stopReason = response.stop_reason || 'unknown';
+      res.status(502).json({ error: 'AI 応答の解析に失敗しました。（stop_reason=' + stopReason + '）' });
       return;
     }
 
-    const textBlock = response.content.find(b => b.type === 'text');
-    if (!textBlock) {
-      res.status(502).json({ error: 'AI 応答の解析に失敗しました。' });
-      return;
-    }
-
-    const data = JSON.parse(textBlock.text);
+    const data = toolBlock.input; // 既にパース済み JS オブジェクト（JSON.parse 不要）
     const category = CATEGORY_VALUES.indexOf(String(data.category)) >= 0
       ? String(data.category)
       : 'other';
