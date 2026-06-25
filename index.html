@@ -702,6 +702,7 @@
     <div class="field">
       <label id="priceLabel">想定売価</label>
       <input id="price" class="price-input" type="text" inputmode="decimal" placeholder="例: 120" />
+      <p class="hint" style="margin-top:4px;">売価未入力でも右下 💾 で下書き保存できます</p>
     </div>
     <div class="field">
       <label>原価（円）<span class="manual-badge">手入力</span></label>
@@ -725,7 +726,7 @@
     </div>
     <!-- ミニ判定バー：売価・原価を入れると即表示（詳細な内訳は下部に残す） -->
     <div id="miniVerdict" class="mini-verdict" style="display:none;"></div>
-    <p class="hint" id="aiHint">💡 Phase 2予定：写真から商品名・売価を自動入力（手入力で上書き可）。</p>
+    <p class="hint" id="aiHint" style="display:none;">💡 Phase 2予定：写真から商品名・売価を自動入力（手入力で上書き可）。</p>
   </div>
 
   <!-- 補助項目・音声入力（折りたたみ） -->
@@ -1860,8 +1861,8 @@
       // 商品名・検索KW: ISBN取得済みなのでAI商品名より正確。手入力済みでなければ上書き（AI/Keepa優先度を超える）
       if (info.title) {
         var memoEl = $('memo'), kwEl = $('searchKw'), obFilled = false;
-        if (memoEl && !_memoUserTouched) { memoEl.value = info.title; obFilled = true; }
-        if (kwEl   && !_kwUserTouched)   { kwEl.value   = info.title; obFilled = true; }
+        if (memoEl && !_memoUserTouched)      { memoEl.value = info.title; obFilled = true; }
+        if (kwEl   && !kwEl.value.trim())   { kwEl.value   = info.title; obFilled = true; } // KWは空欄のみ補完（AI英語KW優先）
         if (obFilled) { dbgLog('[OpenBD title] 商品名・検索KWに反映（AI上書き可）'); refreshAmzCatGuess(); }
       }
       refreshAttrsSummary(); // OpenBD取得後に巻数などがセットされるのでサマリーを更新
@@ -3488,19 +3489,16 @@
       if (price <= 0 || rate <= 0) {
         $('verdict').className = 'verdict v-none';
         $('verdict').textContent = (price <= 0)
-          ? '想定売価なし（下書き保存できます）'
+          ? '売価未入力'
           : '想定売価を入力してください';
         $('reasons').innerHTML = '';
         $('breakdown').style.display = 'none';
         $('miniVerdict').style.display = 'none';
         lastResult = null;
-        if (price <= 0) {                 // 売価なし → 下書き保存を許可（利益・判定は未計算）
-          $('saveBtn').disabled = false;
-          $('saveBtn').textContent = '📝 下書き保存（売価なし）';
-        } else {                          // レート未設定など → 従来どおり保存不可
-          $('saveBtn').disabled = true;
-          $('saveBtn').textContent = '💾 この判定を履歴に保存';
-        }
+        // 売価なし → 右下💾ボタンで下書き保存。画面内 saveBtn は非表示（FABと重複するため）
+        $('saveBtn').style.display = price <= 0 ? 'none' : '';
+        $('saveBtn').disabled = true;
+        $('saveBtn').textContent = '💾 この判定を履歴に保存';
         compareCalc(); // eBay未入力でも国内側の比較は更新する
         return;
       }
@@ -3572,7 +3570,8 @@
         marginNg: marginNg
       };
       $('saveBtn').disabled = false;
-      $('saveBtn').textContent = '💾 この判定を履歴に保存'; // 売価ありに戻ったら通常保存の文言へ
+      $('saveBtn').style.display = ''; // 売価あり → saveBtn を再表示
+      $('saveBtn').textContent = '💾 この判定を履歴に保存';
       compareCalc(); // eBay側の利益が更新されたら比較も更新（既存の判定エンジンは不変）
     }
 
