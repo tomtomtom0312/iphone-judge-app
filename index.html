@@ -98,6 +98,7 @@
     }
     .ai-btn:disabled { opacity: .4; border-color: var(--line); color: var(--muted); }
     .ai-status { font-size: 13px; margin-top: 8px; line-height: 1.6; color: var(--muted); }
+    .jan-status-line { font-size: 11px; margin-top: 3px; line-height: 1.5; color: #6b7280; min-height: 0; }
     .ai-badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-right: 6px; }
     .ai-hi { background: rgba(22,163,74,.18); color: #4ade80; }
     .ai-mid { background: rgba(217,119,6,.18); color: #fbbf24; }
@@ -577,6 +578,7 @@
     <button class="ai-btn" id="cropReadjust" style="display:none;">🔓 画像位置を再調整</button>
     <button class="ai-btn" id="cropToggle" style="display:none;">🖼 画像を隠す</button>
     <div class="ai-status" id="aiStatus"></div>
+    <div class="jan-status-line" id="janStatus"></div>
   </div>
 
   <!-- 連続撮影パネル（連続モードのみ表示） -->
@@ -1848,7 +1850,7 @@
     function tryJanFromPhoto(file) {
       try {
         dbgLog('[開始] file=' + (file && file.name) + ' heldJan=' + getHeldJan());
-        $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN自動検出: 開始</span>';
+        $('janStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN自動検出: 開始</span>';
         if (getHeldJan()) { dbgLog('[開始] 既存JAN有りスキップ'); return; }
         var url = URL.createObjectURL(file);
         var img = new Image();
@@ -1870,14 +1872,14 @@
               if (jnw) jnw.style.display = '';
               setHeldJan(jan);
               if (janKind(jan) !== 'ISBN') fetchKeepa(jan);
-              $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
+              $('janStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
                 + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + label + '）';
             }
 
             // ZXing 全失敗後のフォールバック: Claude Vision（Haiku）でバーコード読取
             function tryClaudeVision() {
               dbgLog('[Claude Vision] 開始');
-              $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 AIバーコード読取中…</span>';
+              $('janStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 AIバーコード読取中…</span>';
               // 最大1200px にリサイズして送信（img は URL revoke 後もメモリ上で有効）
               var maxS = 1200;
               var sc = Math.min(maxS / natW, maxS / natH, 1.0);
@@ -1892,7 +1894,7 @@
               // ZXing + Claude Vision 両方失敗 → JAN未検出表示 + デバッグ画像保存
               function onJanNotFound(reason) {
                 dbgLog('[JAN未検出] ' + reason);
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">JAN未検出</span>';
+                $('janStatus').innerHTML = '<span class="ai-badge ai-lo">JAN未検出</span>';
                 // デバッグパネルに失敗画像を表示（iOS: 長押し→写真に保存 / PC: 右クリック保存）
                 var panel = document.getElementById('debugPanel');
                 if (!panel) return;
@@ -2027,7 +2029,7 @@
               return filterJan(String(result.text || '').replace(/[^0-9]/g, ''));
             }
 
-            $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing読込中…</span>';
+            $('janStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ZXing読込中…</span>';
             loadZXing().then(function (ZX) {
               dbgLog('[ZXingロード完了]');
               var hints = new Map();
@@ -2123,7 +2125,7 @@
                 var sl = cr.dw + 'x' + cr.dh + '(' + cr.scale.toFixed(1) + 'x)';
                 dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0] + ' ' + sl);
                 dbgImg(cr.canvas, c[0] + ' ' + sl);
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')…</span>';
+                $('janStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')…</span>';
 
                 // 同期: 0°/90°/180°/270° × カラー + グレー（速い）
                 var ROTS = [0, 180, 90, 270];
@@ -2148,18 +2150,18 @@
             });
           } catch (onloadErr) {
             dbgLog('[onloadエラー] ' + onloadErr.message);
-            $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 エラー: ' + onloadErr.message + '</span>';
+            $('janStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 エラー: ' + onloadErr.message + '</span>';
           }
         };
         img.onerror = function () {
           dbgLog('[画像読込エラー]');
-          $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 画像読込エラー</span>';
+          $('janStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 画像読込エラー</span>';
           URL.revokeObjectURL(url);
         };
         img.src = url;
       } catch (outerErr) {
         dbgLog('[エラー] ' + outerErr.message);
-        try { $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 エラー: ' + outerErr.message + '</span>'; } catch(x){}
+        try { $('janStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 エラー: ' + outerErr.message + '</span>'; } catch(x){}
       }
     }
 
@@ -2346,6 +2348,7 @@
     var _attrsBeforePhotoCategory = '';
     var captureMode = 'single'; // 'single' = 単品判定 / 'burst' = 連続撮影
     var _autoAiPending = false; // 写真選択後に商品AIを自動実行するフラグ（cimg.onload で消費）
+    var _janFilePending = null;  // AIフェッチ開始後にJAN検出を開始するファイル（cimg.onload で消費）
 
     var CROP_INSET = 0.08;  // ガイド枠のインセット（CSS .crop-frame の inset:8% と一致させる）
     var WORK_MAX = 2000;    // 作業用に読み込む画像の最大辺（メモリ・処理を軽く保つ）
@@ -2461,6 +2464,7 @@
       updateTopJanScanBtn(); // カテゴリに応じて右下メニュー等を同期
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
+      $('janStatus').textContent = '';
       var reader = new FileReader();
       reader.onload = function (ev) {
         var image = new Image();
@@ -2482,12 +2486,16 @@
             showCropUI(true);
             cropLayout();
             currentPhoto = cropRender(THUMB_PX); // 初期（中央）サムネ。未AIの手動保存でも写真が残る
-            // 写真選択直後に商品認識AIを自動実行（JANフォールバックと並行）
+            // 写真選択直後に商品認識AIを自動実行し、その後JAN検出を開始（順序が重要）
             if (_autoAiPending) {
               _autoAiPending = false;
               currentAiImage = cropRender(768);
-              dbgLog('[商品AI] 自動実行（写真選択直後・JAN検出と並行）');
-              recognize();
+              dbgLog('[商品AI] 自動実行（写真選択直後）');
+              recognize(); // Anthropicへのfetchをここで開始（ZXingブロック前）
+              // AI fetchが飛んだ後にJAN検出を開始（ZXingがメインスレッドをブロックしても問題なし）
+              var jf = _janFilePending;
+              _janFilePending = null;
+              if (jf) setTimeout(function () { tryJanFromPhoto(jf); }, 0);
             }
           };
           cimg.src = work;
@@ -2504,11 +2512,15 @@
       var file = e.target.files[0];
       dbgLog('[handlePhotoFile] ファイル選択 file=' + (file && file.name));
       if (!file) return;
-      // 単品モードは画像ロード完了後に商品AIを自動実行（cimg.onload で消費）
-      if (captureMode === 'single') _autoAiPending = true;
+      if (captureMode === 'single') {
+        // 単品モード: cimg.onload で商品AIフェッチ開始→その後JAN検出の順にする
+        _autoAiPending = true;
+        _janFilePending = file; // JAN検出はAIフェッチ開始後に実行（ZXingブロック前にfetchを飛ばす）
+      } else {
+        // 連続撮影モード: JAN検出をそのまま開始
+        setTimeout(function () { tryJanFromPhoto(file); }, 0);
+      }
       loadForCrop(file); // sync でリセット・クロップ準備
-      // setTimeout(0)で loadForCrop の sync 処理が完了してから JAN 検出開始
-      setTimeout(function () { tryJanFromPhoto(file); }, 0);
       e.target.value = ''; // 同じ写真を選び直しても change が発火するように
     }
     $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });    // カメラ起動優先
@@ -2564,6 +2576,7 @@
       $('cameraBtn').style.display = burst ? '' : 'none';
       $('albumBtn').style.display = burst ? '' : 'none';
       $('aiStatus').textContent = '';
+      $('janStatus').textContent = '';
       resetCrop(); // モード切替時はクロップ台を片付ける
       if (burst) renderBurstStatus();
       updateTopJanScanBtn(); // モード切替に応じて上部JANボタンの表示を同期
@@ -2651,8 +2664,9 @@
       if ($('searchKw'))       $('searchKw').value = '';
       if ($('voiceInputArea')) $('voiceInputArea').value = '';
 
-      // 4. aiStatus クリア
+      // 4. aiStatus / janStatus クリア
       $('aiStatus').textContent = '';
+      $('janStatus').textContent = '';
 
       // 5. Keepa / openBD カード
       var ke = $('keepaSuggest');
