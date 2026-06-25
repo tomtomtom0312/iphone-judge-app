@@ -253,6 +253,9 @@
     }
     .hist-item { cursor: pointer; }
     .hist-info .tap-hint { font-size: 11px; color: var(--accent); margin-top: 3px; }
+    .hist-keepa-meta { margin-top: 4px; font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 10px; }
+    .keepa-rank-line { white-space: nowrap; }
+    .keepa-cat-line  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; opacity: .8; }
 
     /* 詳細モーダル */
     .modal-overlay {
@@ -3692,7 +3695,21 @@
         domChannel: $('domChannel').value,   // 国内販路（mercari/amazon/other）
         domAmzCat: $('domAmzCat').value,      // Amazonカテゴリ（Amazon時のみ意味を持つ）
         domFeeRate: num('domFeeRate'),         // 国内手数料率（%）
-        asin: (_keepaCache[_jan] && _keepaCache[_jan].asin) ? _keepaCache[_jan].asin : (_currentFormAsin || '')
+        asin: (_keepaCache[_jan] && _keepaCache[_jan].asin) ? _keepaCache[_jan].asin : (_currentFormAsin || ''),
+        keepa: (function() {
+          var kd = (_jan && _keepaCache[_jan])
+            ? _keepaCache[_jan]
+            : (_currentFormAsin && _keepaCache['__name__' + _currentFormAsin])
+            ? _keepaCache['__name__' + _currentFormAsin]
+            : null;
+          if (!kd) return null;
+          return {
+            salesRank:      kd.salesRank      != null ? kd.salesRank      : null,
+            monthlySold:    kd.monthlySold     != null ? kd.monthlySold    : null,
+            monthlySoldType: kd.monthlySoldType || null,
+            category:       kd.category        || ''
+          };
+        })()
       };
       recompute(e); // profit/margin/level/verdict/draft ＋ 再計算パラメータを確定
       return e;
@@ -3951,6 +3968,18 @@
           }
         }
 
+        // Keepaランキング・月販・カテゴリ（保存済みe.keepaから。旧履歴はnull→非表示）
+        var keepaMetaHtml = '';
+        var _km = e.keepa;
+        if (_km) {
+          var _kParts = [];
+          if (_km.salesRank != null) _kParts.push('ランキング ' + _km.salesRank.toLocaleString('ja-JP') + '位');
+          if (_km.monthlySold != null) _kParts.push('月販 ' + _km.monthlySold.toLocaleString('ja-JP') + (_km.monthlySoldType === 'units' ? '個' : 'ドロップ') + '/月');
+          var _kRankLine = _kParts.length ? '<span class="keepa-rank-line">' + esc(_kParts.join(' ・ ')) + '</span>' : '';
+          var _kCatLine  = _km.category ? '<span class="keepa-cat-line">' + esc(_km.category) + '</span>' : '';
+          if (_kRankLine || _kCatLine) keepaMetaHtml = '<div class="hist-keepa-meta">' + _kRankLine + _kCatLine + '</div>';
+        }
+
         // 相場確認アイコン：履歴の検索KW/商品名/JANから生成。優先順は onSearchClick が data-* を見て決定（AmazonはJAN優先、他はKW→商品名→JAN）。いずれも空なら非表示
         var hKw = (e.searchKw || '').trim();
         var hMemo = (e.memo || '').trim();
@@ -4004,6 +4033,7 @@
                 '<div class="hist-meta">' + meta + '</div>' +
                 '<div class="hist-profit-row">' + profitHtml + '</div>' +
                 cmpHtml +
+                keepaMetaHtml +
                 '<div class="tap-hint">🕒 ' + esc(e.date) + ' ・ タップで詳細 ›</div>' +
               '</div>' +
             '</div>' +
