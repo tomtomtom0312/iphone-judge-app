@@ -1818,7 +1818,8 @@
       return (check === +d.charAt(12)) ? d : '';
     }
 
-    // 静止画JAN検出：写真撮影直後に1回だけ実行。複数クロップ・複数デコード方式を試す。
+    // 静止画JAN検出：写真撮影直後に1回だけ実行。
+    // ZXing（ローカル）→ Claude Vision（サーバー）の順で試し、最初に見つかったJANを確定する。
     function tryJanFromPhoto(file) {
       try {
         dbgLog('[開始] file=' + (file && file.name) + ' heldJan=' + getHeldJan());
@@ -1833,8 +1834,55 @@
             dbgLog('[画像サイズ] ' + natW + 'x' + natH);
             URL.revokeObjectURL(url);
 
+            // JAN 確定 → UI 反映・Keepa 呼出（ZXing/Claude Vision 共通）
+            function commitJan(jan, label) {
+              dbgLog('[JAN確定] ' + jan + ' (' + label + ')');
+              var jh = document.getElementById('janHolder');
+              if (jh) jh.value = jan;
+              var jnv = document.getElementById('janNearVal');
+              var jnw = document.getElementById('janNear');
+              if (jnv) jnv.textContent = jan;
+              if (jnw) jnw.style.display = '';
+              setHeldJan(jan);
+              if (janKind(jan) !== 'ISBN') fetchKeepa(jan);
+              $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
+                + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + label + '）';
+            }
+
+            // ZXing 全失敗後のフォールバック: Claude Vision（Haiku）でバーコード読取
+            function tryClaudeVision() {
+              dbgLog('[Claude Vision] 開始');
+              $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 AIバーコード読取中…</span>';
+              // 最大1200px にリサイズして送信（img は URL revoke 後もメモリ上で有効）
+              var maxS = 1200;
+              var sc = Math.min(maxS / natW, maxS / natH, 1.0);
+              var tw = Math.max(1, Math.round(natW * sc));
+              var th = Math.max(1, Math.round(natH * sc));
+              var tc = document.createElement('canvas');
+              tc.width = tw; tc.height = th;
+              tc.getContext('2d').drawImage(img, 0, 0, tw, th);
+              dbgImg(tc, 'AI送信 ' + tw + 'x' + th);
+              var imgData = tc.toDataURL('image/jpeg', 0.85);
+              fetch('/api/jan-detect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imgData })
+              }).then(function (r) { return r.json(); }).then(function (data) {
+                dbgLog('[Claude Vision] jan=' + (data.jan || '') + ' err=' + (data.error || ''));
+                var jan = normalizeJan(String(data.jan || '').replace(/[^0-9]/g, ''));
+                if (jan) {
+                  commitJan(jan, 'AI-Vision');
+                } else {
+                  $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出</span>';
+                }
+              }).catch(function (e) {
+                dbgLog('[Claude Vision] エラー ' + e.message);
+                $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出</span>';
+              });
+            }
+
             // クロップ定義: [label, xStart割合, yStart割合, width割合, height割合]
-            // 全体・半分・四象限でまずバーコードがどの領域にあるか視覚的に確認できるようにする
+            // 全体・半分・四象限でまず位置確認、右/左 30% で拡大デコード
             var crops = [
               ['全体',     0.00, 0.00, 1.00, 1.00],
               ['左半分',   0.00, 0.00, 0.50, 1.00],
@@ -1867,7 +1915,7 @@
               return { canvas: cv, scale: scale, dw: dw, dh: dh };
             }
 
-            // グレースケール+コントラスト引き伸ばし版を作成（min/max stretch）
+            // グレースケール+コントラスト引き伸ばし版
             function toGrayCanvas(src) {
               var gc = document.createElement('canvas');
               gc.width = src.width; gc.height = src.height;
@@ -1917,7 +1965,7 @@
                 } catch (e) { return null; }
               }
 
-              // 非同期デコード: canvas → PNG dataURL → tmpImg.onload → decodeFromImageElement
+              // 非同期デコード: canvas → PNG → tmpImg.onload → decodeFromImageElement
               var reader = new ZX.BrowserMultiFormatReader(hints, 150);
               function asyncDecode(canvas) {
                 return new Promise(function (resolve, reject) {
@@ -1930,39 +1978,22 @@
                 });
               }
 
-              // text → 有効 JAN か null
               function extractJan(result) {
                 if (!result) return null;
                 var raw = String(result.text || '').replace(/[^0-9]/g, '');
                 return normalizeJan(raw) || null;
               }
 
-              // JAN 確定→ UI 反映・Keepa 呼出
-              function commitJan(jan, label) {
-                dbgLog('[JAN確定] ' + jan + ' (' + label + ')');
-                var jh = document.getElementById('janHolder');
-                if (jh) jh.value = jan;
-                var jnv = document.getElementById('janNearVal');
-                var jnw = document.getElementById('janNear');
-                if (jnv) jnv.textContent = jan;
-                if (jnw) jnw.style.display = '';
-                setHeldJan(jan);
-                if (janKind(jan) !== 'ISBN') fetchKeepa(jan);
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
-                  + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + label + '）';
-              }
-
               function tryNext(i) {
                 if (i >= crops.length) {
-                  dbgLog('[全クロップ失敗] ' + crops.length + '領域で未検出');
-                  $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出（全' + crops.length + '領域）</span>';
+                  dbgLog('[ZXing全失敗] → Claude Vision フォールバック');
+                  tryClaudeVision();
                   return;
                 }
                 var c = crops[i];
                 var cr = makeCropCanvas(c);
                 var sizeLabel = cr.dw + 'x' + cr.dh + '(' + cr.scale.toFixed(1) + 'x)';
                 dbgLog('[crop ' + (i+1) + '/' + crops.length + '] ' + c[0] + ' ' + sizeLabel);
-                // crop 画像をデバッグパネルに表示（ZXingに渡している画像を確認）
                 dbgImg(cr.canvas, c[0] + ' ' + sizeLabel);
                 $('aiStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 ' + c[0] + ' (' + (i+1) + '/' + crops.length + ')…</span>';
 
@@ -1987,8 +2018,8 @@
               }
               tryNext(0);
             }).catch(function (e) {
-              dbgLog('[ZXing読込失敗] ' + (e && e.message));
-              $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 ZXing読込失敗</span>';
+              dbgLog('[ZXing読込失敗] ' + (e && e.message) + ' → Claude Vision へ');
+              tryClaudeVision();
             });
           } catch (onloadErr) {
             dbgLog('[onloadエラー] ' + onloadErr.message);
