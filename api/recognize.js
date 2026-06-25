@@ -99,7 +99,10 @@ const SCHEMA = {
         + '英語名が全く不明なら productName をそのまま使う。60文字以内目安。空文字可。'
     }
   },
-  required: ['productName', 'category', 'condition', 'estimatedRank', 'confidence', 'searchKw'],
+  required: [
+    'productName', 'category', 'brand', 'series', 'setName', 'cardName', 'boxName',
+    'obi', 'jan', 'storage', 'color', 'condition', 'estimatedRank', 'confidence', 'notes', 'searchKw'
+  ],
   additionalProperties: false
 };
 
