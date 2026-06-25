@@ -1801,6 +1801,7 @@
                   dbgLog('[Keepa name fallback] EAN取得 jan=' + ean + ' → JAN補完');
                   if (!_keepaCache.hasOwnProperty(ean)) _keepaCache[ean] = _keepaCache[key]; // JAN経路でfetchKeepaが重複コールしないようキャッシュ
                   setHeldJan(ean); // JANコピー・近接表示・履歴janフィールドへ反映
+                  $('janStatus').innerHTML = '<span class="ai-badge ai-hi">✅ KeepaからJAN補完済み</span>';
                 }
                 syncCurrent(); // ASIN/JAN確定 → 自動保存済み行を更新
               })
