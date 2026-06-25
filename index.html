@@ -2847,8 +2847,9 @@
           }
           updateTopJanScanBtn(); // AI認識でカテゴリが変わったら上部JANボタンの表示を同期
 
-          // 商品名（＋容量・色）を自動入力（人が上書き可能）
+          // 商品名（日本語）と検索KW（eBay/メルカリ/スニダン向け英語優先）を自動入力（後から上書き可能）
           $('memo').value = composeName(j);
+          if ($('searchKw')) $('searchKw').value = (j.searchKw || '').trim();
 
           // 推定ランクを状態セレクトへ反映（無ければ現状維持）
           var mapped = RANK_TO_CONDITION[currentRank];

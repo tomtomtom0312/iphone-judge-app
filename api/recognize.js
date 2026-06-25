@@ -31,7 +31,7 @@ const SCHEMA = {
     category: {
       type: 'string',
       enum: CATEGORY_VALUES,
-      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り）/ trading_card_box=トレカの未開封BOX・パック箱 / figure=フィギュア・プライズ・プラモ完成品 / book=本・漫画・雑誌・文庫・単行本・書籍 / other=それ以外。'
+      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り・PSA鑑定品）/ trading_card_box=トレカ・カードゲームの未開封BOX・パック箱・シュリンク付き / figure=フィギュア・プライズ・プラモ完成品・ガチャ / book=本・漫画・雑誌・文庫・単行本・書籍・写真集 / other=ゲーム機・ゲームソフト・スニーカー・アパレル・家電・ホビー・その他すべて。'
     },
     brand: {
       type: 'string',
@@ -86,6 +86,17 @@ const SCHEMA = {
     notes: {
       type: 'string',
       description: '確証が持てない懸念点・追加で確認したい点（例: カメラ周りに傷の可能性 / 偽物の可能性）。無ければ空文字。'
+    },
+    searchKw: {
+      type: 'string',
+      description: 'メルカリ・eBay・スニダン向けの検索キーワード（短め）。英語名・型番が分かる場合は英語優先。'
+        + 'トレカBOXは「ブランド英語名 + セット英語名 + Booster Box」（例: Pokemon Mega Dream ex Booster Box / Yu-Gi-Oh Blazing Dominion Box）。'
+        + 'トレカ単品は「ブランド + カード名 + レアリティ」（例: Pokemon Charizard ex SAR）。'
+        + '本・漫画は英語タイトル+巻数+edition（例: ONE PIECE Vol.66 manga / Demon Slayer Vol.1 first edition）、英語不明なら日本語タイトル。'
+        + 'フィギュアは「作品名 + キャラ名 + メーカー」（英語名があれば英語）。'
+        + 'スニーカーは「ブランド + モデル名 + カラー/サイズ」（例: Nike Air Jordan 1 Retro High OG）。'
+        + 'ゲームは「タイトル + 機種 + 地域」（例: Pokemon Scarlet Nintendo Switch JP）。'
+        + '英語名が全く不明なら productName をそのまま使う。60文字以内目安。空文字可。'
     }
   },
   required: ['productName', 'category', 'condition', 'estimatedRank', 'confidence'],
@@ -125,7 +136,7 @@ export default async function handler(req, res) {
 
     const response = await client.messages.create({
       model: 'claude-opus-4-8',
-      max_tokens: 400, // 出力項目が増えたぶん少し広げつつコストは抑える
+      max_tokens: 500, // searchKw フィールド追加分を考慮して少し拡張
       output_config: { format: { type: 'json_schema', schema: SCHEMA } },
       messages: [{
         role: 'user',
@@ -144,7 +155,8 @@ export default async function handler(req, res) {
               + ' 本・漫画では condition に表紙の傷・汚れ・折れ・日焼け・帯の傷みなど写真から見える範囲だけを簡潔に書き、裏面・小口・背表紙が写っていない場合は「裏面/背表紙は未確認」のように確認できない旨も記します。'
               + ' 初版/重版・特典の有無は写真だけで断定できないため、明確に分かる場合のみ言及し、迷う場合は触れないでください（憶測で断定しない）。'
               + ' 画像内にJANコード/バーコード/ISBNが明確に読み取れる場合のみ jan にその数字（数字のみ）を入れ、読めない/不確実なら空文字にします（推測で創作しない）。jan は商品名やカテゴリの判定には使いません。'
-              + ' productName はそのカテゴリで出品タイトルに使える簡潔な商品名にします。'
+              + ' productName はそのカテゴリで出品タイトルに使える日本語の簡潔な商品名にします（例: ポケモンカードゲーム MEGA ハイクラスパック MEGAドリームex BOX / 遊戯王OCG BLAZING DOMINION BOX）。'
+              + ' searchKw はメルカリ・eBay・スニダン検索向けの短いキーワードで、英語名・型番が分かる場合は英語を優先します（例: Pokemon Mega Dream ex Booster Box / Yu-Gi-Oh Blazing Dominion Box / ONE PIECE Vol.66 manga）。英語名が不明なら productName をそのまま入れてください。'
               + ' condition は写真から実際に見える外観状態のみを記述し（割れ・傷・汚れ・未開封か否か）、見えない部分を憶測で断定しないでください。'
               + ' estimatedRank は外観から推定した状態ランク（S/A/B/C/D/ジャンク）です。'
               + ' 確証が持てない懸念点（例: 角度的に確認できない傷、真贋の不安）は notes に書いてください。'
@@ -185,7 +197,8 @@ export default async function handler(req, res) {
       condition: String(data.condition || ''),
       estimatedRank: String(data.estimatedRank || ''),
       confidence: Number(data.confidence) || 0,
-      notes: String(data.notes || '')
+      notes: String(data.notes || ''),
+      searchKw: String(data.searchKw || '')
     });
   } catch (err) {
     const msg = err && err.message ? err.message : 'unknown';
