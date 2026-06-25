@@ -659,9 +659,10 @@
     <div class="field">
       <label>検索キーワード（eBay向け英語名も可）</label>
       <textarea id="searchKw" rows="2" placeholder="例：Charizard SAR / Luffy Gear 5"></textarea>
-      <div style="margin-top:6px; display:flex; align-items:center; gap:8px;">
+      <div style="margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <button type="button" id="ebayKwBtn" class="ebay-kw-btn">eBay KW生成（AI）</button>
         <span class="hint" style="margin:0;">AI使用・必要時のみ</span>
+        <button type="button" id="goToPriceBtn" class="ebay-kw-btn" style="margin-left:auto;">売価へ ▼</button>
       </div>
     </div>
     <!-- カテゴリ非依存の JAN 保持先（単一の真実）。読み取り結果はここに入れ、補助項目JAN欄が存在すれば同期。保存構造・CSV・localStorage には非依存 -->
@@ -2930,6 +2931,13 @@
     });
     // FAB 下書き保存：既存 saveCurrent() を呼ぶだけ（売価なし下書き対応済み）
     $('fabSaveBtn').addEventListener('click', function () { closeFabMenu(); saveCurrent(); });
+    // 売価へボタン：想定売価入力欄へスクロール＋フォーカス
+    $('goToPriceBtn').addEventListener('click', function () {
+      var el = $('price');
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(function () { el.focus(); }, 300);
+    });
     // eBay KW生成ボタン：手動押下時のみ /api/ebay-kw を呼ぶ（自動課金なし）
     $('ebayKwBtn').addEventListener('click', function () {
       var kw = ($('searchKw') ? $('searchKw').value : '').trim();
