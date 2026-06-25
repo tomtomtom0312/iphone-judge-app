@@ -1863,6 +1863,33 @@
               tc.getContext('2d').drawImage(img, 0, 0, tw, th);
               dbgImg(tc, 'AI送信 ' + tw + 'x' + th);
               var imgData = tc.toDataURL('image/jpeg', 0.85);
+
+              // ZXing + Claude Vision 両方失敗 → JAN未検出表示 + デバッグ画像保存
+              function onJanNotFound(reason) {
+                dbgLog('[JAN未検出] ' + reason);
+                $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">JAN未検出</span>';
+                // デバッグパネルに失敗画像を表示（iOS: 長押し→写真に保存 / PC: 右クリック保存）
+                var panel = document.getElementById('debugPanel');
+                if (!panel) return;
+                panel.style.display = 'block';
+                var wrap = document.createElement('div');
+                wrap.style.cssText = 'margin:4px 0;padding:6px;border:1px solid #ef4444;border-radius:6px;';
+                var lbl = document.createElement('div');
+                lbl.style.cssText = 'font-size:10px;color:#ef4444;margin-bottom:4px;';
+                lbl.textContent = '⚠ JAN未検出 — ' + reason
+                  + ' / ' + new Date().toLocaleTimeString('ja-JP')
+                  + '（iOS: 長押し→写真に保存　PC: 右クリック→保存）';
+                wrap.appendChild(lbl);
+                var failImg = document.createElement('img');
+                // 保存用に quality 0.92 で再エンコード（高品質）
+                failImg.src = tc.toDataURL('image/jpeg', 0.92);
+                failImg.style.cssText = 'max-width:100%;display:block;border:1px solid #ef4444;border-radius:4px;';
+                failImg.alt = 'JAN未検出画像';
+                wrap.appendChild(failImg);
+                panel.appendChild(wrap);
+                panel.scrollTop = panel.scrollHeight;
+              }
+
               fetch('/api/jan-detect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1873,11 +1900,10 @@
                 if (jan) {
                   commitJan(jan, 'AI-Vision');
                 } else {
-                  $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出</span>';
+                  onJanNotFound('AI読取結果: ' + (data.jan ? '"' + data.jan + '"' : '（空）'));
                 }
               }).catch(function (e) {
-                dbgLog('[Claude Vision] エラー ' + e.message);
-                $('aiStatus').innerHTML = '<span class="ai-badge ai-lo">🔍 バーコード未検出</span>';
+                onJanNotFound('通信エラー: ' + (e && e.message));
               });
             }
 
