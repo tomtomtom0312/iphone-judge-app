@@ -3974,7 +3974,8 @@
         if (_km) {
           var _kParts = [];
           if (_km.salesRank != null) _kParts.push('ランキング ' + _km.salesRank.toLocaleString('ja-JP') + '位');
-          if (_km.monthlySold != null) _kParts.push('月販 ' + _km.monthlySold.toLocaleString('ja-JP') + (_km.monthlySoldType === 'units' ? '個' : 'ドロップ') + '/月');
+          if (_km.monthlySold != null && _km.monthlySoldType === 'units') _kParts.push('月販 ' + _km.monthlySold.toLocaleString('ja-JP') + '個');
+          else if (_km.monthlySold != null) _kParts.push('ドロップ ' + _km.monthlySold.toLocaleString('ja-JP') + '回/月');
           var _kRankLine = _kParts.length ? '<span class="keepa-rank-line">' + esc(_kParts.join(' ・ ')) + '</span>' : '';
           var _kCatLine  = _km.category ? '<span class="keepa-cat-line">' + esc(_km.category) + '</span>' : '';
           if (_kRankLine || _kCatLine) keepaMetaHtml = '<div class="hist-keepa-meta">' + _kRankLine + _kCatLine + '</div>';
