@@ -3984,9 +3984,9 @@
         var _km = e.keepa;
         if (_km) {
           var _kParts = [];
-          if (_km.salesRank != null) _kParts.push('🏆' + _km.salesRank.toLocaleString('ja-JP') + '位');
-          if (_km.monthlySold != null && _km.monthlySoldType === 'units') _kParts.push('📦' + _km.monthlySold.toLocaleString('ja-JP') + '/月');
-          else if (_km.monthlySold != null) _kParts.push('⬇' + _km.monthlySold.toLocaleString('ja-JP') + '/月');
+          if (_km.salesRank != null) _kParts.push('🏆' + _km.salesRank.toLocaleString('ja-JP'));
+          if (_km.monthlySold != null && _km.monthlySoldType === 'units') _kParts.push('📦' + _km.monthlySold.toLocaleString('ja-JP'));
+          else if (_km.monthlySold != null) _kParts.push('⬇' + _km.monthlySold.toLocaleString('ja-JP'));
           if (_kParts.length) keepaMetaHtml = '<div class="hist-keepa-meta"><span class="keepa-rank-line">' + esc(_kParts.join('　')) + '</span></div>';
         }
 
