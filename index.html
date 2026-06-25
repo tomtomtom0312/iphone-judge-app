@@ -45,7 +45,7 @@
     label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
     .field { margin-bottom: 14px; }
     .field:last-child { margin-bottom: 0; }
-    input, select {
+    input, select, textarea {
       width: 100%;
       font-size: 17px;
       padding: 12px;
@@ -55,7 +55,8 @@
       color: var(--text);
       appearance: none;
     }
-    input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    textarea { resize: none; line-height: 1.45; font-family: inherit; }
     .row { display: flex; gap: 10px; }
     .row > .field { flex: 1; }
 
@@ -638,11 +639,11 @@
     </div>
     <div class="field">
       <label>商品名 / メモ</label>
-      <input id="memo" class="primary-input" type="text" placeholder="例: iPhone 13 128GB / 画面キズ" />
+      <textarea id="memo" class="primary-input" rows="3" placeholder="例: iPhone 13 128GB / 画面キズ"></textarea>
     </div>
     <div class="field">
       <label>検索キーワード（eBay向け英語名も可）</label>
-      <input id="searchKw" type="text" placeholder="例：Charizard SAR / Luffy Gear 5" />
+      <textarea id="searchKw" rows="2" placeholder="例：Charizard SAR / Luffy Gear 5"></textarea>
     </div>
     <!-- カテゴリ非依存の JAN 保持先（単一の真実）。読み取り結果はここに入れ、補助項目JAN欄が存在すれば同期。保存構造・CSV・localStorage には非依存 -->
     <input type="hidden" id="janHolder" />
@@ -1796,7 +1797,7 @@
       };
       card.appendChild(btn);
       obEl.appendChild(card);
-      // 本・漫画カテゴリ選択中のとき attrsBox ＋ 商品名 / 検索KW へ自動流し込み（既入力は温存、空欄のみ補完）
+      // 本・漫画カテゴリのとき attrsBox（著者/出版社/発売日/巻数）を補完（空欄のみ）
       var catEl = $('category');
       if (catEl && normCategory(catEl.value) === 'book') {
         var pd2 = String(info.pubdate || '').replace(/[^0-9]/g, '');
@@ -1807,14 +1808,13 @@
           var el = document.querySelector('#attrsBox [data-attr="' + k + '"]');
           if (el && !el.value.trim()) el.value = fillMap[k];
         });
-        // 商品名・検索KW（空欄のみ補完。ユーザー入力は温存）
-        if (info.title) {
-          var memoEl = $('memo'), kwEl = $('searchKw'), obFilled = false;
-          if (memoEl && !memoEl.value.trim()) { memoEl.value = info.title; obFilled = true; }
-          if (kwEl   && !kwEl.value.trim())   { kwEl.value   = info.title; obFilled = true; }
-          if (obFilled) dbgLog('[OpenBD title] 商品名・検索KWに反映');
-          refreshAmzCatGuess();
-        }
+      }
+      // 商品名・検索KW: ISBN取得済みなのでAI商品名より正確。手入力済みでなければ上書き（AI/Keepa優先度を超える）
+      if (info.title) {
+        var memoEl = $('memo'), kwEl = $('searchKw'), obFilled = false;
+        if (memoEl && !_memoUserTouched) { memoEl.value = info.title; obFilled = true; }
+        if (kwEl   && !_kwUserTouched)   { kwEl.value   = info.title; obFilled = true; }
+        if (obFilled) { dbgLog('[OpenBD title] 商品名・検索KWに反映（AI上書き可）'); refreshAmzCatGuess(); }
       }
     }
 
