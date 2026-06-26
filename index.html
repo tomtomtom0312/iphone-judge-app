@@ -623,6 +623,11 @@
       </select>
     </div>
     <div class="burst-status" id="burstStatus"></div>
+    <!-- 直近の連続撮影ログ（初期非表示。保存後にJAN/ASIN/Keepa状態を折りたたみで表示） -->
+    <div id="burstLastLog" style="display:none;margin-top:6px;">
+      <button type="button" id="burstLastLogBtn" style="width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer;"></button>
+      <div id="burstLastLogPanel" style="display:none;margin-top:4px;padding:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;font-size:11px;color:var(--text);line-height:1.7;white-space:pre-wrap;word-break:break-all;"></div>
+    </div>
   </div>
 
   <!-- 主要入力（写真直下・現場で最初に入力。将来は写真からAI自動入力） -->
@@ -3271,10 +3276,11 @@
     }
 
     // --- 連続撮影モード（1枚ごとにAI認識→ドラフト履歴へ自動保存） ---
-    var burstCount = 0;     // このセッションで連続撮影・保存した枚数
-    var burstLast = '';     // 直近で保存した内容のラベル（表示用）
-    var burstBusy = false;  // 認識処理中フラグ
-    var _burstJanSaved = false;    // JAN自動保存済み（AI二重保存防止）
+    var burstCount = 0;        // このセッションで連続撮影・保存した枚数
+    var burstLast = '';        // 直近で保存した内容のラベル（表示用）
+    var burstBusy = false;     // 認識処理中フラグ
+    var _burstJanSaved = false; // JAN自動保存済み（AI二重保存防止）
+    var _burstLastLogData = null; // 直近保存ログ（パネル表示用）
 
     function renderBurstStatus(msg, cls) {
       var html = '';
@@ -3284,6 +3290,42 @@
       if (!html) html = '「📷 連続撮影：1枚撮る」を押して撮影してください。';
       $('burstStatus').innerHTML = html;
     }
+
+    // 直近の連続撮影ログパネルを更新（保存後に呼ぶ。clearCurrentForm()では呼ばないため次の商品まで残る）
+    function renderBurstLastLog() {
+      var wrap  = $('burstLastLog');
+      var btn   = $('burstLastLogBtn');
+      var panel = $('burstLastLogPanel');
+      if (!wrap || !btn || !panel) return;
+      if (!_burstLastLogData) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      var d = _burstLastLogData;
+      var parts = [];
+      if (d.jan)        parts.push('JANあり');
+      if (d.keepaTitle) parts.push(d.entryAsin ? 'Keepa補完済み' : 'Keepaタイトルのみ');
+      if (d.entryAsin)  parts.push('ASINあり');
+      else if (d.keepaTitle) parts.push('ASIN無');
+      var isOpen = panel.style.display !== 'none';
+      btn.textContent = (isOpen ? '▼' : '▶') + ' 直近の保存ログ' + (parts.length ? '　' + parts.join('・') : '');
+      if (!isOpen) return;
+      var lines = [];
+      lines.push('保存時刻: ' + (d.time || '-'));
+      lines.push('商品名:   ' + (d.memo || '(空)'));
+      lines.push('JAN:      ' + (d.jan  || '(空)'));
+      lines.push('ASIN:     ' + (d.entryAsin || '(取得できず)'));
+      if (d.keepaTitle) lines.push('Keepa:    ' + d.keepaTitle.slice(0, 50));
+      lines.push('カテゴリ: ' + (d.category || '(空)'));
+      lines.push('─────────────');
+      lines.push('[debug] cacheAsin: ' + (d.cacheAsin  != null ? (d.cacheAsin  || '(空)') : '-'));
+      lines.push('[debug] formAsin:  ' + (d.snapFormAsin != null ? (d.snapFormAsin || '(空)') : '-'));
+      lines.push('[debug] snapAsin:  ' + (d.snapAsin   != null ? (d.snapAsin   || '(空)') : '-'));
+      panel.textContent = lines.join('\n');
+    }
+    $('burstLastLogBtn').addEventListener('click', function () {
+      var panel = $('burstLastLogPanel');
+      panel.style.display = (panel.style.display !== 'none') ? 'none' : '';
+      renderBurstLastLog();
+    });
 
     // 連続撮影モード：Keepa/OpenBD で商品名が確定した後に下書き保存し、次の商品待ちに戻る
     function maybeBurstAutoSave() {
@@ -3295,42 +3337,55 @@
       var _snapJan = getHeldJan();
       var _snapKd  = (_snapJan && _keepaCache[_snapJan]) || null;
       var _snapAsin = (_snapKd && _snapKd.asin) ? _snapKd.asin : (_currentFormAsin || '');
-      dbgLog('[burst保存前] jan=' + _snapJan + ' cacheAsin=' + (_snapKd ? (_snapKd.asin || '(空)') : 'cache無') + ' formAsin=' + (_currentFormAsin || '(空)') + ' → snapAsin=' + (_snapAsin || '(空)'));
+      var _snapFormAsin = _currentFormAsin || '';
+      dbgLog('[burst保存前] jan=' + _snapJan + ' cacheAsin=' + (_snapKd ? (_snapKd.asin || '(空)') : 'cache無') + ' formAsin=' + (_snapFormAsin || '(空)') + ' → snapAsin=' + (_snapAsin || '(空)'));
       if (_snapAsin) _currentFormAsin = _snapAsin; // buildCurrentEntry が必ず読める状態にする
+      // 直近ログ：保存前情報をセット（entryAsin は保存後に確定）
+      _burstLastLogData = {
+        time:         new Date().toLocaleTimeString('ja-JP'),
+        memo:         memo,
+        jan:          _snapJan,
+        snapAsin:     _snapAsin,
+        cacheAsin:    _snapKd ? (_snapKd.asin || '') : null,
+        snapFormAsin: _snapFormAsin,
+        keepaTitle:   _snapKd ? (_snapKd.title || '') : '',
+        category:     currentCategory || '',
+        entryAsin:    ''  // 保存後に更新
+      };
       currentEntryId = null;
       if (!upsertCurrent()) return;
       // buildCurrentEntry がASINを見逃した場合の最終保障：保存済みエントリを直接パッチ
-      if (_snapAsin) {
-        var _snapId = currentEntryId;
-        var _pList = getHistory();
-        for (var _pi = 0; _pi < _pList.length; _pi++) {
-          if (_pList[_pi].id === _snapId) {
-            if (!_pList[_pi].asin) {
-              _pList[_pi].asin = _snapAsin;
-              dbgLog('[burst保存後パッチ] id=' + _snapId + ' asin=' + _snapAsin + ' → パッチ適用');
-              if (!_pList[_pi].keepa && _snapKd) {
-                _pList[_pi].keepa = {
-                  salesRank:      _snapKd.salesRank      != null ? _snapKd.salesRank      : null,
-                  monthlySold:    _snapKd.monthlySold     != null ? _snapKd.monthlySold    : null,
-                  monthlySoldType: _snapKd.monthlySoldType || null,
-                  category:       _snapKd.category        || ''
-                };
-              }
-              try { setHistory(_pList); } catch(e) {}
-            } else {
-              dbgLog('[burst保存後] id=' + _snapId + ' entry.asin=' + _pList[_pi].asin + ' → パッチ不要');
+      var _snapId = currentEntryId;
+      var _pList = getHistory();
+      for (var _pi = 0; _pi < _pList.length; _pi++) {
+        if (_pList[_pi].id === _snapId) {
+          if (_snapAsin && !_pList[_pi].asin) {
+            _pList[_pi].asin = _snapAsin;
+            dbgLog('[burst保存後パッチ] id=' + _snapId + ' asin=' + _snapAsin + ' → パッチ適用');
+            if (!_pList[_pi].keepa && _snapKd) {
+              _pList[_pi].keepa = {
+                salesRank:       _snapKd.salesRank      != null ? _snapKd.salesRank      : null,
+                monthlySold:     _snapKd.monthlySold     != null ? _snapKd.monthlySold    : null,
+                monthlySoldType: _snapKd.monthlySoldType || null,
+                category:        _snapKd.category        || ''
+              };
             }
-            break;
+            try { setHistory(_pList); } catch(e) {}
+          } else {
+            dbgLog('[burst保存後] id=' + _snapId + ' entry.asin=' + (_pList[_pi].asin || '(空)') + (_pList[_pi].asin ? ' → パッチ不要' : ' → ASIN無'));
           }
+          // 直近ログ：最終的に保存されたASINを記録
+          if (_burstLastLogData) _burstLastLogData.entryAsin = _pList[_pi].asin || '';
+          break;
         }
-      } else {
-        dbgLog('[burst保存前] ASIN取得できず → Keepaボタンなしで保存');
       }
+      if (!_snapAsin) dbgLog('[burst保存前] ASIN取得できず → Keepaボタンなしで保存');
       _burstJanSaved = true;
       burstCount++;
       burstLast = memo;
       currentEntryId = null;
       renderHistory();
+      renderBurstLastLog();
       renderBurstStatus('✅ 下書き保存しました。次の商品を撮影してください。');
       setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
