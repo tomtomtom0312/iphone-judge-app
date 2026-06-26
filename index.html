@@ -2856,7 +2856,14 @@
         _autoAiPending = true;
         _janFilePending = file; // JAN検出はAIフェッチ開始後に実行（ZXingブロック前にfetchを飛ばす）
       } else {
-        // 連続撮影モード: JAN検出をそのまま開始
+        // 連続撮影モード: 前の写真の保留タイマーをキャンセルし状態をリセット→JAN検出開始
+        clearTimeout(_burstClearFormTimer); _burstClearFormTimer = null;
+        clearTimeout(_burstJanWaitTimer);   _burstJanWaitTimer   = null;
+        clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null;
+        _burstAiEntry = null;
+        _burstJanSaved = false;
+        _keepaLastJan = '';
+        _openBdLastIsbn = '';
         setTimeout(function () { tryJanFromPhoto(file); }, 0);
       }
       loadForCrop(file); // sync でリセット・クロップ準備
@@ -3010,6 +3017,7 @@
     // FAB クリア：現在の商品フォームを全リセットして次の商品へ
     function clearCurrentForm() {
       _burstJanSaved = false;
+      clearTimeout(_burstClearFormTimer); _burstClearFormTimer = null;
       clearTimeout(_burstJanWaitTimer);  _burstJanWaitTimer  = null;
       clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null; _burstAiEntry = null;
       _janScanGen++; // 前の写真のスキャン（Claude Vision等）の遅延応答を無効化
@@ -3340,6 +3348,7 @@
     var _burstAiEntry = null;        // AI認識完了entry（JAN確定後のKeepa待ち中に保持）
     var _burstKeepaWaitTimer = null; // Keepaタイムアウトタイマー（JAN確定後2.5s）
     var _burstJanWaitTimer = null;   // AI完了後にJAN確定を待つタイマー（最大1s）
+    var _burstClearFormTimer = null; // 保存後にフォームをクリアするタイマー（1s後）
 
     function renderBurstStatus(msg, cls) {
       var html = '';
@@ -3393,19 +3402,24 @@
       var tl = getHistory(); tl.unshift(e);
       try { setHistory(tl); }
       catch (ex) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
-      _burstJanSaved = true;
+      // _burstJanSaved は true にしない（次の写真をすぐ撮れるようにする）
+      // 旧写真のKeepa/OpenBD応答が返っても重複保存しないよう JAN/ISBN をクリア
+      _keepaLastJan   = '';
+      _openBdLastIsbn = '';
       burstCount++;
       burstLast = (e.memo || '(名称未設定)') + '（' + categoryLabel(e.category)
         + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
       renderHistory(); resetCrop();
       renderBurstStatus('保存しました（JAN/Keepa未取得）。続けて次の1枚を撮影できます。');
+      _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
 
     // 連続撮影モード：Keepa/OpenBD で商品名が確定した後に下書き保存し、次の商品待ちに戻る
     function maybeBurstAutoSave() {
       if (captureMode !== 'burst') return;
       if (_burstJanSaved) return;
-      // Keepa/OpenBD が返った → JAN待ち・Keepa待ちタイマーを全キャンセル
+      // Keepa/OpenBD が返った → 全保留タイマーをキャンセル
+      clearTimeout(_burstClearFormTimer); _burstClearFormTimer = null;
       clearTimeout(_burstJanWaitTimer);  _burstJanWaitTimer  = null;
       clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null; _burstAiEntry = null;
       var memo = ($('memo') ? $('memo').value : '').trim();
