@@ -3402,10 +3402,7 @@
       var tl = getHistory(); tl.unshift(e);
       try { setHistory(tl); }
       catch (ex) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
-      // _burstJanSaved は true にしない（次の写真をすぐ撮れるようにする）
-      // 旧写真のKeepa/OpenBD応答が返っても重複保存しないよう JAN/ISBN をクリア
-      _keepaLastJan   = '';
-      _openBdLastIsbn = '';
+      _burstJanSaved = true; // Keepa/OpenBD等の後着応答による重複保存を防ぐ
       burstCount++;
       burstLast = (e.memo || '(名称未設定)') + '（' + categoryLabel(e.category)
         + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
@@ -3478,7 +3475,7 @@
       renderHistory();
       renderBurstLastLog();
       renderBurstStatus('✅ 下書き保存しました。次の商品を撮影してください。');
-      setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
+      _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
 
     // 認識結果オブジェクト j からドラフト履歴エントリを生成（売価・原価・送料は未入力）
