@@ -2168,6 +2168,20 @@
               dbgLog('[JAN確定] ' + jan + ' (' + label + ')');
               // JAN確定：連続撮影のAI自動認識タイマーは不要（JAN経路で保存）
               clearTimeout(_burstAutoTimer); _burstAutoTimer = null;
+              // 連続撮影：AI完了後のJAN待ちタイマーが動いていれば即座にKeepa待ちへ切り替え
+              if (captureMode === 'burst' && _burstJanWaitTimer && _burstAiEntry && !_burstJanSaved) {
+                dbgLog('[burst JAN確定] JAN待ちタイマーをキャンセル → Keepa待ちへ切替');
+                clearTimeout(_burstJanWaitTimer); _burstJanWaitTimer = null;
+                clearTimeout(_burstKeepaWaitTimer);
+                _burstKeepaWaitTimer = setTimeout(function () {
+                  _burstKeepaWaitTimer = null;
+                  if (!_burstJanSaved && _burstAiEntry) {
+                    dbgLog('[burst JAN確定後Keepaタイムアウト] → AI名で保存');
+                    _doSaveBurstAiEntry(_burstAiEntry);
+                  }
+                }, 2500);
+                renderBurstStatus('🔍 Keepa確認中...');
+              }
               var jh = document.getElementById('janHolder');
               if (jh) jh.value = jan;
               var jnv = document.getElementById('janNearVal');
@@ -2695,7 +2709,7 @@
     function setCropLocked(locked) { crop.locked = !!locked; renderCropUI(); }
     // 画像エリアの折りたたみ/展開（AI認識後に自動で折りたたむ。トグルで再表示）
     function setCropCollapsed(collapsed) { crop.collapsed = !!collapsed; renderCropUI(); }
-    function resetCrop() { crop.active = false; crop.locked = false; crop.collapsed = false; clearTimeout(_burstAutoTimer); _burstAutoTimer = null; renderCropUI(); }
+    function resetCrop() { crop.active = false; crop.locked = false; crop.collapsed = false; clearTimeout(_burstAutoTimer); _burstAutoTimer = null; clearTimeout(_burstJanWaitTimer); _burstJanWaitTimer = null; clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null; _burstAiEntry = null; renderCropUI(); }
 
     // クロップ枠を画像へ反映（transform。translateは画面px・scaleは中心基準）
     function cropApply() {
@@ -2996,6 +3010,7 @@
     // FAB クリア：現在の商品フォームを全リセットして次の商品へ
     function clearCurrentForm() {
       _burstJanSaved = false;
+      clearTimeout(_burstJanWaitTimer);  _burstJanWaitTimer  = null;
       clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null; _burstAiEntry = null;
       _janScanGen++; // 前の写真のスキャン（Claude Vision等）の遅延応答を無効化
       // 1. JAN / heldJan
@@ -3324,6 +3339,7 @@
     var _burstLastLogData = null; // 直近保存ログ（パネル表示用）
     var _burstAiEntry = null;        // AI認識完了entry（JAN確定後のKeepa待ち中に保持）
     var _burstKeepaWaitTimer = null; // Keepaタイムアウトタイマー（JAN確定後2.5s）
+    var _burstJanWaitTimer = null;   // AI完了後にJAN確定を待つタイマー（最大1s）
 
     function renderBurstStatus(msg, cls) {
       var html = '';
@@ -3370,11 +3386,27 @@
       renderBurstLastLog();
     });
 
+    // 連続撮影モード：AI認識結果エントリを履歴に保存（JAN未検出・Keepaタイムアウト時の共通処理）
+    function _doSaveBurstAiEntry(e) {
+      _burstAiEntry = null;
+      if (_burstJanSaved) return;
+      var tl = getHistory(); tl.unshift(e);
+      try { setHistory(tl); }
+      catch (ex) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
+      _burstJanSaved = true;
+      burstCount++;
+      burstLast = (e.memo || '(名称未設定)') + '（' + categoryLabel(e.category)
+        + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
+      renderHistory(); resetCrop();
+      renderBurstStatus('保存しました（JAN/Keepa未取得）。続けて次の1枚を撮影できます。');
+    }
+
     // 連続撮影モード：Keepa/OpenBD で商品名が確定した後に下書き保存し、次の商品待ちに戻る
     function maybeBurstAutoSave() {
       if (captureMode !== 'burst') return;
       if (_burstJanSaved) return;
-      // Keepa/OpenBD が返った → AI認識のKeepa待ちタイマーをキャンセル
+      // Keepa/OpenBD が返った → JAN待ち・Keepa待ちタイマーを全キャンセル
+      clearTimeout(_burstJanWaitTimer);  _burstJanWaitTimer  = null;
       clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null; _burstAiEntry = null;
       var memo = ($('memo') ? $('memo').value : '').trim();
       if (!memo) return;
@@ -3516,9 +3548,9 @@
           sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           var entry = entryFromRecognition(j, thumb);
 
-          // Keepa経路で保存済みなら重複保存しない
+          // 保存済みなら何もしない
           if (_burstJanSaved) {
-            dbgLog('[burst AI] 保存済み(Keepa経路) → AI保存スキップ');
+            dbgLog('[burst AI] 保存済み → AI保存スキップ');
             return;
           }
           // JAN確定済みでKeepa未着 → 最大2.5秒待ってからKeepa名で保存
@@ -3531,29 +3563,39 @@
               _burstKeepaWaitTimer = null;
               if (!_burstJanSaved && _burstAiEntry) {
                 dbgLog('[burst AI] Keepaタイムアウト → AI名で保存');
-                var tl = getHistory(); tl.unshift(_burstAiEntry);
-                try { setHistory(tl); } catch (e) {}
-                _burstAiEntry = null;
-                _burstJanSaved = true;
-                burstCount++;
-                renderHistory(); resetCrop();
-                renderBurstStatus('保存しました（Keepa未取得）。続けて次の1枚を撮影できます。');
+                _doSaveBurstAiEntry(_burstAiEntry);
               }
             }, 2500);
             renderBurstStatus('🔍 Keepa確認中...');
             return;
           }
-          // JAN未検出 → 直接保存（従来通り）
-          var list = getHistory();
-          list.unshift(entry);
-          try { setHistory(list); }
-          catch (e) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
-          burstCount++;
-          burstLast = (entry.memo || '(名称未設定)') + '（' + categoryLabel(entry.category)
-            + (entry.estimatedRank ? ' / ランク' + entry.estimatedRank : '') + '）';
-          renderHistory();
-          resetCrop(); // 次の撮影に備えてクロップ台を片付ける
-          renderBurstStatus('保存しました。続けて次の1枚を撮影できます。');
+          // JAN未確定（ZXingスキャン中の可能性）→ 最大1s待ってからJAN状態を再確認
+          dbgLog('[burst AI] JAN未確定 → 最大1s待機');
+          _burstAiEntry = entry;
+          clearTimeout(_burstJanWaitTimer);
+          _burstJanWaitTimer = setTimeout(function () {
+            _burstJanWaitTimer = null;
+            if (_burstJanSaved) { _burstAiEntry = null; return; }
+            var latJan = getHeldJan();
+            if (latJan) {
+              // 1s待機中にJAN確定 → Keepa待ちへ移行
+              dbgLog('[burst AI] JAN待機後に確定(' + latJan + ') → Keepa応答を最大2.5秒待機');
+              clearTimeout(_burstKeepaWaitTimer);
+              _burstKeepaWaitTimer = setTimeout(function () {
+                _burstKeepaWaitTimer = null;
+                if (!_burstJanSaved && _burstAiEntry) {
+                  dbgLog('[burst AI] JAN待機後Keepaタイムアウト → AI名で保存');
+                  _doSaveBurstAiEntry(_burstAiEntry);
+                }
+              }, 2500);
+              renderBurstStatus('🔍 Keepa確認中...');
+            } else {
+              // 1s経過してもJANなし → AI名で保存
+              dbgLog('[burst AI] JAN未検出(1s待機後) → AI名で保存');
+              if (_burstAiEntry) _doSaveBurstAiEntry(_burstAiEntry);
+            }
+          }, 1000);
+          renderBurstStatus('🔍 確認中...');
         })
         .catch(function () {
           renderBurstStatus(timedOut
