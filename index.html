@@ -1509,7 +1509,7 @@
       if (jan) {
         parts.push('JANあり');
         var kd = _keepaCache[jan] || _keepaCache['__name__' + jan];
-        if (kd && kd.title) parts.push('Keepa補完済み');
+        if (kd && kd.title) parts.push(kd.asin ? 'Keepa補完済み' : 'Keepaタイトルのみ(ASIN無)');
       } else if (_janNotFound) {
         parts.push('JAN未検出');
       }
@@ -1877,6 +1877,7 @@
         if (obFilled) { dbgLog('[OpenBD title] 商品名・検索KWに反映（AI上書き可）'); refreshAmzCatGuess(); }
       }
       refreshAttrsSummary(); // OpenBD取得後に巻数などがセットされるのでサマリーを更新
+      maybeBurstAutoSave(); // 連続撮影モード：商品名確定 → 自動下書き保存
     }
 
     // Keepa API: JAN → 商品名/ASIN/カテゴリ/新品最安値/ランキング/月間販売数
@@ -1905,10 +1906,12 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
           _keepaCache[jan] = (data && data.title) ? data : null;
+          dbgLog('[Keepa応答] jan=' + jan + ' title=' + (data && data.title ? data.title.slice(0,30) : 'なし') + ' asin=' + (data ? (data.asin || '(空)') : 'null'));
           if (_keepaLastJan === jan) _renderKeepa(jan);
         })
-        .catch(function() {
+        .catch(function(err) {
           _keepaCache[jan] = null;
+          dbgLog('[Keepa応答] jan=' + jan + ' エラー: ' + (err && err.message || '不明'));
           if (_keepaLastJan === jan) _renderKeepa(jan);
         });
     }
@@ -2053,6 +2056,8 @@
       var caBtn = document.getElementById('copyAsinBtn');
       if (caBtn) caBtn.style.display = '';
       refreshAiSummary(); // Keepa補完済みをサマリーへ反映
+      if (captureMode === 'burst') _currentFormAsin = info.asin || _currentFormAsin; // 連続撮影：ASIN確定タイミングで明示セット
+      maybeBurstAutoSave(); // 連続撮影モード：商品名確定 → 自動下書き保存
     }
 
     // 文字列中の日本語（ひらがな・カタカナ・漢字）比率が 30% 超かどうかを返す
@@ -2186,10 +2191,10 @@
                 _janNotFound = true;
                 // AI認識がすでに完了していれば、productNameでKeepa検索（race対応）
                 if (_aiProductName && !getHeldJan()) tryKeepaByName(_aiProductName, _aiSearchKw);
-                // デバッグパネルに失敗画像を表示（iOS: 長押し→写真に保存 / PC: 右クリック保存）
+                // デバッグパネルに失敗画像を保存（パネルは自動では開かない：「デバッグを見る」ボタンから確認）
                 var panel = document.getElementById('debugPanel');
                 if (!panel) return;
-                panel.style.display = 'block';
+                _dbgShowWrap(); // トグルボタンだけ表示。パネル本体は手動で開く
                 var wrap = document.createElement('div');
                 wrap.style.cssText = 'margin:4px 0;padding:6px;border:1px solid #ef4444;border-radius:6px;';
                 var lbl = document.createElement('div');
@@ -2948,6 +2953,7 @@
     });
     // FAB クリア：現在の商品フォームを全リセットして次の商品へ
     function clearCurrentForm() {
+      _burstJanSaved = false;
       // 1. JAN / heldJan
       setHeldJan('');
       var jh = document.getElementById('janHolder');
@@ -3268,6 +3274,7 @@
     var burstCount = 0;     // このセッションで連続撮影・保存した枚数
     var burstLast = '';     // 直近で保存した内容のラベル（表示用）
     var burstBusy = false;  // 認識処理中フラグ
+    var _burstJanSaved = false;    // JAN自動保存済み（AI二重保存防止）
 
     function renderBurstStatus(msg, cls) {
       var html = '';
@@ -3276,6 +3283,56 @@
       if (burstLast) html += '<div class="burst-last">直近: ' + esc(burstLast) + '</div>';
       if (!html) html = '「📷 連続撮影：1枚撮る」を押して撮影してください。';
       $('burstStatus').innerHTML = html;
+    }
+
+    // 連続撮影モード：Keepa/OpenBD で商品名が確定した後に下書き保存し、次の商品待ちに戻る
+    function maybeBurstAutoSave() {
+      if (captureMode !== 'burst') return;
+      if (_burstJanSaved) return;
+      var memo = ($('memo') ? $('memo').value : '').trim();
+      if (!memo) return;
+      // 保存前にASIN/Keepaデータをスナップショット（_keepaCache優先 → _currentFormAsin フォールバック）
+      var _snapJan = getHeldJan();
+      var _snapKd  = (_snapJan && _keepaCache[_snapJan]) || null;
+      var _snapAsin = (_snapKd && _snapKd.asin) ? _snapKd.asin : (_currentFormAsin || '');
+      dbgLog('[burst保存前] jan=' + _snapJan + ' cacheAsin=' + (_snapKd ? (_snapKd.asin || '(空)') : 'cache無') + ' formAsin=' + (_currentFormAsin || '(空)') + ' → snapAsin=' + (_snapAsin || '(空)'));
+      if (_snapAsin) _currentFormAsin = _snapAsin; // buildCurrentEntry が必ず読める状態にする
+      currentEntryId = null;
+      if (!upsertCurrent()) return;
+      // buildCurrentEntry がASINを見逃した場合の最終保障：保存済みエントリを直接パッチ
+      if (_snapAsin) {
+        var _snapId = currentEntryId;
+        var _pList = getHistory();
+        for (var _pi = 0; _pi < _pList.length; _pi++) {
+          if (_pList[_pi].id === _snapId) {
+            if (!_pList[_pi].asin) {
+              _pList[_pi].asin = _snapAsin;
+              dbgLog('[burst保存後パッチ] id=' + _snapId + ' asin=' + _snapAsin + ' → パッチ適用');
+              if (!_pList[_pi].keepa && _snapKd) {
+                _pList[_pi].keepa = {
+                  salesRank:      _snapKd.salesRank      != null ? _snapKd.salesRank      : null,
+                  monthlySold:    _snapKd.monthlySold     != null ? _snapKd.monthlySold    : null,
+                  monthlySoldType: _snapKd.monthlySoldType || null,
+                  category:       _snapKd.category        || ''
+                };
+              }
+              try { setHistory(_pList); } catch(e) {}
+            } else {
+              dbgLog('[burst保存後] id=' + _snapId + ' entry.asin=' + _pList[_pi].asin + ' → パッチ不要');
+            }
+            break;
+          }
+        }
+      } else {
+        dbgLog('[burst保存前] ASIN取得できず → Keepaボタンなしで保存');
+      }
+      _burstJanSaved = true;
+      burstCount++;
+      burstLast = memo;
+      currentEntryId = null;
+      renderHistory();
+      renderBurstStatus('✅ 下書き保存しました。次の商品を撮影してください。');
+      setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
 
     // 認識結果オブジェクト j からドラフト履歴エントリを生成（売価・原価・送料は未入力）
@@ -3312,6 +3369,7 @@
     // クロップ枠から作った thumb(400)/aiImg(768) を認識→ドラフト履歴へ保存
     function burstRecognize(thumb, aiImg) {
       if (burstBusy) return;
+      if (_burstJanSaved) return;
       if (!aiImg) { renderBurstStatus('画像の処理に失敗しました。撮り直してください。', 'ai-lo'); return; }
       burstBusy = true;
       var btn = $('aiBtn');
@@ -3985,7 +4043,7 @@
     // 現在のエントリを履歴へ upsert（currentEntryId があれば上書き＝重複防止、無ければ新規）
     function upsertCurrent() {
       var e = buildCurrentEntry();
-      if (e.asin) dbgLog('[saveHistory] asin=' + e.asin);
+      dbgLog('[saveHistory] asin=' + (e.asin || '(空)') + ' jan=' + (e.jan || '(空)') + ' memo=' + (e.memo || '').slice(0, 20));
       var list = getHistory();
       var idx = -1;
       if (currentEntryId) {
