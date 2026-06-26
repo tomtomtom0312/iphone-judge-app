@@ -1893,6 +1893,7 @@
     var _aiProductName = '';    // AI認識の商品名（JAN未検出時のKeepa fallback用）
     var _aiSearchKw = '';       // AI認識のsearchKw（productName失敗時の2nd try用）
     var _janNotFound = false;   // JAN検出が「未検出」と確定したフラグ
+    var _janScanGen  = 0;       // JANスキャン世代番号。新写真ごとにインクリメント（古いAPI応答を無視するため）
     var _userSetCategory = false; // ユーザーが手動でカテゴリを変更した場合true（AI自動反映を抑制）
     var _memoUserTouched = false; // ユーザーが商品名欄を直接入力済みtrue（AI/Keepa自動反映を抑制）
     var _kwUserTouched   = false; // ユーザーが検索KW欄を直接入力済みtrue（AI/Keepa自動反映を抑制）
@@ -2149,7 +2150,8 @@
     // ZXing（ローカル）→ Claude Vision（サーバー）の順で試し、最初に見つかったJANを確定する。
     function tryJanFromPhoto(file) {
       try {
-        dbgLog('[開始] file=' + (file && file.name) + ' heldJan=' + getHeldJan());
+        var myGen = ++_janScanGen; // このスキャン専用の世代番号（古い応答を無視するため）
+        dbgLog('[開始] file=' + (file && file.name) + ' heldJan=' + getHeldJan() + ' gen=' + myGen);
         $('janStatus').innerHTML = '<span class="ai-badge ai-mid">🔍 JAN自動検出: 開始</span>';
         if (getHeldJan()) { dbgLog('[開始] 既存JAN有りスキップ'); return; }
         var url = URL.createObjectURL(file);
@@ -2193,6 +2195,11 @@
 
               // ZXing + Claude Vision 両方失敗 → JAN未検出表示 + デバッグ画像保存
               function onJanNotFound(reason) {
+                // 世代不一致 = 新しい写真のスキャンが始まっているので古い応答は無視
+                if (_janScanGen !== myGen) {
+                  dbgLog('[JAN未検出スキップ] 古い応答 gen=' + myGen + ' current=' + _janScanGen + ' / ' + reason);
+                  return;
+                }
                 dbgLog('[JAN未検出] ' + reason);
                 $('janStatus').innerHTML = '<span class="ai-badge ai-lo">JAN未検出</span>';
                 _janNotFound = true;
@@ -2964,6 +2971,7 @@
     // FAB クリア：現在の商品フォームを全リセットして次の商品へ
     function clearCurrentForm() {
       _burstJanSaved = false;
+      _janScanGen++; // 前の写真のスキャン（Claude Vision等）の遅延応答を無効化
       // 1. JAN / heldJan
       setHeldJan('');
       var jh = document.getElementById('janHolder');
