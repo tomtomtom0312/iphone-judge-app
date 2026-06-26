@@ -2996,6 +2996,7 @@
     // FAB クリア：現在の商品フォームを全リセットして次の商品へ
     function clearCurrentForm() {
       _burstJanSaved = false;
+      clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null; _burstAiEntry = null;
       _janScanGen++; // 前の写真のスキャン（Claude Vision等）の遅延応答を無効化
       // 1. JAN / heldJan
       setHeldJan('');
@@ -3321,6 +3322,8 @@
     var _burstCropTouched = false; // 連続撮影：ユーザーがクロップ操作済みフラグ（タイマーキャンセル用）
     var _burstJanSaved = false; // JAN自動保存済み（AI二重保存防止）
     var _burstLastLogData = null; // 直近保存ログ（パネル表示用）
+    var _burstAiEntry = null;        // AI認識完了entry（JAN確定後のKeepa待ち中に保持）
+    var _burstKeepaWaitTimer = null; // Keepaタイムアウトタイマー（JAN確定後2.5s）
 
     function renderBurstStatus(msg, cls) {
       var html = '';
@@ -3371,6 +3374,8 @@
     function maybeBurstAutoSave() {
       if (captureMode !== 'burst') return;
       if (_burstJanSaved) return;
+      // Keepa/OpenBD が返った → AI認識のKeepa待ちタイマーをキャンセル
+      clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null; _burstAiEntry = null;
       var memo = ($('memo') ? $('memo').value : '').trim();
       if (!memo) return;
       // 保存前にASIN/Keepaデータをスナップショット（_keepaCache優先 → _currentFormAsin フォールバック）
@@ -3510,6 +3515,35 @@
           }
           sanitizeIphoneRecognition(j); // iPhoneは機種を断定せず安全寄りに（notes警告付与）
           var entry = entryFromRecognition(j, thumb);
+
+          // Keepa経路で保存済みなら重複保存しない
+          if (_burstJanSaved) {
+            dbgLog('[burst AI] 保存済み(Keepa経路) → AI保存スキップ');
+            return;
+          }
+          // JAN確定済みでKeepa未着 → 最大2.5秒待ってからKeepa名で保存
+          var _waitJan = getHeldJan();
+          if (_waitJan) {
+            dbgLog('[burst AI] JAN確定済み(' + _waitJan + ') → Keepa応答を最大2.5秒待機');
+            _burstAiEntry = entry;
+            clearTimeout(_burstKeepaWaitTimer);
+            _burstKeepaWaitTimer = setTimeout(function () {
+              _burstKeepaWaitTimer = null;
+              if (!_burstJanSaved && _burstAiEntry) {
+                dbgLog('[burst AI] Keepaタイムアウト → AI名で保存');
+                var tl = getHistory(); tl.unshift(_burstAiEntry);
+                try { setHistory(tl); } catch (e) {}
+                _burstAiEntry = null;
+                _burstJanSaved = true;
+                burstCount++;
+                renderHistory(); resetCrop();
+                renderBurstStatus('保存しました（Keepa未取得）。続けて次の1枚を撮影できます。');
+              }
+            }, 2500);
+            renderBurstStatus('🔍 Keepa確認中...');
+            return;
+          }
+          // JAN未検出 → 直接保存（従来通り）
           var list = getHistory();
           list.unshift(entry);
           try { setHistory(list); }
