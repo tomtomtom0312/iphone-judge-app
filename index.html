@@ -2166,6 +2166,8 @@
             // JAN 確定 → UI 反映・Keepa 呼出（ZXing/Claude Vision 共通）
             function commitJan(jan, label) {
               dbgLog('[JAN確定] ' + jan + ' (' + label + ')');
+              // JAN確定：連続撮影のAI自動認識タイマーは不要（JAN経路で保存）
+              clearTimeout(_burstAutoTimer); _burstAutoTimer = null;
               var jh = document.getElementById('janHolder');
               if (jh) jh.value = jan;
               var jnv = document.getElementById('janNearVal');
@@ -2693,7 +2695,7 @@
     function setCropLocked(locked) { crop.locked = !!locked; renderCropUI(); }
     // 画像エリアの折りたたみ/展開（AI認識後に自動で折りたたむ。トグルで再表示）
     function setCropCollapsed(collapsed) { crop.collapsed = !!collapsed; renderCropUI(); }
-    function resetCrop() { crop.active = false; crop.locked = false; crop.collapsed = false; renderCropUI(); }
+    function resetCrop() { crop.active = false; crop.locked = false; crop.collapsed = false; clearTimeout(_burstAutoTimer); _burstAutoTimer = null; renderCropUI(); }
 
     // クロップ枠を画像へ反映（transform。translateは画面px・scaleは中心基準）
     function cropApply() {
@@ -2808,6 +2810,18 @@
               _janFilePending = null;
               if (jf) setTimeout(function () { tryJanFromPhoto(jf); }, 0);
             }
+            // 連続撮影モード：700ms後にユーザー操作がなければ自動認識開始
+            if (captureMode === 'burst') {
+              _burstCropTouched = false;
+              clearTimeout(_burstAutoTimer);
+              _burstAutoTimer = setTimeout(function () {
+                _burstAutoTimer = null;
+                if (captureMode === 'burst' && !_burstCropTouched && !burstBusy && !_burstJanSaved) {
+                  dbgLog('[burst自動認識] 700ms経過・操作なし → onAiConfirm()');
+                  onAiConfirm();
+                }
+              }, 700);
+            }
           };
           cimg.src = work;
         };
@@ -2844,6 +2858,8 @@
       var stage = $('cropStage');
       stage.addEventListener('pointerdown', function (e) {
         if (!crop.active || crop.locked) return; // ロック中はドラッグしない（スクロール優先）
+        // 連続撮影：ユーザーがドラッグ開始 → 自動認識タイマーをキャンセル
+        if (captureMode === 'burst') { _burstCropTouched = true; clearTimeout(_burstAutoTimer); _burstAutoTimer = null; }
         crop.dragging = true;
         crop.px = e.clientX; crop.py = e.clientY;
         crop.stx = crop.tx; crop.sty = crop.ty;
@@ -2861,9 +2877,18 @@
       stage.addEventListener('pointerup', end);
       stage.addEventListener('pointercancel', end);
       stage.addEventListener('pointerleave', end);
-      $('zoomIn').addEventListener('click', function () { cropZoom(1.25); });
-      $('zoomOut').addEventListener('click', function () { cropZoom(1 / 1.25); });
-      $('zoomReset').addEventListener('click', cropResetView);
+      $('zoomIn').addEventListener('click', function () {
+        if (captureMode === 'burst') { _burstCropTouched = true; clearTimeout(_burstAutoTimer); _burstAutoTimer = null; }
+        cropZoom(1.25);
+      });
+      $('zoomOut').addEventListener('click', function () {
+        if (captureMode === 'burst') { _burstCropTouched = true; clearTimeout(_burstAutoTimer); _burstAutoTimer = null; }
+        cropZoom(1 / 1.25);
+      });
+      $('zoomReset').addEventListener('click', function () {
+        if (captureMode === 'burst') { _burstCropTouched = true; clearTimeout(_burstAutoTimer); _burstAutoTimer = null; }
+        cropResetView();
+      });
       $('cropReadjust').addEventListener('click', function () { setCropLocked(false); });
       $('cropToggle').addEventListener('click', function () { setCropCollapsed(!crop.collapsed); });
     })();
@@ -3292,6 +3317,8 @@
     var burstCount = 0;        // このセッションで連続撮影・保存した枚数
     var burstLast = '';        // 直近で保存した内容のラベル（表示用）
     var burstBusy = false;     // 認識処理中フラグ
+    var _burstAutoTimer   = null;  // 連続撮影：自動認識タイマーID
+    var _burstCropTouched = false; // 連続撮影：ユーザーがクロップ操作済みフラグ（タイマーキャンセル用）
     var _burstJanSaved = false; // JAN自動保存済み（AI二重保存防止）
     var _burstLastLogData = null; // 直近保存ログ（パネル表示用）
 
