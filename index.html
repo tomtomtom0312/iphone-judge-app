@@ -1874,12 +1874,12 @@
           if (el && !el.value.trim()) el.value = fillMap[k];
         });
       }
-      // 商品名・検索KW: ISBN取得済みなのでAI商品名より正確。手入力済みでなければ上書き（AI/Keepa優先度を超える）
+      // 商品名・検索KW: 優先度 Keepa > OpenBD > AI。Keepa設定済みなら上書きしない。手入力も温存。
       if (info.title) {
         var memoEl = $('memo'), kwEl = $('searchKw'), obFilled = false;
-        if (memoEl && !_memoUserTouched)      { memoEl.value = info.title; obFilled = true; }
-        if (kwEl   && !kwEl.value.trim())   { kwEl.value   = info.title; obFilled = true; } // KWは空欄のみ補完（AI英語KW優先）
-        if (obFilled) { dbgLog('[OpenBD title] 商品名・検索KWに反映（AI上書き可）'); refreshAmzCatGuess(); }
+        if (memoEl && !_memoUserTouched && !_keepaNameFilled) { memoEl.value = info.title; obFilled = true; _openBdNameFilled = true; }
+        if (kwEl   && !kwEl.value.trim()  && !_keepaNameFilled) { kwEl.value   = info.title; obFilled = true; } // KWは空欄のみ補完（AI英語KW優先）
+        if (obFilled) { dbgLog('[OpenBD title] 商品名・検索KWに反映（Keepa設定済みなら上書きしない）'); refreshAmzCatGuess(); }
       }
       refreshAttrsSummary(); // OpenBD取得後に巻数などがセットされるのでサマリーを更新
       maybeBurstAutoSave(); // 連続撮影モード：商品名確定 → 自動下書き保存
@@ -1896,7 +1896,8 @@
     var _userSetCategory = false; // ユーザーが手動でカテゴリを変更した場合true（AI自動反映を抑制）
     var _memoUserTouched = false; // ユーザーが商品名欄を直接入力済みtrue（AI/Keepa自動反映を抑制）
     var _kwUserTouched   = false; // ユーザーが検索KW欄を直接入力済みtrue（AI/Keepa自動反映を抑制）
-    var _keepaNameFilled = false; // Keepaが商品名を設定済みtrue（Keepa最優先：AI上書き防止用）
+    var _keepaNameFilled  = false; // Keepaが商品名を設定済みtrue（Keepa最優先：AI/OpenBD上書き防止用）
+    var _openBdNameFilled = false; // OpenBDが商品名を設定済みtrue（OpenBD第2優先：AI上書き防止用）
     var _ebayKwGenerating = false; // /api/ebay-kw 呼び出し中フラグ（重複防止）
     var _ebayKwReqId      = 0;    // フォーム切替時にインクリメント → 古い応答を無視
 
@@ -2767,7 +2768,7 @@
       currentPhoto = null; currentAiImage = null;
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false; _keepaNameFilled = false; _aiConfidence = 0; _ebayKwReqId++; _ebayKwGenerating = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false; _keepaNameFilled = false; _openBdNameFilled = false; _aiConfidence = 0; _ebayKwReqId++; _ebayKwGenerating = false;
       var reader = new FileReader();
       reader.onload = function (ev) {
         var image = new Image();
@@ -2898,7 +2899,10 @@
       // JAN読み取りはカテゴリ非依存：右下メニューもJAN項目も単品モードなら常に表示（未選択/その他/iPhone でも使える）
       $('fabMenu').style.display = single ? '' : 'none';
       $('fabJanBtn').style.display = single ? '' : 'none';
-      if (!single) closeFabMenu(); // 非表示化に伴い開いた状態を畳む
+      if (!single) {
+        closeFabMenu(); // 非表示化に伴い開いた状態を畳む
+        if ($('scrollTopBtn')) $('scrollTopBtn').style.display = 'block'; // 連続撮影モード：↑ボタン常時表示
+      }
       updateJanNear(); // 近接JAN表示をカテゴリ非依存で同期（保持値を表示）
     }
     // 右下メニュー：開閉トグル＋各項目は既存トリガを呼ぶだけ（写真/アルバム/JANの本体処理には触れない）
@@ -2929,7 +2933,7 @@
       top.addEventListener('click', function () {
         try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
       });
-      function toggleTop() { top.style.display = (window.pageYOffset > 300) ? 'block' : 'none'; }
+      function toggleTop() { top.style.display = (captureMode === 'burst' || window.pageYOffset > 300) ? 'block' : 'none'; }
       window.addEventListener('scroll', toggleTop, { passive: true });
       toggleTop();
     })();
@@ -2986,7 +2990,7 @@
       // 4. aiStatus / janStatus クリア
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
-      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false; _keepaNameFilled = false; _aiConfidence = 0; _ebayKwReqId++; _ebayKwGenerating = false;
+      _currentFormAsin = ''; _aiProductName = ''; _aiSearchKw = ''; _janNotFound = false; _userSetCategory = false; _memoUserTouched = false; _kwUserTouched = false; _keepaNameFilled = false; _openBdNameFilled = false; _aiConfidence = 0; _ebayKwReqId++; _ebayKwGenerating = false;
 
       // 5. Keepa / openBD カード
       var ke = $('keepaSuggest');
@@ -3218,15 +3222,15 @@
           }
           updateTopJanScanBtn(); // AI認識でカテゴリが変わったら上部JANボタンの表示を同期
 
-          // 商品名・検索KW：Keepa最優先。手入力・Keepa設定済みでなければAI結果を反映
+          // 商品名・検索KW：優先度 Keepa > OpenBD > AI。手入力・上位ソース設定済みなら反映しない
           _aiProductName = j.productName || '';
           _aiSearchKw = (j.searchKw || '').trim();
           var _aiComposedName = composeName(j);
-          if (_aiComposedName && !_memoUserTouched && !_keepaNameFilled) {
+          if (_aiComposedName && !_memoUserTouched && !_keepaNameFilled && !_openBdNameFilled) {
             $('memo').value = _aiComposedName;
             dbgLog('[AI memo] ' + _aiComposedName.slice(0, 40));
           }
-          if (_aiSearchKw && !_kwUserTouched && !_keepaNameFilled && $('searchKw')) {
+          if (_aiSearchKw && !_kwUserTouched && !_keepaNameFilled && !_openBdNameFilled && $('searchKw')) {
             $('searchKw').value = _aiSearchKw;
             dbgLog('[AI searchKw] ' + _aiSearchKw.slice(0, 40));
           }
