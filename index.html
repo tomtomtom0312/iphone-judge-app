@@ -2872,6 +2872,9 @@
         clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null;
         _burstAiEntry = null;
         _burstJanSaved = false;
+        // 新撮影ID発行（この写真に対する保存は1回だけ許可するためのショットID）
+        _burstShotId = 'shot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        _burstSavedShotId = ''; // 新写真→保存済みフラグをリセット
         _keepaLastJan = '';
         _openBdLastIsbn = '';
         setTimeout(function () { tryJanFromPhoto(file); }, 0);
@@ -3358,6 +3361,8 @@
     var _burstAutoTimer   = null;  // 連続撮影：自動認識タイマーID
     var _burstCropTouched = false; // 連続撮影：ユーザーがクロップ操作済みフラグ（タイマーキャンセル用）
     var _burstJanSaved = false; // JAN自動保存済み（AI二重保存防止）
+    var _burstShotId = '';        // 現在の撮影を識別する一意ID（handlePhotoFileで更新）
+    var _burstSavedShotId = '';   // 保存済み撮影ID（新写真まで変更しない→clearCurrentFormで消さない）
     var _burstLastLogData = null; // 直近保存ログ（パネル表示用）
     var _burstAiEntry = null;        // AI認識完了entry（JAN確定後のKeepa待ち中に保持）
     var _burstKeepaWaitTimer = null; // Keepaタイムアウトタイマー（JAN確定後2.5s）
@@ -3425,13 +3430,17 @@
 
     // 連続撮影モード：AI認識結果エントリを履歴に保存（JAN未検出・Keepaタイムアウト時の共通処理）
     function _doSaveBurstAiEntry(e) {
-      dbgLog('[SAVE-AI] _doSaveBurstAiEntry ENTER _burstJanSaved=' + _burstJanSaved);
+      dbgLog('[SAVE-AI] _doSaveBurstAiEntry ENTER _burstJanSaved=' + _burstJanSaved + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId);
       _burstAiEntry = null;
-      if (_burstJanSaved) { dbgLog('[SAVE-AI] _burstJanSaved=true → SKIP'); return; }
+      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId)) {
+        dbgLog('[SAVE-AI] 保存済みスキップ（_burstJanSaved=' + _burstJanSaved + ' shotId一致=' + (_burstSavedShotId === _burstShotId) + '）');
+        return;
+      }
       var tl = getHistory(); tl.unshift(e);
       try { setHistory(tl); }
       catch (ex) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
       _burstJanSaved = true; // Keepa/OpenBD等の後着応答による重複保存を防ぐ
+      _burstSavedShotId = _burstShotId; // shotID単位でも保存済みをマーク
       burstCount++;
       burstLast = (e.memo || '(名称未設定)') + '（' + categoryLabel(e.category)
         + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
@@ -3445,9 +3454,12 @@
 
     // 連続撮影モード：Keepa/OpenBD で商品名が確定した後に下書き保存し、次の商品待ちに戻る
     function maybeBurstAutoSave() {
-      dbgLog('[SAVE-KP] maybeBurstAutoSave ENTER _burstJanSaved=' + _burstJanSaved + ' memo=' + (($('memo') && $('memo').value) || '').slice(0,20));
+      dbgLog('[SAVE-KP] maybeBurstAutoSave ENTER _burstJanSaved=' + _burstJanSaved + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId + ' memo=' + (($('memo') && $('memo').value) || '').slice(0,20));
       if (captureMode !== 'burst') return;
-      if (_burstJanSaved) { dbgLog('[SAVE-KP] _burstJanSaved=true → SKIP'); return; }
+      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId)) {
+        dbgLog('[SAVE-KP] 保存済みスキップ（_burstJanSaved=' + _burstJanSaved + ' shotId一致=' + (_burstSavedShotId === _burstShotId) + '）');
+        return;
+      }
       // Keepa/OpenBD が返った → 全保留タイマーをキャンセル
       clearTimeout(_burstClearFormTimer); _burstClearFormTimer = null;
       clearTimeout(_burstJanWaitTimer);  _burstJanWaitTimer  = null;
@@ -3502,6 +3514,7 @@
       }
       if (!_snapAsin) dbgLog('[burst保存前] ASIN取得できず → Keepaボタンなしで保存');
       _burstJanSaved = true;
+      _burstSavedShotId = _burstShotId; // shotID単位でも保存済みをマーク
       burstCount++;
       burstLast = memo;
       currentEntryId = null;
@@ -4132,6 +4145,12 @@
     // 後からの変更を「自動保存済みの現在行」へ反映（change=確定時のみ。入力中の全再描画は避けてちらつき回避）
     function syncCurrent() {
       if (!currentEntryId) return; // AI未認識など未保存なら何もしない（手動は保存ボタンで作成）
+      // 連続撮影：shotIDが一致している（=この写真はもう保存済み）なら追加保存をブロック
+      if (captureMode === 'burst' && _burstShotId && _burstSavedShotId === _burstShotId) {
+        dbgLog('[syncCurrent] burst保存済みスキップ currentEntryId=' + currentEntryId + ' shotId=' + _burstShotId);
+        return;
+      }
+      dbgLog('[syncCurrent] CALLED currentEntryId=' + currentEntryId + ' captureMode=' + captureMode);
       if (upsertCurrent()) renderHistory();
     }
     ['price', 'cost', 'condition', 'shipping', 'memo', 'searchKw',
@@ -4183,6 +4202,12 @@
     function setHistory(list) {
       // 新しい順（先頭が最新）。先頭から MAX_HIST 件だけ残す＝上限超過分は末尾（最古）から自動削除。
       // 新規保存は呼び出し側で list.unshift（先頭追加）するため、直前に保存した最新は切り捨てられない。
+      if (captureMode === 'burst') {
+        var _st = (new Error()).stack || '';
+        var _stShort = _st.split('\n').slice(1, 5).map(function(l) { return l.trim().replace(/\s+/g, ' '); }).join(' | ');
+        dbgLog('[setHistory] burst list[0].memo=' + (list[0] ? (list[0].memo || '').slice(0, 25) : '(空)') + ' len=' + list.length + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId);
+        dbgLog('[setHistory] CALL STACK: ' + _stShort.slice(0, 200));
+      }
       localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, MAX_HIST)));
     }
 
