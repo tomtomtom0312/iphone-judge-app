@@ -31,7 +31,7 @@ const SCHEMA = {
     category: {
       type: 'string',
       enum: CATEGORY_VALUES,
-      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り・PSA鑑定品）/ trading_card_box=トレカ・カードゲームの未開封BOX・パック箱・シュリンク付き / figure=フィギュア・プライズ・プラモ完成品・ガチャ / book=本・漫画・雑誌・文庫・単行本・書籍・写真集 / other=ゲーム機・ゲームソフト・スニーカー・アパレル・家電・ホビー・その他すべて。'
+      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り・PSA鑑定品）/ trading_card_box=ポケモンカード・遊戯王・MTG等のTCG専用未開封BOX・パック（ロゴ/ブランド名が確認できること。コスメ・サプリ・食品・日用品等の箱は絶対に含まない。カードゲームロゴが見えない場合はother）/ figure=フィギュア・プライズ・プラモ完成品・ガチャ / book=本・漫画・雑誌・文庫・単行本・書籍・写真集 / other=ゲーム機・ゲームソフト・コスメ・ビューティー・サプリ・ドラッグストア・食品・スニーカー・アパレル・家電・ホビー・その他すべて（カードゲーム以外の箱商品もother）。'
     },
     brand: {
       type: 'string',
@@ -157,6 +157,7 @@ export default async function handler(req, res) {
               + ' それら背景・周辺物は無視し、画像の中央に最も大きく写っている主要な商品「1点だけ」を特定してください。'
               + ' フリマ/eBay 出品を想定し、まず category を判定し、そのカテゴリに関係する項目だけを埋めてください（関係しない項目は空文字）。'
               + ' トレカ単品なら cardName/series/setName、トレカBOXなら boxName/series/setName、iPhoneなら storage/color を優先的に読み取ります。'
+              + ' trading_card_box はポケモンカード・遊戯王・MTG等のカードゲーム専用のBOX・パックのみです。コスメ・サプリ・食品・日用品などの箱は、たとえシュリンクされていてもすべて other になります。カードゲームのロゴや文字が確認できない場合は other にしてください。'
               + ' 文庫・漫画・単行本・雑誌・書籍と判断できる画像は category=book とします。'
               + ' 本・漫画の productName は検索しやすい商品名にし、表紙のタイトルに加え、レーベル/文庫名/出版社/シリーズ名が見える場合はそれも含めます（例: 超かぐや姫! ファミ通文庫。巻数が明確に見える場合は「タイトル ◯巻」）。'
               + ' series にはレーベル/文庫名/出版社/シリーズ名（例: ファミ通文庫）を入れます。'
