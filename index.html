@@ -1909,8 +1909,9 @@
     function fetchKeepa(jan) {
       var el = document.getElementById('keepaSuggest');
       if (!el) return;
-      if (_keepaCache.hasOwnProperty(jan)) { _renderKeepa(jan); return; }
-      if (_keepaLastJan === jan) return;
+      if (_keepaCache.hasOwnProperty(jan)) { dbgLog('[KEEPA] fetchKeepa CACHE HIT jan=' + jan + ' _burstJanSaved=' + _burstJanSaved); _renderKeepa(jan); return; }
+      if (_keepaLastJan === jan) { dbgLog('[KEEPA] fetchKeepa 重複スキップ jan=' + jan); return; }
+      dbgLog('[KEEPA] fetchKeepa ネット取得開始 jan=' + jan);
       _keepaLastJan = jan;
       el.style.display = '';
       el.innerHTML = '<p style="margin:4px 0 0;font-size:12px;color:var(--muted);">Amazon照会中…</p>';
@@ -2169,7 +2170,7 @@
 
             // JAN 確定 → UI 反映・Keepa 呼出（ZXing/Claude Vision 共通）
             function commitJan(jan, label) {
-              dbgLog('[JAN確定] ' + jan + ' (' + label + ')');
+              dbgLog('[JAN確定] ' + jan + ' (' + label + ') _burstJanSaved=' + _burstJanSaved);
               // JAN確定：連続撮影のAI自動認識タイマーは不要（JAN経路で保存）
               clearTimeout(_burstAutoTimer); _burstAutoTimer = null;
               // 連続撮影：AI完了後のJAN待ちタイマーが動いていれば即座にKeepa待ちへ切り替え
@@ -3023,6 +3024,7 @@
     });
     // FAB クリア：現在の商品フォームを全リセットして次の商品へ
     function clearCurrentForm() {
+      dbgLog('[CLEAR] clearCurrentForm CALLED _burstJanSaved=' + _burstJanSaved);
       _burstJanSaved = false;
       clearTimeout(_burstClearFormTimer); _burstClearFormTimer = null;
       clearTimeout(_burstJanWaitTimer);  _burstJanWaitTimer  = null;
@@ -3418,8 +3420,9 @@
 
     // 連続撮影モード：AI認識結果エントリを履歴に保存（JAN未検出・Keepaタイムアウト時の共通処理）
     function _doSaveBurstAiEntry(e) {
+      dbgLog('[SAVE-AI] _doSaveBurstAiEntry ENTER _burstJanSaved=' + _burstJanSaved);
       _burstAiEntry = null;
-      if (_burstJanSaved) return;
+      if (_burstJanSaved) { dbgLog('[SAVE-AI] _burstJanSaved=true → SKIP'); return; }
       var tl = getHistory(); tl.unshift(e);
       try { setHistory(tl); }
       catch (ex) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
@@ -3435,8 +3438,9 @@
 
     // 連続撮影モード：Keepa/OpenBD で商品名が確定した後に下書き保存し、次の商品待ちに戻る
     function maybeBurstAutoSave() {
+      dbgLog('[SAVE-KP] maybeBurstAutoSave ENTER _burstJanSaved=' + _burstJanSaved + ' memo=' + (($('memo') && $('memo').value) || '').slice(0,20));
       if (captureMode !== 'burst') return;
-      if (_burstJanSaved) return;
+      if (_burstJanSaved) { dbgLog('[SAVE-KP] _burstJanSaved=true → SKIP'); return; }
       // Keepa/OpenBD が返った → 全保留タイマーをキャンセル
       clearTimeout(_burstClearFormTimer); _burstClearFormTimer = null;
       clearTimeout(_burstJanWaitTimer);  _burstJanWaitTimer  = null;
