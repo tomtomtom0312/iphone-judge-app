@@ -2173,11 +2173,12 @@
               // 世代不一致（clearCurrentForm後の古いZXingコールバック）は通常スキップ
               // ただしバースト保存済みエントリへのKeepa後着更新だけは許可する
               if (_janScanGen !== myGen) {
-                if (captureMode === 'burst' && _burstSavedEntryId && _burstSavedShotId === _burstShotId) {
-                  dbgLog('[JAN後着更新] myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan + ' id=' + _burstSavedEntryId);
+                // AI-Visionの誤読JANで保存済みエントリを汚染しないようZXingのみ許可
+                if (captureMode === 'burst' && _burstSavedEntryId && _burstSavedShotId === _burstShotId && label !== 'AI-Vision') {
+                  dbgLog('[JAN後着更新] myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan + ' label=' + label + ' id=' + _burstSavedEntryId);
                   _updateBurstEntryFromJan(jan);
                 } else {
-                  dbgLog('[JAN確定スキップ] 古い世代 myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan);
+                  dbgLog('[JAN確定スキップ] 古い世代 myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan + ' label=' + label);
                 }
                 return;
               }
@@ -3450,8 +3451,9 @@
         if (list[i].id !== _burstSavedEntryId) continue;
         var changed = false;
         if (kd.title && kd.title !== list[i].memo) { list[i].memo = kd.title; changed = true; }
-        if (jan) { list[i].jan = jan; changed = true; }
-        if (kd.asin) { list[i].asin = kd.asin; changed = true; }
+        // 既存JANがある場合は上書きしない（AI-Vision誤読JANによる汚染を防ぐ）
+        if (jan && !list[i].jan) { list[i].jan = jan; changed = true; }
+        if (kd.asin && !list[i].asin) { list[i].asin = kd.asin; changed = true; }
         list[i].keepa = {
           salesRank:       kd.salesRank      != null ? kd.salesRank      : null,
           monthlySold:     kd.monthlySold     != null ? kd.monthlySold    : null,
@@ -3484,8 +3486,8 @@
     function _doSaveBurstAiEntry(e) {
       dbgLog('[SAVE-AI] _doSaveBurstAiEntry ENTER _burstJanSaved=' + _burstJanSaved + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId);
       _burstAiEntry = null;
-      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId)) {
-        dbgLog('[SAVE-AI] 保存済みスキップ（_burstJanSaved=' + _burstJanSaved + ' shotId一致=' + (_burstSavedShotId === _burstShotId) + '）');
+      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId) || _burstSavedEntryId) {
+        dbgLog('[SAVE-AI] 保存済みスキップ（_burstJanSaved=' + _burstJanSaved + ' shotId一致=' + (_burstSavedShotId === _burstShotId) + ' savedEntryId=' + _burstSavedEntryId + '）');
         return;
       }
       var tl = getHistory(); tl.unshift(e);
@@ -3509,7 +3511,7 @@
     function maybeBurstAutoSave() {
       dbgLog('[SAVE-KP] maybeBurstAutoSave ENTER _burstJanSaved=' + _burstJanSaved + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId + ' memo=' + (($('memo') && $('memo').value) || '').slice(0,20));
       if (captureMode !== 'burst') return;
-      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId)) {
+      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId) || _burstSavedEntryId) {
         // 保存済みでも、Keepaデータがあれば保存済みエントリのmemo/JAN/ASIN/Keepaを後から更新する
         // （AI名で先に保存された場合でも、後着Keepaで正式商品名に差し替える）
         if (captureMode === 'burst' && _burstSavedEntryId) {
