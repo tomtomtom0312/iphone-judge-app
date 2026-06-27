@@ -1669,7 +1669,8 @@
       var kind = janKind(v);
       var cat  = normCategory($('category') && $('category').value);
       dbgLog('[setHeldJan] janKind=' + kind + ' category=' + cat);
-      if (kind === 'ISBN' && cat !== 'book') {
+      // ISBN検出→book自動は、カテゴリ未設定(other)のときだけ。AIが非book判定済みなら上書きしない
+      if (kind === 'ISBN' && cat === 'other') {
         applyCategoryIfAllowed('book', 'OpenBD category', 'ISBN検出');
       }
       dbgLog('[setHeldJan] updateJanNear呼出');
@@ -1715,10 +1716,10 @@
       // Step1（APIなし）：978/979(ISBN) かつ カテゴリ未選択（その他）のときだけ候補を提示。手動で他カテゴリを選んでいる場合は出さない（タップ時のみ反映）
       var sug = document.getElementById('janCatSuggest');
       if (sug) sug.style.display = (janKind(jan) === 'ISBN' && cat === 'other') ? '' : 'none';
-      // openBD：ISBN(978/979)のときだけ書籍情報を取得（カテゴリ問わず）
+      // openBD：ISBN(978/979)かつ本カテゴリのときだけ書籍情報を取得（非bookカテゴリでISBN形式でも呼ばない）
       var obEl = document.getElementById('openBdSuggest');
       if (obEl) {
-        if (janKind(jan) === 'ISBN') {
+        if (janKind(jan) === 'ISBN' && cat === 'book') {
           dbgLog('[updateJanNear] → fetchOpenBd(' + jan + ')');
           fetchOpenBd(jan);
         } else {
@@ -1930,11 +1931,19 @@
           dbgLog('[Keepa応答] jan=' + jan + ' title=' + (data && data.title ? data.title.slice(0,30) : 'なし') + ' asin=' + (data ? (data.asin || '(空)') : 'null'));
           if (_keepaLastJan === jan) {
             _renderKeepa(jan);
+            delete _pendingKeepaUpdates[jan]; // 正常経路で処理済み → pending不要
           } else if (captureMode === 'burst' && _burstSavedEntryId && _burstShotId === _fetchShotId && _keepaCache[jan]) {
             // clearCurrentFormで_keepaLastJanがリセットされた後に返ってきたKeepa応答:
             // _renderKeepaは呼べないが、保存済みエントリをKeepa正式名で直接更新する
             dbgLog('[Keepa後着] clearCurrentForm後の後着Keepa → 保存済みエントリ直更新 jan=' + jan);
             _directUpdateBurstEntry(jan, _keepaCache[jan]);
+            delete _pendingKeepaUpdates[jan];
+          } else if (captureMode === 'burst' && _pendingKeepaUpdates[jan] && _keepaCache[jan]) {
+            // 次の写真のhandlePhotoFileで_burstSavedEntryIdがクリアされた後でも、
+            // pending登録があれば該当エントリをKeepa正式名で更新する
+            dbgLog('[Keepa後着] pending登録エントリを直更新 jan=' + jan + ' id=' + _pendingKeepaUpdates[jan]);
+            _directUpdateBurstEntry(jan, _keepaCache[jan], _pendingKeepaUpdates[jan]);
+            delete _pendingKeepaUpdates[jan];
           }
         })
         .catch(function(err) {
@@ -2231,6 +2240,11 @@
               if (jnw) jnw.style.display = '';
               setHeldJan(jan);
               if (janKind(jan) !== 'ISBN') fetchKeepa(jan);
+              // バースト：AI先行保存済みかつKeepa未着なら後着Keepaがエントリを更新できるよう登録
+              if (captureMode === 'burst' && _burstSavedEntryId && janKind(jan) !== 'ISBN' && !_keepaCache.hasOwnProperty(jan)) {
+                _pendingKeepaUpdates[jan] = _burstSavedEntryId;
+                dbgLog('[pending Keepa] ZXing後AI保存済み登録 jan=' + jan + ' id=' + _burstSavedEntryId);
+              }
               $('janStatus').innerHTML = '<span class="ai-badge ai-hi">✅ JAN検出</span>'
                 + ' ' + jan + '&nbsp;— 写真から自動検出しました（' + label + '）';
             }
@@ -3413,6 +3427,7 @@
     var _burstLastMemo = '';       // 直近保存の商品名（表示用）
     var _burstLastIsKeepa = false; // 直近保存がKeepa確認済みかどうか
     var _burstLastJanSaved = '';   // 直近保存時のJAN
+    var _pendingKeepaUpdates = {}; // { jan: entryId } — AI先行保存エントリで後着Keepaが更新すべきもの
 
     // 現在の撮影IDが既に保存済みかどうかを判定（重複保存防止条件を一本化）
     function _isBurstShotSaved() {
@@ -3511,16 +3526,20 @@
 
     // 後着ZXingによるバースト保存済みエントリへのKeepデータ直接更新
     // （clearCurrentForm後に_janScanGenがブロックした場合のフォールバック）
-    function _directUpdateBurstEntry(jan, kd) {
-      if (!_burstSavedEntryId || !kd) return;
+    function _directUpdateBurstEntry(jan, kd, entryId) {
+      var targetId = entryId || _burstSavedEntryId;
+      if (!targetId || !kd) return;
       var list = getHistory();
       for (var i = 0; i < list.length; i++) {
-        if (list[i].id !== _burstSavedEntryId) continue;
+        if (list[i].id !== targetId) continue;
         var changed = false;
         if (kd.title && kd.title !== list[i].memo) { list[i].memo = kd.title; changed = true; }
         // 既存JANがある場合は上書きしない（AI-Vision誤読JANによる汚染を防ぐ）
         if (jan && !list[i].jan) { list[i].jan = jan; changed = true; }
         if (kd.asin && !list[i].asin) { list[i].asin = kd.asin; changed = true; }
+        // KeepaカテゴリでAIカテゴリを上書き（ドラッグストア/ビューティーなど正確な分類へ）
+        var _kCat = keepaCatToStolyCategory(kd.category || '');
+        if (_kCat && _kCat !== list[i].category) { list[i].category = _kCat; changed = true; }
         list[i].keepa = {
           salesRank:       kd.salesRank      != null ? kd.salesRank      : null,
           monthlySold:     kd.monthlySold     != null ? kd.monthlySold    : null,
@@ -3529,7 +3548,7 @@
         };
         changed = true;
         if (changed) {
-          dbgLog('[後着ZXing直更新] id=' + _burstSavedEntryId + ' jan=' + jan + ' title=' + (kd.title || '').slice(0,20));
+          dbgLog('[後着ZXing直更新] id=' + targetId + ' jan=' + jan + ' title=' + (kd.title || '').slice(0,20));
           try { setHistory(list); } catch(ex) {}
           renderHistory();
           // clearCurrentForm後でも直近表示をKeepa正式名に更新
@@ -3570,6 +3589,12 @@
       _burstJanSaved = true; // Keepa/OpenBD等の後着応答による重複保存を防ぐ
       _burstSavedShotId = _burstShotId; // shotID単位でも保存済みをマーク
       _burstSavedEntryId = e.id;        // 後着Keepaがこのエントリを更新できるよう記録
+      // JAN確定済みかつKeepa未着なら後着Keepaがエントリを更新できるよう登録
+      var _pj = getHeldJan();
+      if (_pj && janKind(_pj) !== 'ISBN' && !_keepaCache.hasOwnProperty(_pj)) {
+        _pendingKeepaUpdates[_pj] = e.id;
+        dbgLog('[pending Keepa] AI先行保存登録 jan=' + _pj + ' id=' + e.id);
+      }
       _burstLastMemo = e.memo || '';
       _burstLastIsKeepa = false;
       _burstLastJanSaved = e.jan || '';
@@ -3612,6 +3637,13 @@
                 // JAN・ASINを補完/上書き（空でも、より正確なデータで更新）
                 if (_upJan) { _upList[_upI].jan = _upJan; _upChanged = true; }
                 if (_upAsin) { _upList[_upI].asin = _upAsin; _upChanged = true; }
+                // KeepaカテゴリでAIカテゴリを上書き（正式分類へ）
+                var _upKeepaRawCat = (_upKd && _upKd.category) ? _upKd.category : '';
+                var _upCat = _upKeepaRawCat ? keepaCatToStolyCategory(_upKeepaRawCat) : normCategory($('category').value);
+                if (_upCat && _upCat !== 'other' && _upCat !== _upList[_upI].category) {
+                  dbgLog('[SAVE-KP] カテゴリ更新: "' + _upList[_upI].category + '" → "' + _upCat + '"');
+                  _upList[_upI].category = _upCat; _upChanged = true;
+                }
                 // KeepaデータをセットまたはJANベースのデータで上書き
                 if (_upKd) {
                   _upList[_upI].keepa = {
