@@ -2879,6 +2879,9 @@
         _burstSavedEntryId = ''; // 新写真→保存済みエントリIDをリセット
         _keepaLastJan = '';
         _openBdLastIsbn = '';
+        // 前の写真のJANが残っているとAIが「JAN確定済み」と誤判定するためクリア
+        // (clearCurrentFormがキャンセルされた場合でも必ずリセット)
+        setHeldJan('');
         setTimeout(function () { tryJanFromPhoto(file); }, 0);
       }
       loadForCrop(file); // sync でリセット・クロップ準備
