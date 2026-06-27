@@ -477,6 +477,12 @@
     .jan-toast.is-success { background: #16a34a; }
     .jan-toast.is-fail { background: #ea580c; }
     .jan-toast.is-info { background: #2563eb; }
+    /* ライブカメラオーバーレイ（getUserMedia + canvas capture。シャッター音なし確認用プロトタイプ） */
+    #liveCamOverlay { position: fixed; inset: 0; z-index: 9990; background: #000; display: flex; flex-direction: column; }
+    #liveCamVideo { flex: 1; width: 100%; object-fit: cover; display: block; }
+    #liveCamControls { display: flex; gap: 12px; justify-content: center; align-items: center; padding: 16px 20px; background: #111; flex-shrink: 0; }
+    #liveCamCaptureBtn { flex: 1; max-width: 220px; padding: 16px 0; border: none; border-radius: 50px; background: #16a34a; color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; }
+    #liveCamCloseBtn { padding: 14px 20px; border: 1px solid #555; border-radius: 50px; background: #222; color: #ccc; font-size: 15px; cursor: pointer; }
     /* 相場検索の丸アイコンボタン（常時表示・横並び・折り返し可）。正式ロゴは使わず自作の文字アイコン。aria-label/title でサイト名を補う */
     .search-icons { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
     .search-icon { width: 42px; height: 42px; border-radius: 50%; border: 1px solid #d0d0d0; background: #fff; color: #111; font-size: 17px; font-weight: 800; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
@@ -541,6 +547,7 @@
     </div>
     <!-- 上部の撮影/アルバムボタンは連続撮影モード専用表示（単品モードは右下メニューに集約）。初期は単品なので非表示。表示制御は applyCaptureMode -->
     <button class="photo-btn" id="cameraBtn" style="display:none;">📷 写真を撮る</button>
+    <button class="photo-btn photo-btn-sub" id="liveCamBtn" style="display:none;">🎬 ライブ撮影（音なし）</button>
     <button class="photo-btn photo-btn-sub" id="albumBtn" style="display:none;">🖼 アルバムから選ぶ</button>
     <!-- 連続撮影モード：撮影ボタン直下に保存件数を常時表示（スクロール不要） -->
     <div id="burstQuickStatus" style="display:none; text-align:center; padding:6px 10px; font-size:13px; border-radius:8px; margin:4px 0 0;"></div>
@@ -548,6 +555,7 @@
     <div id="fabMenu" style="display:none; position:fixed; right:16px; bottom:16px; z-index:40;">
       <div id="fabMenuItems" style="display:none; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:10px;">
         <button type="button" id="fabCameraBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 写真を撮る</button>
+        <button type="button" id="fabLiveCamBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#dcfce7; color:#15803d; font-size:14px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🎬 ライブ撮影（音なし）</button>
         <button type="button" id="fabAlbumBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🖼 アルバムから選ぶ</button>
         <button type="button" id="fabJanBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">📷 JANを読む</button>
         <button type="button" id="fabVoiceBtn" style="border:none; border-radius:20px; padding:10px 16px; background:#fff; color:#111; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer;">🎙 音声で商品入力</button>
@@ -582,6 +590,14 @@
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
+    <!-- ライブカメラオーバーレイ（getUserMedia + canvasキャプチャ。シャッター音なし確認用プロトタイプ） -->
+    <div id="liveCamOverlay" style="display:none;">
+      <video id="liveCamVideo" playsinline muted></video>
+      <div id="liveCamControls">
+        <button type="button" id="liveCamCaptureBtn">📸 撮影（音なし）</button>
+        <button type="button" id="liveCamCloseBtn">✕ 閉じる</button>
+      </div>
+    </div>
     <!-- デバッグ折りたたみ（通常は非表示。ログがあるときだけトグルボタンが現れる） -->
     <div id="debugWrap" style="display:none; margin:4px 0;">
       <button id="debugToggleBtn" onclick="(function(){var p=document.getElementById('debugPanel');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'🔧 デバッグを隠す':'🔧 デバッグを見る';}).call(this)" style="background:none;border:1px solid #f59e0b;border-radius:6px;color:#f59e0b;font-size:10px;padding:2px 8px;cursor:pointer;">🔧 デバッグを見る</button>
@@ -2721,9 +2737,13 @@
     }
 
     // 画面離脱・バックグラウンド時もカメラを必ず停止（点きっぱなし防止）
-    window.addEventListener('pagehide', function () { if (_janScan.active) stopJanLiveScan(); });
+    window.addEventListener('pagehide', function () {
+      if (_janScan.active) stopJanLiveScan();
+      if (_liveCamStream) closeLiveCamera();
+    });
     document.addEventListener('visibilitychange', function () {
       if (document.hidden && _janScan.active) stopJanLiveScan('読み取りを中止しました。');
+      if (document.hidden && _liveCamStream) closeLiveCamera();
     });
 
     function parseInputNumber(value) {
@@ -2934,10 +2954,10 @@
     }
 
     // 写真の取得元（カメラ=capture付き / アルバム=capture無し）が違うだけで、処理は共通
-    function handlePhotoFile(e) {
-      var file = e.target.files[0];
-      dbgLog('[handlePhotoFile] ファイル選択 file=' + (file && file.name));
+    // ファイルまたはBlobからの共通写真処理（handlePhotoFile・ライブカメラキャプチャ共用）
+    function processPhotoFile(file) {
       if (!file) return;
+      dbgLog('[processPhotoFile] file=' + (file && file.name) + ' mode=' + captureMode);
       if (captureMode === 'single') {
         // 単品モード: cimg.onload で商品AIフェッチ開始→その後JAN検出の順にする
         _autoAiPending = true;
@@ -2959,16 +2979,81 @@
         _keepaLastJan = '';
         _openBdLastIsbn = '';
         // 前の写真のJANが残っているとAIが「JAN確定済み」と誤判定するためクリア
-        // (clearCurrentFormがキャンセルされた場合でも必ずリセット)
         setHeldJan('');
         setTimeout(function () { tryJanFromPhoto(file); }, 0);
       }
       loadForCrop(file); // sync でリセット・クロップ準備
+    }
+    function handlePhotoFile(e) {
+      var file = e.target.files[0];
+      dbgLog('[handlePhotoFile] ファイル選択 file=' + (file && file.name));
+      processPhotoFile(file);
       e.target.value = ''; // 同じ写真を選び直しても change が発火するように
     }
+
+    // ライブカメラ（getUserMedia + canvas capture）プロトタイプ
+    var _liveCamStream = null;
+    var _liveCamCanvas = null;
+    function openLiveCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('このブラウザはライブカメラに対応していません');
+        return;
+      }
+      var overlay = $('liveCamOverlay');
+      var video = $('liveCamVideo');
+      overlay.style.display = 'flex';
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false
+      }).then(function (stream) {
+        _liveCamStream = stream;
+        video.srcObject = stream;
+        video.play().catch(function () {});
+        dbgLog('[liveCam] getUserMedia 成功');
+      }).catch(function (err) {
+        overlay.style.display = 'none';
+        dbgLog('[liveCam] getUserMedia 失敗: ' + err.message);
+        alert('カメラを起動できませんでした: ' + err.message);
+      });
+    }
+    function closeLiveCamera() {
+      if (_liveCamStream) {
+        _liveCamStream.getTracks().forEach(function (t) { t.stop(); });
+        _liveCamStream = null;
+      }
+      var video = $('liveCamVideo');
+      if (video) { try { video.srcObject = null; } catch (e) {} }
+      var overlay = $('liveCamOverlay');
+      if (overlay) overlay.style.display = 'none';
+      dbgLog('[liveCam] 停止');
+    }
+    function captureLiveFrame() {
+      var video = $('liveCamVideo');
+      if (!video || !video.videoWidth || !video.videoHeight) {
+        alert('映像の準備ができていません。しばらく待ってから再度タップしてください。');
+        return;
+      }
+      if (!_liveCamCanvas) _liveCamCanvas = document.createElement('canvas');
+      _liveCamCanvas.width  = video.videoWidth;
+      _liveCamCanvas.height = video.videoHeight;
+      _liveCamCanvas.getContext('2d').drawImage(video, 0, 0);
+      _liveCamCanvas.toBlob(function (blob) {
+        if (!blob) { alert('キャプチャに失敗しました'); return; }
+        var file = new File([blob], 'live-capture.jpg', { type: 'image/jpeg' });
+        dbgLog('[liveCam] キャプチャ完了 ' + video.videoWidth + 'x' + video.videoHeight);
+        closeLiveCamera();
+        processPhotoFile(file);
+      }, 'image/jpeg', 0.92);
+    }
+    $('liveCamCaptureBtn').addEventListener('click', captureLiveFrame);
+    $('liveCamCloseBtn').addEventListener('click', closeLiveCamera);
+
     $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });    // カメラ起動優先
+    $('liveCamBtn').addEventListener('click', openLiveCamera);                            // ライブ撮影（音なし）
     $('albumBtn').addEventListener('click', function () { $('photoInputLib').click(); });  // フォトライブラリ/ファイル選択
     $('burstCameraFab').addEventListener('click', function () { $('photoInput').click(); }); // 連続撮影右下FAB
+    if ($('fabCameraBtn'))  $('fabCameraBtn').addEventListener('click',  function () { $('photoInput').click(); });
+    if ($('fabLiveCamBtn')) $('fabLiveCamBtn').addEventListener('click', openLiveCamera);
     $('photoInput').addEventListener('change', handlePhotoFile);
     $('photoInputLib').addEventListener('change', handlePhotoFile);
 
@@ -3029,6 +3114,7 @@
       $('albumBtn').textContent = burst ? '🖼 連続撮影：アルバムから1枚' : '🖼 アルバムから選ぶ';
       // 上部の撮影/アルバムボタンは連続撮影モードのみ表示（単品モードは右下メニューに集約）
       $('cameraBtn').style.display = burst ? '' : 'none';
+      if ($('liveCamBtn')) $('liveCamBtn').style.display = burst ? '' : 'none';
       $('albumBtn').style.display = burst ? '' : 'none';
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
