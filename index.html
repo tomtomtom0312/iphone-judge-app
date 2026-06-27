@@ -546,8 +546,8 @@
       <button data-mode="burst">連続撮影</button>
     </div>
     <!-- 上部の撮影/アルバムボタンは連続撮影モード専用表示（単品モードは右下メニューに集約）。初期は単品なので非表示。表示制御は applyCaptureMode -->
-    <button class="photo-btn" id="cameraBtn" style="display:none;">📷 写真を撮る</button>
-    <button class="photo-btn photo-btn-sub" id="liveCamBtn" style="display:none;">🎬 ライブ撮影（音なし）</button>
+    <button class="photo-btn" id="liveCamBtn" style="display:none;">🎬 ライブ撮影（音なし）</button>
+    <button class="photo-btn photo-btn-sub" id="cameraBtn" style="display:none;">📷 写真を撮る</button>
     <button class="photo-btn photo-btn-sub" id="albumBtn" style="display:none;">🖼 アルバムから選ぶ</button>
     <!-- 連続撮影モード：撮影ボタン直下に保存件数を常時表示（スクロール不要） -->
     <div id="burstQuickStatus" style="display:none; text-align:center; padding:6px 10px; font-size:13px; border-radius:8px; margin:4px 0 0;"></div>
@@ -3552,7 +3552,7 @@
     // 保存完了後に撮影ボタンをパルスアニメーションで次撮影をガイド
     function _burstReadyPulse() {
       if (navigator.vibrate) navigator.vibrate(120);
-      var cb = $('cameraBtn');
+      var cb = $('liveCamBtn');   // ライブ撮影がメインボタンなのでこちらにパルスを当てる
       if (cb && cb.style.display !== 'none') {
         cb.style.transition = 'background-color 0.25s';
         cb.style.backgroundColor = '#15803d';
