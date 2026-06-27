@@ -2880,6 +2880,9 @@
         clearTimeout(_burstKeepaWaitTimer); _burstKeepaWaitTimer = null;
         _burstAiEntry = null;
         _burstJanSaved = false;
+        // _burstClearFormTimerをキャンセルするとclearCurrentFormが走らず_janScanGenが増えないため
+        // ここで明示的にインクリメントして前の写真のZXing/JanDetect/AI応答をすべて無効化
+        _janScanGen++;
         // 新撮影ID発行（この写真に対する保存は1回だけ許可するためのショットID）
         _burstShotId = 'shot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
         _burstSavedShotId = ''; // 新写真→保存済みフラグをリセット
@@ -3673,6 +3676,7 @@
       var timedOut = false;
       var timer = setTimeout(function () { timedOut = true; controller.abort(); }, AI_TIMEOUT_MS);
       var hint = $('burstCategoryHint').value || '';
+      var myAiGen = _janScanGen; // AI応答が届いた時点で次の写真が撮られていないか確認用
 
       function finish() {
         clearTimeout(timer);
@@ -3695,6 +3699,11 @@
           });
         })
         .then(function (res) {
+          // 次の写真が撮影されて世代が変わっていたら古いAI結果を破棄
+          if (_janScanGen !== myAiGen) {
+            dbgLog('[burst AI] 古い世代スキップ myAiGen=' + myAiGen + ' current=' + _janScanGen);
+            return;
+          }
           var j = res.j || {};
           if (res.status === 404 || res.status === 501) {
             renderBurstStatus('AI関数(/api)が無い環境です。連続撮影はVercelデプロイ後に利用できます。', 'ai-lo');
