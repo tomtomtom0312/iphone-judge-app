@@ -2876,6 +2876,7 @@
         // 新撮影ID発行（この写真に対する保存は1回だけ許可するためのショットID）
         _burstShotId = 'shot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
         _burstSavedShotId = ''; // 新写真→保存済みフラグをリセット
+        _burstSavedEntryId = ''; // 新写真→保存済みエントリIDをリセット
         _keepaLastJan = '';
         _openBdLastIsbn = '';
         setTimeout(function () { tryJanFromPhoto(file); }, 0);
@@ -3365,6 +3366,7 @@
     var _burstJanSaved = false; // JAN自動保存済み（AI二重保存防止）
     var _burstShotId = '';        // 現在の撮影を識別する一意ID（handlePhotoFileで更新）
     var _burstSavedShotId = '';   // 保存済み撮影ID（新写真まで変更しない→clearCurrentFormで消さない）
+    var _burstSavedEntryId = '';  // 保存済みエントリID（Keepa後着時にこのエントリをアップデート）
     var _burstLastLogData = null; // 直近保存ログ（パネル表示用）
     var _burstAiEntry = null;        // AI認識完了entry（JAN確定後のKeepa待ち中に保持）
     var _burstKeepaWaitTimer = null; // Keepaタイムアウトタイマー（JAN確定後2.5s）
@@ -3443,6 +3445,7 @@
       catch (ex) { renderBurstStatus('保存容量が上限に達しました。古い履歴を削除してください。', 'ai-lo'); return; }
       _burstJanSaved = true; // Keepa/OpenBD等の後着応答による重複保存を防ぐ
       _burstSavedShotId = _burstShotId; // shotID単位でも保存済みをマーク
+      _burstSavedEntryId = e.id;        // 後着Keepaがこのエントリを更新できるよう記録
       burstCount++;
       burstLast = (e.memo || '(名称未設定)') + '（' + categoryLabel(e.category)
         + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
@@ -3459,6 +3462,49 @@
       dbgLog('[SAVE-KP] maybeBurstAutoSave ENTER _burstJanSaved=' + _burstJanSaved + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId + ' memo=' + (($('memo') && $('memo').value) || '').slice(0,20));
       if (captureMode !== 'burst') return;
       if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId)) {
+        // 保存済みでも、Keepaデータがあれば保存済みエントリのmemo/JAN/ASIN/Keepaを後から更新する
+        // （AI名で先に保存された場合でも、後着Keepaで正式商品名に差し替える）
+        if (captureMode === 'burst' && _burstSavedEntryId) {
+          var _upMemo = ($('memo') ? $('memo').value : '').trim();
+          var _upJan  = getHeldJan();
+          var _upAsin = _currentFormAsin || '';
+          var _upKdKey = (_upJan && _keepaCache.hasOwnProperty(_upJan)) ? _upJan
+                       : (_upAsin && _keepaCache.hasOwnProperty('__name__' + _upAsin)) ? '__name__' + _upAsin : '';
+          var _upKd = _upKdKey ? _keepaCache[_upKdKey] : null;
+          if (_upMemo) { // Keepaタイトルが設定されているときだけ更新を試みる
+            var _upList = getHistory();
+            for (var _upI = 0; _upI < _upList.length; _upI++) {
+              if (_upList[_upI].id === _burstSavedEntryId) {
+                var _upChanged = false;
+                // 商品名を正式Keepaタイトルで上書き（AI仮名 → Keepa正式名）
+                if (_upMemo !== _upList[_upI].memo) {
+                  dbgLog('[SAVE-KP] 後着Keepaでmemo更新: "' + (_upList[_upI].memo || '').slice(0,20) + '" → "' + _upMemo.slice(0,20) + '"');
+                  _upList[_upI].memo = _upMemo;
+                  _upChanged = true;
+                }
+                // JAN・ASINを補完/上書き（空でも、より正確なデータで更新）
+                if (_upJan) { _upList[_upI].jan = _upJan; _upChanged = true; }
+                if (_upAsin) { _upList[_upI].asin = _upAsin; _upChanged = true; }
+                // KeepaデータをセットまたはJANベースのデータで上書き
+                if (_upKd) {
+                  _upList[_upI].keepa = {
+                    salesRank:       _upKd.salesRank      != null ? _upKd.salesRank      : null,
+                    monthlySold:     _upKd.monthlySold     != null ? _upKd.monthlySold    : null,
+                    monthlySoldType: _upKd.monthlySoldType || null,
+                    category:        _upKd.category        || ''
+                  };
+                  _upChanged = true;
+                }
+                if (_upChanged) {
+                  try { setHistory(_upList); } catch(ex) {}
+                  renderHistory();
+                  dbgLog('[SAVE-KP] 後着Keepa更新完了 id=' + _burstSavedEntryId + ' jan=' + _upJan + ' asin=' + _upAsin);
+                }
+                break;
+              }
+            }
+          }
+        }
         dbgLog('[SAVE-KP] 保存済みスキップ（_burstJanSaved=' + _burstJanSaved + ' shotId一致=' + (_burstSavedShotId === _burstShotId) + '）');
         return;
       }
@@ -3517,6 +3563,7 @@
       if (!_snapAsin) dbgLog('[burst保存前] ASIN取得できず → Keepaボタンなしで保存');
       _burstJanSaved = true;
       _burstSavedShotId = _burstShotId; // shotID単位でも保存済みをマーク
+      _burstSavedEntryId = _snapId;     // 後着Keepaがこのエントリを更新できるよう記録
       burstCount++;
       burstLast = memo;
       currentEntryId = null;
