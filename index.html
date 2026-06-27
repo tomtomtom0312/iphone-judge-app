@@ -2790,6 +2790,7 @@
       currentRank = ''; currentAi = null;
       domAmzCatTouched = false; // 新しい商品＝Amazonカテゴリの自動推定を再開（手動上書き保護をリセット）
       currentEntryId = null; // 新しい写真＝新しい商品。次の保存は新規行になる
+      _lastSaveKey = ''; _lastSaveTime = 0; _lastSaveId = ''; // 新写真でdedup状態リセット
       if (keepCat) {
         currentAttrs = _attrsBeforePhoto; // 手動カテゴリの手入力は維持（画面DOMもそのまま）
       } else {
@@ -3054,6 +3055,7 @@
       currentRank  = '';
       currentAttrs = {};
       currentEntryId = null;
+      _lastSaveKey = ''; _lastSaveTime = 0; _lastSaveId = ''; // 次の写真でdedup誤検知しないようリセット
       domAmzCatTouched = false;
 
       // 3. 商品名・検索KW・音声入力
@@ -3797,6 +3799,12 @@
 
     var lastResult = null; // 直近の有効な判定（保存用）
     var currentEntryId = null; // 単品フォームで扱い中の履歴行ID（自動保存＝upsert用。新写真でnull）
+    // 共通二重保存防止（単品・連続共用）
+    var _lastSaveKey  = '';  // 直前の「新規挿入」キー: jan + '|' + memo先頭25字
+    var _lastSaveTime = 0;   // 直前の新規挿入タイムスタンプ（ms）
+    var _lastSaveId   = '';  // 直前の新規挿入エントリID（dedup時に更新先を特定）
+    var _saveCurrentBusy = false; // 保存ボタン連打防止
+    var _upsertSkipDedup = false; // saveCurrent の明示的新規保存はdedup不要
 
     // --- 5段階評価 ---
     var LEVELS = {
@@ -4296,7 +4304,29 @@
         e.date = list[idx].date; // 既存行は登録日時を保持（並びも維持）
         list[idx] = e;
       } else {
-        list.unshift(e); // 新規（または20件丸めで脱落していた場合）は先頭へ
+        // 新規挿入：saveCurrent以外の自動保存経路で3秒以内の同一商品重複を防ぐ
+        if (!_upsertSkipDedup) {
+          var _newKey = (e.jan || '') + '|' + (e.memo || '').slice(0, 25);
+          var _now = Date.now();
+          if (_newKey !== '|' && _lastSaveKey === _newKey && (_now - _lastSaveTime) < 3000 && _lastSaveId) {
+            // 直前エントリIDで更新扱い（新規追加しない）
+            for (var j = 0; j < list.length; j++) {
+              if (list[j].id === _lastSaveId) { idx = j; break; }
+            }
+            if (idx >= 0) {
+              dbgLog('[upsertCurrent] 重複保存防止 3秒以内 key=' + _newKey + ' → 直前エントリを更新');
+              e.date = list[idx].date;
+              list[idx] = e;
+            }
+          }
+        }
+        if (idx < 0) {
+          // 本当の新規挿入
+          var _insKey = (e.jan || '') + '|' + (e.memo || '').slice(0, 25);
+          var _insNow = Date.now();
+          list.unshift(e);
+          if (!_upsertSkipDedup) { _lastSaveKey = _insKey; _lastSaveTime = _insNow; _lastSaveId = e.id; }
+        }
       }
       try { setHistory(list); }
       catch (err) { alert('保存できませんでした（容量上限の可能性）。古い履歴を削除してください。'); return false; }
@@ -4308,6 +4338,10 @@
     // 直前に保存した下書きを上書きしないよう、保存の前後で currentEntryId を null にする。
     // （既存履歴の更新は履歴カードの「編集」＝saveEdit からのみ。自動同期 syncCurrent も直前行を書き換えない）
     function saveCurrent() {
+      // 連打防止：2秒以内の2回目以降の呼び出しはスキップ
+      if (_saveCurrentBusy) { dbgLog('[saveCurrent] 連打防止スキップ'); return; }
+      _saveCurrentBusy = true;
+      setTimeout(function() { _saveCurrentBusy = false; }, 2000);
       if (!lastResult) {
         // 売価なし＝下書き保存。空エントリ乱発を防ぐため、最低限の中身がある場合のみ許可。
         var a = readAttrs($('attrsBox'));
@@ -4315,10 +4349,15 @@
           || ($('memo').value || '').trim()
           || ($('searchKw').value || '').trim()
           || Object.keys(a).some(function (k) { return String(a[k] || '').trim(); });
-        if (!hasContent) { alert('下書き保存するには、写真・商品名/メモ・検索キーワード・補助項目のいずれかを入力してください。'); return; }
+        if (!hasContent) {
+          _saveCurrentBusy = false; // キャンセル時はフラグを即解放
+          alert('下書き保存するには、写真・商品名/メモ・検索キーワード・補助項目のいずれかを入力してください。'); return;
+        }
       }
       currentEntryId = null;            // 毎回新規IDで追加（直前の履歴を上書きしない）
+      _upsertSkipDedup = true;          // 手動保存はdedup不要（ユーザーが意図的に保存）
       if (upsertCurrent()) renderHistory();
+      _upsertSkipDedup = false;
       currentEntryId = null;            // 保存後も保持しない：自動同期で直前行を書き換えない／次回も新規
     }
 
