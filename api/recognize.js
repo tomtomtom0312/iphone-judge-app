@@ -14,7 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
 export const config = { maxDuration: 30 };
 
 // 取り扱いカテゴリ（機械値）。フロント CATEGORIES のキーと一致させること。
-const CATEGORY_VALUES = ['iPhone', 'trading_card_single', 'trading_card_box', 'figure', 'book', 'other'];
+const CATEGORY_VALUES = ['iPhone', 'game_software', 'game_console', 'trading_card_single', 'trading_card_box', 'figure', 'book', 'other'];
 
 // 状態ランク（外観グレード）。フロントの状態セレクトへマッピングして使う
 const RANKS = ['S', 'A', 'B', 'C', 'D', 'ジャンク'];
@@ -31,7 +31,7 @@ const SCHEMA = {
     category: {
       type: 'string',
       enum: CATEGORY_VALUES,
-      description: 'iPhone=Apple iPhone本体 / trading_card_single=トレカ1枚（スリーブ・1枚撮り・PSA鑑定品）/ trading_card_box=ポケモンカード・遊戯王・MTG等のTCG専用未開封BOX・パック（ロゴ/ブランド名が確認できること。コスメ・サプリ・食品・日用品等の箱は絶対に含まない。カードゲームロゴが見えない場合はother）/ figure=フィギュア・プライズ・プラモ完成品・ガチャ / book=本・漫画・雑誌・文庫・単行本・書籍・写真集 / other=ゲーム機・ゲームソフト・コスメ・ビューティー・サプリ・ドラッグストア・食品・スニーカー・アパレル・家電・ホビー・その他すべて（カードゲーム以外の箱商品もother）。'
+      description: 'iPhone=Apple iPhone本体 / game_software=Nintendo Switch・PS4・PS5・Xbox等のゲームソフト（カートリッジ・ディスク・ゲームケース。ゲームタイトルが確認できるもの）/ game_console=ゲーム機本体（Nintendo Switch本体・PS5本体・Xbox本体等。コントローラー単品は含まない）/ trading_card_single=トレカ1枚（スリーブ・1枚撮り・PSA鑑定品）/ trading_card_box=ポケモンカード・遊戯王・MTG等のTCG専用未開封BOX・パック（ロゴ/ブランド名が確認できること。コスメ・サプリ・食品・日用品等の箱は絶対に含まない。カードゲームロゴが見えない場合はother）/ figure=フィギュア・プライズ・プラモ完成品・ガチャ / book=本・漫画・雑誌・文庫・単行本・書籍・写真集 / other=コスメ・ビューティー・サプリ・ドラッグストア・食品・スニーカー・アパレル・家電・ホビー・おもちゃ・その他すべて（game_software/game_console以外のゲーム関連、カードゲーム以外の箱商品もother）。'
     },
     brand: {
       type: 'string',
@@ -64,11 +64,11 @@ const SCHEMA = {
     },
     storage: {
       type: 'string',
-      description: 'iPhoneのストレージ容量（例: 256GB）。読み取れなければ、またはiPhone以外なら空文字。'
+      description: 'iPhoneならストレージ容量（例: 256GB）、game_softwareならプラットフォーム名（Nintendo Switch / PS4 / PS5 / Xbox Series X / 3DS 等）、game_consoleならモデル名・容量（例: Nintendo Switch OLED / PlayStation 5 Digital Edition / 512GB）。それ以外は空文字。'
     },
     color: {
       type: 'string',
-      description: 'iPhoneの本体色（例: Graphite）。読み取れなければ、またはiPhone以外なら空文字。'
+      description: 'iPhone/game_consoleの本体色（例: Graphite / ホワイト / ブラック）。読み取れなければ空文字。'
     },
     condition: {
       type: 'string',
@@ -156,7 +156,7 @@ export default async function handler(req, res) {
             text: 'この写真には、背景・周辺の雑多な物が一緒に写っている可能性があります。'
               + ' それら背景・周辺物は無視し、画像の中央に最も大きく写っている主要な商品「1点だけ」を特定してください。'
               + ' フリマ/eBay 出品を想定し、まず category を判定し、そのカテゴリに関係する項目だけを埋めてください（関係しない項目は空文字）。'
-              + ' トレカ単品なら cardName/series/setName、トレカBOXなら boxName/series/setName、iPhoneなら storage/color を優先的に読み取ります。'
+              + ' トレカ単品なら cardName/series/setName、トレカBOXなら boxName/series/setName、iPhoneなら storage/color、game_softwareなら storage にプラットフォーム名（Nintendo Switch/PS5等）・productName に「プラットフォーム ゲームタイトル」形式（例: Nintendo Switch スプラトゥーン3 / PS5 原神）、game_consoleなら storage にモデル名・color に本体色を優先的に読み取ります。'
               + ' trading_card_box はポケモンカード・遊戯王・MTG等のカードゲーム専用のBOX・パックのみです。コスメ・サプリ・食品・日用品などの箱は、たとえシュリンクされていてもすべて other になります。カードゲームのロゴや文字が確認できない場合は other にしてください。'
               + ' コスメ・ビューティー・ドラッグストア・その他すべてのカテゴリで、パッケージに見えるブランド名（無印良品・excel・資生堂・カネボウ・KOSE・DHC・SK-II・花王・ロート製薬など）を productName の先頭に必ず含めること。ブランド名が読み取れる場合は「ブランド名 + 製品種類 + 製品名」の順で記述する（例: 無印良品 さっぱり乳液 / excel パウダーファンデーション）。商品の詳細が読み取れない場合でも「ブランド名 + 製品カテゴリ」の形にし、「詳細不明」「プラスチックケース入り商品」などの汎用記述は productName に絶対使わないこと。'
               + ' 文庫・漫画・単行本・雑誌・書籍と判断できる画像は category=book とします。'

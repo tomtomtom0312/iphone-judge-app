@@ -1277,21 +1277,21 @@
         { key: 'memo',         label: 'メモ' }
       ],
       game_software: [
-        // JAN付きゲームソフト向け。jan キーで JAN欄＋右下「JANを読む」が自動連動（状態は既存グローバル「商品状態」を使うため補助項目には入れない）
+        // JAN付きゲームソフト向け。jan キーで JAN欄＋右下「JANを読む」が自動連動
         { key: 'jan',         label: 'JAN' },
-        { key: 'model',       label: '機種' },
-        { key: 'title',       label: 'タイトル' },
+        { key: 'model',       label: '機種', from: 'storage' },       // AI storage = プラットフォーム (Switch/PS5等)
+        { key: 'title',       label: 'タイトル', from: 'productName' },
         { key: 'edition',     label: '限定版/通常版', type: 'select', options: ['不明', '通常版', '限定版'] },
         { key: 'accessories', label: '付属品' },
         { key: 'memo',        label: 'メモ' }
       ],
       game_console: [
-        // JAN付きゲーム機本体向け。jan キーで JAN欄＋右下「JANを読む」が自動連動（動作確認は型混在を避けるため opStatus キーの select）
+        // JAN付きゲーム機本体向け。jan キーで JAN欄＋右下「JANを読む」が自動連動
         { key: 'jan',         label: 'JAN' },
-        { key: 'model',       label: '機種' },
+        { key: 'model',       label: '機種', from: 'storage' },       // AI storage = モデル名 (Switch OLED等)
         { key: 'modelNo',     label: '型番' },
         { key: 'capacity',    label: '容量' },
-        { key: 'color',       label: '色' },
+        { key: 'color',       label: '色', from: 'color' },
         { key: 'accessories', label: '付属品' },
         { key: 'opStatus',    label: '動作確認', type: 'select', options: ['不明', '動作確認済', '未確認', 'ジャンク'] },
         { key: 'memo',        label: 'メモ' }
