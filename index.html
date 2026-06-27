@@ -2170,9 +2170,15 @@
 
             // JAN 確定 → UI 反映・Keepa 呼出（ZXing/Claude Vision 共通）
             function commitJan(jan, label) {
-              // 世代不一致（clearCurrentForm後の古いZXingコールバック）は無視して二重保存を防ぐ
+              // 世代不一致（clearCurrentForm後の古いZXingコールバック）は通常スキップ
+              // ただしバースト保存済みエントリへのKeepa後着更新だけは許可する
               if (_janScanGen !== myGen) {
-                dbgLog('[JAN確定スキップ] 古い世代 myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan);
+                if (captureMode === 'burst' && _burstSavedEntryId && _burstSavedShotId === _burstShotId) {
+                  dbgLog('[JAN後着更新] myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan + ' id=' + _burstSavedEntryId);
+                  _updateBurstEntryFromJan(jan);
+                } else {
+                  dbgLog('[JAN確定スキップ] 古い世代 myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan);
+                }
                 return;
               }
               dbgLog('[JAN確定] ' + jan + ' (' + label + ') _burstJanSaved=' + _burstJanSaved);
@@ -3434,6 +3440,45 @@
       panel.style.display = (panel.style.display !== 'none') ? 'none' : '';
       renderBurstLastLog();
     });
+
+    // 後着ZXingによるバースト保存済みエントリへのKeepデータ直接更新
+    // （clearCurrentForm後に_janScanGenがブロックした場合のフォールバック）
+    function _directUpdateBurstEntry(jan, kd) {
+      if (!_burstSavedEntryId || !kd) return;
+      var list = getHistory();
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id !== _burstSavedEntryId) continue;
+        var changed = false;
+        if (kd.title && kd.title !== list[i].memo) { list[i].memo = kd.title; changed = true; }
+        if (jan) { list[i].jan = jan; changed = true; }
+        if (kd.asin) { list[i].asin = kd.asin; changed = true; }
+        list[i].keepa = {
+          salesRank:       kd.salesRank      != null ? kd.salesRank      : null,
+          monthlySold:     kd.monthlySold     != null ? kd.monthlySold    : null,
+          monthlySoldType: kd.monthlySoldType || null,
+          category:        kd.category        || ''
+        };
+        changed = true;
+        if (changed) {
+          dbgLog('[後着ZXing直更新] id=' + _burstSavedEntryId + ' jan=' + jan + ' title=' + (kd.title || '').slice(0,20));
+          try { setHistory(list); } catch(ex) {}
+          renderHistory();
+        }
+        break;
+      }
+    }
+    function _updateBurstEntryFromJan(jan) {
+      if (!_burstSavedEntryId || !jan) return;
+      if (_keepaCache.hasOwnProperty(jan)) {
+        _directUpdateBurstEntry(jan, _keepaCache[jan]);
+      } else if (janKind(jan) !== 'ISBN') {
+        var _lj = jan;
+        fetch('/api/keepa?jan=' + encodeURIComponent(_lj))
+          .then(function(r) { return r.json(); })
+          .then(function(data) { if (data && data.title) { _keepaCache[_lj] = data; _directUpdateBurstEntry(_lj, data); } })
+          .catch(function() {});
+      }
+    }
 
     // 連続撮影モード：AI認識結果エントリを履歴に保存（JAN未検出・Keepaタイムアウト時の共通処理）
     function _doSaveBurstAiEntry(e) {
