@@ -623,7 +623,7 @@
         <option value="trading_card_box">🎴 トレカBOX</option>
         <option value="trading_card_single">🃏 トレカ単品</option>
         <option value="figure">🧍 フィギュア</option>
-        <option value="game_console">🎮 ゲーム機本体</option>
+        <option value="game_console">🎮 ゲーム本体</option>
         <option value="game_software">💿 ゲームソフト</option>
         <option value="game_accessory">🎮 ゲーム周辺機器</option>
         <option value="dvd">📀 DVD</option>
@@ -650,7 +650,7 @@
         <option value="trading_card_box">🎴 トレカBOX</option>
         <option value="trading_card_single">🃏 トレカ単品</option>
         <option value="figure">🧍 フィギュア</option>
-        <option value="game_console">🎮 ゲーム機本体</option>
+        <option value="game_console">🎮 ゲーム本体</option>
         <option value="game_software">💿 ゲームソフト</option>
         <option value="game_accessory">🎮 ゲーム周辺機器</option>
         <option value="dvd">📀 DVD</option>
@@ -810,7 +810,7 @@
           <option value="book">本</option>
           <option value="toy">おもちゃ</option>
           <option value="hobby">ホビー</option>
-          <option value="game_console">ゲーム機本体</option>
+          <option value="game_console">ゲーム本体</option>
           <option value="game_software">ゲームソフト</option>
           <option value="other">その他</option>
         </select>
@@ -934,7 +934,7 @@
             <option value="trading_card_box">🎴 トレカBOX</option>
             <option value="trading_card_single">🃏 トレカ単品</option>
             <option value="figure">🧍 フィギュア</option>
-            <option value="game_console">🎮 ゲーム機本体</option>
+            <option value="game_console">🎮 ゲーム本体</option>
             <option value="game_software">💿 ゲームソフト</option>
             <option value="game_accessory">🎮 ゲーム周辺機器</option>
             <option value="dvd">📀 DVD</option>
@@ -1122,7 +1122,7 @@
       trading_card_box:    '🎴 トレカBOX',
       trading_card_single: '🃏 トレカ単品',
       figure:              '🧍 フィギュア',
-      game_console:        '🎮 ゲーム機本体',
+      game_console:        '🎮 ゲーム本体',
       game_software:       '💿 ゲームソフト',
       game_accessory:      '🎮 ゲーム周辺機器',
       dvd:                 '📀 DVD',
@@ -1173,8 +1173,10 @@
     // Keepaタイトルや商品名のキーワードからゲーム系カテゴリを推測（category=other 時のフォールバック）
     function guessGameCatFromTitle(title) {
       if (!title) return '';
-      // 本体キーワードを先に評価（Switch本体がゲームソフトに誤判定されないよう）
-      if (/本体|Console|Joy-Con|DualSense|DualShock|PSP-[0-9]|CFI-[0-9]|CUH-[0-9]|HAC-[0-9]|HDH-[0-9]/.test(title)) return 'game_console';
+      // 周辺機器キーワード（本体・ソフトより先に評価）
+      if (/Joy-Con|DualSense|DualShock|Pro コントローラー|プロコン|コントローラー|ヘッドセット|ACアダプター|充電器|充電スタンド|ケーブル|メモリースティック|ドック|グリップ|ゲーム用ケース/.test(title)) return 'game_accessory';
+      // 本体キーワード（型番・"本体"キーワード）
+      if (/本体|\bConsole\b|PSP-[0-9]|CFI-[0-9]|CUH-[0-9]|HAC-[0-9]|HDH-[0-9]/.test(title)) return 'game_console';
       // ゲームソフトキーワード
       if (/PlayStation|Nintendo Switch|Nintendo 3DS|Nintendo DS|ニンテンドー|PSP|Xbox|CERO|ゲームソフト|Game Software/.test(title)) return 'game_software';
       if (/\bWii\b/.test(title)) return 'game_software';
@@ -1316,10 +1318,10 @@
   game_accessory: [
     // JAN付きゲーム周辺機器向け。内部Amazonカテゴリは game_software に寄せて15%系として扱う
     { key: 'jan',         label: 'JAN' },
-    { key: 'kind',        label: '種類' },
-    { key: 'compatModel', label: '対応機種' },
+    { key: 'kind',        label: '種類', from: 'productName' },   // AI productName = 周辺機器種別
+    { key: 'compatModel', label: '対応機種', from: 'storage' },   // AI storage = 対応プラットフォーム
     { key: 'modelNo',     label: '型番' },
-    { key: 'color',       label: '色' },
+    { key: 'color',       label: '色', from: 'color' },
     { key: 'accessories', label: '付属品' },
     { key: 'opStatus',    label: '動作確認', type: 'select', options: ['不明', '動作確認済', '未確認', 'ジャンク'] },
     { key: 'memo',        label: 'メモ' }
