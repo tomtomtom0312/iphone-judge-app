@@ -3175,7 +3175,7 @@
       toggleTop();
     })();
     $('fabCameraBtn').addEventListener('click', function () { closeFabMenu(); $('photoInput').click(); });
-    $('fabLiveCamBtn').addEventListener('click', function () { closeFabMenu(); openLiveCamera(); });
+    $('fabLiveCamBtn').addEventListener('click', function () { closeFabMenu(); applyCaptureMode('burst'); openLiveCamera(); });
     $('fabAlbumBtn').addEventListener('click', function () { closeFabMenu(); $('photoInputLib').click(); });
     $('fabJanBtn').addEventListener('click', function () {
       closeFabMenu();
