@@ -319,6 +319,11 @@
     .burst-status { font-size: 14px; line-height: 1.6; margin-top: 12px; min-height: 1.2em; }
     .burst-count { font-weight: 700; color: #4ade80; }
     .burst-last { font-size: 13px; color: var(--muted); margin-top: 4px; word-break: break-word; }
+    .burst-saved-card { background: rgba(74,222,128,.1); border: 1px solid rgba(74,222,128,.3); border-radius: 10px; padding: 10px 14px; margin-top: 6px; }
+    .burst-saved-name { font-size: 15px; font-weight: 700; color: #f0fdf4; word-break: break-word; line-height: 1.4; margin-bottom: 5px; }
+    .burst-saved-meta { font-size: 12px; color: var(--muted); }
+    @keyframes burst-cam-pulse { 0%,100%{box-shadow:0 4px 12px rgba(0,0,0,.3)} 50%{box-shadow:0 0 0 9px rgba(74,222,128,.45),0 4px 12px rgba(0,0,0,.2)} }
+    .burst-cam-ready { animation: burst-cam-pulse 0.75s ease 3; }
 
     /* カテゴリ・ランク表示 */
     .cat-tag {
@@ -3404,23 +3409,56 @@
     var _burstKeepaWaitTimer = null; // Keepaタイムアウトタイマー（JAN確定後2.5s）
     var _burstJanWaitTimer = null;   // AI完了後にJAN確定を待つタイマー（最大1s）
     var _burstClearFormTimer = null; // 保存後にフォームをクリアするタイマー（1s後）
+    var _burstLastMemo = '';       // 直近保存の商品名（表示用）
+    var _burstLastIsKeepa = false; // 直近保存がKeepa確認済みかどうか
+    var _burstLastJanSaved = '';   // 直近保存時のJAN
+
+    // 現在の撮影IDが既に保存済みかどうかを判定（重複保存防止条件を一本化）
+    function _isBurstShotSaved() {
+      return _burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId) || !!_burstSavedEntryId;
+    }
+
+    // 保存完了後に撮影ボタンをパルスアニメーションで次撮影をガイド
+    function _burstReadyPulse() {
+      ['cameraBtn', 'albumBtn', 'burstCameraFab'].forEach(function(id) {
+        var el = $(id);
+        if (!el || el.style.display === 'none') return;
+        el.classList.remove('burst-cam-ready'); void el.offsetWidth;
+        el.classList.add('burst-cam-ready');
+        setTimeout(function() { el.classList.remove('burst-cam-ready'); }, 2300);
+      });
+    }
 
     function renderBurstStatus(msg, cls) {
+      var isSavedMsg = !!(msg && msg.indexOf('保存しました') >= 0);
       var html = '';
-      if (burstCount > 0) html += '<span class="burst-count">✓ ' + burstCount + '枚 認識・保存しました</span>';
-      if (msg) html += (html ? '<br>' : '') + (cls ? '<span class="ai-badge ' + cls + '">' + esc(cls === 'ai-lo' ? '注意' : 'OK') + '</span>' : '') + esc(msg);
-      if (burstLast) html += '<div class="burst-last">直近: ' + esc(burstLast) + '</div>';
-      if (!html) html = '「📷 連続撮影：1枚撮る」を押して撮影してください。';
+      if (isSavedMsg && _burstLastMemo) {
+        // 保存完了カード：商品名を大きく・Keepa確認バッジ付き
+        var kBadge = _burstLastIsKeepa
+          ? '<span style="font-size:11px;font-weight:700;background:rgba(74,222,128,.25);color:#4ade80;padding:1px 7px;border-radius:999px;margin-right:6px;">✅ Keepa確認</span>'
+          : '<span style="font-size:11px;font-weight:700;background:rgba(250,204,21,.2);color:#fbbf24;padding:1px 7px;border-radius:999px;margin-right:6px;">🔍 AI名</span>';
+        html = '<div class="burst-saved-card">'
+          + '<div class="burst-saved-name">' + esc(_burstLastMemo) + '</div>'
+          + '<div class="burst-saved-meta">' + kBadge
+          + (_burstLastJanSaved ? 'JAN:&thinsp;' + esc(_burstLastJanSaved) + '&ensp;' : '')
+          + '<span class="burst-count">' + burstCount + '件目</span>'
+          + '</div></div>';
+      } else {
+        if (burstCount > 0) html += '<span class="burst-count">✓ ' + burstCount + '件 保存済み</span>';
+        if (msg) html += (html ? '<br>' : '') + (cls ? '<span class="ai-badge ' + cls + '">' + esc(cls === 'ai-lo' ? '注意' : '') + '</span> ' : '') + esc(msg);
+        if (!msg && _burstLastMemo) html += (html ? '<br>' : '') + '<span class="burst-last">📦 直近: ' + esc(_burstLastMemo) + ' — 次の商品を撮影できます</span>';
+        if (!html) html = '<span style="color:var(--muted)">「📷 連続撮影：1枚撮る」を押して撮影してください。</span>';
+      }
       $('burstStatus').innerHTML = html;
       // カメラボタン付近にも保存状態を表示（スクロール不要）
       var qs = $('burstQuickStatus');
       if (qs) {
-        var isSaved = msg && msg.indexOf('保存しました') >= 0;
-        if (isSaved) {
-          qs.innerHTML = '✅ 保存しました &nbsp; 履歴' + burstCount + '件';
+        if (isSavedMsg && _burstLastMemo) {
+          var sn = _burstLastMemo.length > 22 ? _burstLastMemo.slice(0, 22) + '…' : _burstLastMemo;
+          qs.innerHTML = '✅ ' + esc(sn) + ' &nbsp;<span style="font-weight:600;opacity:.75;">計' + burstCount + '件</span>';
           qs.style.background = '#dcfce7'; qs.style.color = '#15803d'; qs.style.fontWeight = '700';
         } else if (burstCount > 0) {
-          qs.innerHTML = '✓ ' + burstCount + '件 保存済み';
+          qs.innerHTML = '✓ ' + burstCount + '件保存済み';
           qs.style.background = '#f0fdf4'; qs.style.color = '#16a34a'; qs.style.fontWeight = '600';
         } else {
           qs.innerHTML = ''; qs.style.background = ''; qs.style.color = '#6b7280'; qs.style.fontWeight = '';
@@ -3487,6 +3525,13 @@
           dbgLog('[後着ZXing直更新] id=' + _burstSavedEntryId + ' jan=' + jan + ' title=' + (kd.title || '').slice(0,20));
           try { setHistory(list); } catch(ex) {}
           renderHistory();
+          // clearCurrentForm後でも直近表示をKeepa正式名に更新
+          if (kd.title) {
+            _burstLastMemo = kd.title;
+            _burstLastIsKeepa = true;
+            if (jan) _burstLastJanSaved = jan;
+            renderBurstStatus('');
+          }
         }
         break;
       }
@@ -3508,7 +3553,7 @@
     function _doSaveBurstAiEntry(e) {
       dbgLog('[SAVE-AI] _doSaveBurstAiEntry ENTER _burstJanSaved=' + _burstJanSaved + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId);
       _burstAiEntry = null;
-      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId) || _burstSavedEntryId) {
+      if (_isBurstShotSaved()) {
         dbgLog('[SAVE-AI] 保存済みスキップ（_burstJanSaved=' + _burstJanSaved + ' shotId一致=' + (_burstSavedShotId === _burstShotId) + ' savedEntryId=' + _burstSavedEntryId + '）');
         return;
       }
@@ -3518,22 +3563,25 @@
       _burstJanSaved = true; // Keepa/OpenBD等の後着応答による重複保存を防ぐ
       _burstSavedShotId = _burstShotId; // shotID単位でも保存済みをマーク
       _burstSavedEntryId = e.id;        // 後着Keepaがこのエントリを更新できるよう記録
+      _burstLastMemo = e.memo || '';
+      _burstLastIsKeepa = false;
+      _burstLastJanSaved = e.jan || '';
       burstCount++;
       burstLast = (e.memo || '(名称未設定)') + '（' + categoryLabel(e.category)
         + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
       renderHistory(); resetCrop();
-      renderBurstStatus('保存しました（JAN/Keepa未取得）。続けて次の1枚を撮影できます。');
+      renderBurstStatus('保存しました（AI名・Keepa更新待ち）');
       // デバッグパネルが開いているときはスクロールしない（ログが消えるため）
       var _dp = document.getElementById('debugPanel');
       if (!_dp || _dp.style.display === 'none') window.scrollTo({ top: 0, behavior: 'smooth' });
-      _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
+      _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); _burstReadyPulse(); }, 1000);
     }
 
     // 連続撮影モード：Keepa/OpenBD で商品名が確定した後に下書き保存し、次の商品待ちに戻る
     function maybeBurstAutoSave() {
       dbgLog('[SAVE-KP] maybeBurstAutoSave ENTER _burstJanSaved=' + _burstJanSaved + ' shotId=' + _burstShotId + ' savedShotId=' + _burstSavedShotId + ' memo=' + (($('memo') && $('memo').value) || '').slice(0,20));
       if (captureMode !== 'burst') return;
-      if (_burstJanSaved || (_burstShotId && _burstSavedShotId === _burstShotId) || _burstSavedEntryId) {
+      if (_isBurstShotSaved()) {
         // 保存済みでも、Keepaデータがあれば保存済みエントリのmemo/JAN/ASIN/Keepaを後から更新する
         // （AI名で先に保存された場合でも、後着Keepaで正式商品名に差し替える）
         if (captureMode === 'burst' && _burstSavedEntryId) {
@@ -3571,6 +3619,11 @@
                   try { setHistory(_upList); } catch(ex) {}
                   renderHistory();
                   dbgLog('[SAVE-KP] 後着Keepa更新完了 id=' + _burstSavedEntryId + ' jan=' + _upJan + ' asin=' + _upAsin);
+                  // 保存カード・直近表示をKeepa正式名に更新
+                  _burstLastMemo = _upMemo;
+                  _burstLastIsKeepa = !!_upJan;
+                  _burstLastJanSaved = _upJan || _burstLastJanSaved;
+                  renderBurstStatus(_burstJanSaved ? '保存しました（Keepa更新済み）' : '');
                 }
                 break;
               }
@@ -3636,16 +3689,19 @@
       _burstJanSaved = true;
       _burstSavedShotId = _burstShotId; // shotID単位でも保存済みをマーク
       _burstSavedEntryId = _snapId;     // 後着Keepaがこのエントリを更新できるよう記録
+      _burstLastMemo = memo;
+      _burstLastIsKeepa = !!_snapJan;
+      _burstLastJanSaved = _snapJan || '';
       burstCount++;
       burstLast = memo;
       currentEntryId = null;
       renderHistory();
       renderBurstLastLog();
-      renderBurstStatus('✅ 下書き保存しました。次の商品を撮影してください。');
+      renderBurstStatus('保存しました（Keepa確認済み）');
       // デバッグパネルが開いているときはスクロールしない（ログが消えるため）
       var _dbgPanel = document.getElementById('debugPanel');
       if (!_dbgPanel || _dbgPanel.style.display === 'none') window.scrollTo({ top: 0, behavior: 'smooth' });
-      _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
+      _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); _burstReadyPulse(); }, 1000);
     }
 
     // 認識結果オブジェクト j からドラフト履歴エントリを生成（売価・原価・送料は未入力）
