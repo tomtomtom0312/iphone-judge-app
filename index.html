@@ -1913,6 +1913,9 @@
       if (_keepaLastJan === jan) { dbgLog('[KEEPA] fetchKeepa 重複スキップ jan=' + jan); return; }
       dbgLog('[KEEPA] fetchKeepa ネット取得開始 jan=' + jan);
       _keepaLastJan = jan;
+      // clearCurrentFormが1s後にkeepaLastJanをリセットしても、同写真の保存済みエントリは
+      // 後着Keepaで正式商品名に更新できるよう撮影IDをキャプチャしておく
+      var _fetchShotId = _burstShotId;
       el.style.display = '';
       el.innerHTML = '<p style="margin:4px 0 0;font-size:12px;color:var(--muted);">Amazon照会中…</p>';
       fetch('/api/keepa?jan=' + encodeURIComponent(jan))
@@ -1920,7 +1923,14 @@
         .then(function(data) {
           _keepaCache[jan] = (data && data.title) ? data : null;
           dbgLog('[Keepa応答] jan=' + jan + ' title=' + (data && data.title ? data.title.slice(0,30) : 'なし') + ' asin=' + (data ? (data.asin || '(空)') : 'null'));
-          if (_keepaLastJan === jan) _renderKeepa(jan);
+          if (_keepaLastJan === jan) {
+            _renderKeepa(jan);
+          } else if (captureMode === 'burst' && _burstSavedEntryId && _burstShotId === _fetchShotId && _keepaCache[jan]) {
+            // clearCurrentFormで_keepaLastJanがリセットされた後に返ってきたKeepa応答:
+            // _renderKeepaは呼べないが、保存済みエントリをKeepa正式名で直接更新する
+            dbgLog('[Keepa後着] clearCurrentForm後の後着Keepa → 保存済みエントリ直更新 jan=' + jan);
+            _directUpdateBurstEntry(jan, _keepaCache[jan]);
+          }
         })
         .catch(function(err) {
           _keepaCache[jan] = null;
