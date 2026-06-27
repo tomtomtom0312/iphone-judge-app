@@ -3052,8 +3052,6 @@
     $('liveCamBtn').addEventListener('click', openLiveCamera);                            // ライブ撮影（音なし）
     $('albumBtn').addEventListener('click', function () { $('photoInputLib').click(); });  // フォトライブラリ/ファイル選択
     $('burstCameraFab').addEventListener('click', function () { $('photoInput').click(); }); // 連続撮影右下FAB
-    if ($('fabCameraBtn'))  $('fabCameraBtn').addEventListener('click',  function () { $('photoInput').click(); });
-    if ($('fabLiveCamBtn')) $('fabLiveCamBtn').addEventListener('click', openLiveCamera);
     $('photoInput').addEventListener('change', handlePhotoFile);
     $('photoInputLib').addEventListener('change', handlePhotoFile);
 
@@ -3176,8 +3174,9 @@
       window.addEventListener('scroll', toggleTop, { passive: true });
       toggleTop();
     })();
-    $('fabCameraBtn').addEventListener('click', function () { closeFabMenu(); $('photoInput').click(); });   // 既存「写真を撮る」と同じトリガ
-    $('fabAlbumBtn').addEventListener('click', function () { closeFabMenu(); $('photoInputLib').click(); });  // 既存「アルバムから選ぶ」と同じトリガ
+    $('fabCameraBtn').addEventListener('click', function () { closeFabMenu(); $('photoInput').click(); });
+    $('fabLiveCamBtn').addEventListener('click', function () { closeFabMenu(); openLiveCamera(); });
+    $('fabAlbumBtn').addEventListener('click', function () { closeFabMenu(); $('photoInputLib').click(); });
     $('fabJanBtn').addEventListener('click', function () {
       closeFabMenu();
       // カテゴリ非依存：保持用 janHolder へ読み取り → janHolder の input で setHeldJan が近接表示＋（存在すれば）補助項目JAN欄へ同期
