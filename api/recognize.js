@@ -139,7 +139,7 @@ export default async function handler(req, res) {
 
     // tool_choice で特定ツールを強制呼び出し → 全 SDK バージョンで安定動作するJSON出力方式
     const response = await client.messages.create({
-      model: 'claude-opus-4-8',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       tools: [{
         name: 'recognize_product',
