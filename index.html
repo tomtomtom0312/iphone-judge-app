@@ -1206,7 +1206,13 @@
       if (normCategory(j.category) === 'iPhone') {
         return 'iPhone 本体（機種未確認）';
       }
-      return (j.productName || '').trim();
+      var name = (j.productName || '').trim();
+      var brand = (j.brand || '').trim();
+      // ブランドが商品名に含まれていない場合は先頭に付与（Keepaが取れない場合のフォールバック）
+      if (brand && name && !name.toLowerCase().includes(brand.toLowerCase())) {
+        return brand + ' ' + name;
+      }
+      return name;
     }
 
     /* ============================================================
