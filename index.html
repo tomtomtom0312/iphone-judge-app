@@ -2182,6 +2182,15 @@
                 }
                 return;
               }
+              // ZXingが確定済みJANをAI-Visionが上書きしないようガード（同一写真内）
+              // ZXing→CV順で到着時、CV誤読が_keepaLastJanを汚染してZXing結果を抑制するのを防ぐ
+              if (label === 'AI-Vision') {
+                var _existJan = getHeldJan();
+                if (_existJan && _existJan !== jan) {
+                  dbgLog('[JAN確定スキップ] AI-Vision上書き防止: 確定済み=' + _existJan + ' AI候補=' + jan);
+                  return;
+                }
+              }
               dbgLog('[JAN確定] ' + jan + ' (' + label + ') _burstJanSaved=' + _burstJanSaved);
               // JAN確定：連続撮影のAI自動認識タイマーは不要（JAN経路で保存）
               clearTimeout(_burstAutoTimer); _burstAutoTimer = null;
