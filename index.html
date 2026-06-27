@@ -2170,6 +2170,11 @@
 
             // JAN 確定 → UI 反映・Keepa 呼出（ZXing/Claude Vision 共通）
             function commitJan(jan, label) {
+              // 世代不一致（clearCurrentForm後の古いZXingコールバック）は無視して二重保存を防ぐ
+              if (_janScanGen !== myGen) {
+                dbgLog('[JAN確定スキップ] 古い世代 myGen=' + myGen + ' current=' + _janScanGen + ' jan=' + jan);
+                return;
+              }
               dbgLog('[JAN確定] ' + jan + ' (' + label + ') _burstJanSaved=' + _burstJanSaved);
               // JAN確定：連続撮影のAI自動認識タイマーは不要（JAN経路で保存）
               clearTimeout(_burstAutoTimer); _burstAutoTimer = null;
@@ -3432,7 +3437,9 @@
         + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
       renderHistory(); resetCrop();
       renderBurstStatus('保存しました（JAN/Keepa未取得）。続けて次の1枚を撮影できます。');
-      window.scrollTo({ top: 0, behavior: 'smooth' }); // 保存後はカメラボタンへ自動スクロール
+      // デバッグパネルが開いているときはスクロールしない（ログが消えるため）
+      var _dp = document.getElementById('debugPanel');
+      if (!_dp || _dp.style.display === 'none') window.scrollTo({ top: 0, behavior: 'smooth' });
       _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
 
@@ -3501,7 +3508,9 @@
       renderHistory();
       renderBurstLastLog();
       renderBurstStatus('✅ 下書き保存しました。次の商品を撮影してください。');
-      window.scrollTo({ top: 0, behavior: 'smooth' }); // 保存後はカメラボタンへ自動スクロール
+      // デバッグパネルが開いているときはスクロールしない（ログが消えるため）
+      var _dbgPanel = document.getElementById('debugPanel');
+      if (!_dbgPanel || _dbgPanel.style.display === 'none') window.scrollTo({ top: 0, behavior: 'smooth' });
       _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
 
