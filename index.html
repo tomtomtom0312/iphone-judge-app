@@ -537,6 +537,8 @@
     <!-- 上部の撮影/アルバムボタンは連続撮影モード専用表示（単品モードは右下メニューに集約）。初期は単品なので非表示。表示制御は applyCaptureMode -->
     <button class="photo-btn" id="cameraBtn" style="display:none;">📷 写真を撮る</button>
     <button class="photo-btn photo-btn-sub" id="albumBtn" style="display:none;">🖼 アルバムから選ぶ</button>
+    <!-- 連続撮影モード：撮影ボタン直下に保存件数を常時表示（スクロール不要） -->
+    <div id="burstQuickStatus" style="display:none; text-align:center; padding:6px 10px; font-size:13px; border-radius:8px; margin:4px 0 0;"></div>
     <!-- 右下固定の開閉メニュー（片手操作用）。各項目は既存トリガを呼ぶだけ。表示同期は updateTopJanScanBtn で実施 -->
     <div id="fabMenu" style="display:none; position:fixed; right:16px; bottom:16px; z-index:40;">
       <div id="fabMenuItems" style="display:none; flex-direction:column; align-items:flex-end; gap:8px; margin-bottom:10px;">
@@ -570,6 +572,8 @@
     </div>
     <!-- ページ上部へ戻る固定ボタン（左下・右下メニューと干渉しない）。少しスクロールしたら表示 -->
     <button type="button" id="scrollTopBtn" aria-label="ページ上部へ戻る" title="ページ上部へ戻る" style="display:none; position:fixed; left:16px; bottom:16px; z-index:40; width:48px; height:48px; border:none; border-radius:50%; background:#2563eb; color:#fff; font-size:22px; line-height:1; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">↑</button>
+    <!-- 連続撮影モード専用：右下カメラFAB（スクロール中でも次の撮影ができる） -->
+    <button type="button" id="burstCameraFab" aria-label="次を撮影" title="次を撮影" style="display:none; position:fixed; right:16px; bottom:16px; z-index:40; width:56px; height:56px; border:none; border-radius:50%; background:#16a34a; color:#fff; font-size:26px; line-height:1; box-shadow:0 4px 12px rgba(0,0,0,.3); cursor:pointer;">📷</button>
     <p class="shot-hint">📸 判定したい商品を<b>中央に大きく</b>写してください。背景のゴミ袋・家具・段ボールなど周辺の物は自動で無視します。</p>
     <input class="photo-input" id="photoInput" type="file" accept="image/*" capture="environment" />
     <input class="photo-input" id="photoInputLib" type="file" accept="image/*" />
@@ -2871,6 +2875,7 @@
     }
     $('cameraBtn').addEventListener('click', function () { $('photoInput').click(); });    // カメラ起動優先
     $('albumBtn').addEventListener('click', function () { $('photoInputLib').click(); });  // フォトライブラリ/ファイル選択
+    $('burstCameraFab').addEventListener('click', function () { $('photoInput').click(); }); // 連続撮影右下FAB
     $('photoInput').addEventListener('change', handlePhotoFile);
     $('photoInputLib').addEventListener('change', handlePhotoFile);
 
@@ -2935,6 +2940,7 @@
       $('aiStatus').textContent = '';
       $('janStatus').textContent = '';
       resetCrop(); // モード切替時はクロップ台を片付ける
+      if ($('burstQuickStatus')) $('burstQuickStatus').style.display = burst ? '' : 'none';
       if (burst) renderBurstStatus();
       updateTopJanScanBtn(); // モード切替に応じて上部JANボタンの表示を同期
     }
@@ -2952,6 +2958,7 @@
       // JAN読み取りはカテゴリ非依存：右下メニューもJAN項目も単品モードなら常に表示（未選択/その他/iPhone でも使える）
       $('fabMenu').style.display = single ? '' : 'none';
       $('fabJanBtn').style.display = single ? '' : 'none';
+      if ($('burstCameraFab')) $('burstCameraFab').style.display = single ? 'none' : 'block';
       if (!single) {
         closeFabMenu(); // 非表示化に伴い開いた状態を畳む
         if ($('scrollTopBtn')) $('scrollTopBtn').style.display = 'block'; // 連続撮影モード：↑ボタン常時表示
@@ -3357,6 +3364,20 @@
       if (burstLast) html += '<div class="burst-last">直近: ' + esc(burstLast) + '</div>';
       if (!html) html = '「📷 連続撮影：1枚撮る」を押して撮影してください。';
       $('burstStatus').innerHTML = html;
+      // カメラボタン付近にも保存状態を表示（スクロール不要）
+      var qs = $('burstQuickStatus');
+      if (qs) {
+        var isSaved = msg && msg.indexOf('保存しました') >= 0;
+        if (isSaved) {
+          qs.innerHTML = '✅ 保存しました &nbsp; 履歴' + burstCount + '件';
+          qs.style.background = '#dcfce7'; qs.style.color = '#15803d'; qs.style.fontWeight = '700';
+        } else if (burstCount > 0) {
+          qs.innerHTML = '✓ ' + burstCount + '件 保存済み';
+          qs.style.background = '#f0fdf4'; qs.style.color = '#16a34a'; qs.style.fontWeight = '600';
+        } else {
+          qs.innerHTML = ''; qs.style.background = ''; qs.style.color = '#6b7280'; qs.style.fontWeight = '';
+        }
+      }
     }
 
     // 直近の連続撮影ログパネルを更新（保存後に呼ぶ。clearCurrentForm()では呼ばないため次の商品まで残る）
@@ -3408,6 +3429,7 @@
         + (e.estimatedRank ? ' / ランク' + e.estimatedRank : '') + '）';
       renderHistory(); resetCrop();
       renderBurstStatus('保存しました（JAN/Keepa未取得）。続けて次の1枚を撮影できます。');
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // 保存後はカメラボタンへ自動スクロール
       _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
 
@@ -3475,6 +3497,7 @@
       renderHistory();
       renderBurstLastLog();
       renderBurstStatus('✅ 下書き保存しました。次の商品を撮影してください。');
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // 保存後はカメラボタンへ自動スクロール
       _burstClearFormTimer = setTimeout(function () { clearCurrentForm(); renderBurstStatus(); }, 1000);
     }
 
