@@ -1151,6 +1151,13 @@
       if (/ゲームソフト|家庭用ゲームソフト/.test(keepaCat))         return 'game_software';
       if (/ゲーム機|家庭用ゲーム本体/.test(keepaCat))               return 'game_console';
       if (/ゲーム周辺機器/.test(keepaCat))                          return 'game_accessory';
+      // Amazon.co.jp TVゲームカテゴリツリー（Keepa: "TVゲーム > PlayStation Portable" 等2段表示）
+      if (/TVゲーム/.test(keepaCat)) {
+        if (/本体/.test(keepaCat))                                   return 'game_console';
+        if (/周辺機器|コントローラー|アクセサリー/.test(keepaCat))  return 'game_accessory';
+        return 'game_software'; // PS Portable / Nintendo Switch / Xbox 等はソフトとみなす
+      }
+      if (/^Video Games$/.test(keepaCat))                           return 'game_software';
       if (/DIY|工具|ガーデン/.test(keepaCat))                       return 'diy';
       if (/スポーツ|アウトドア/.test(keepaCat))                     return 'sports';
       if (/ドラッグストア|医薬品/.test(keepaCat))                   return 'drugstore';
@@ -1161,6 +1168,16 @@
       if (/文房具|オフィス/.test(keepaCat))                         return 'stationery';
       if (/楽器|音響/.test(keepaCat))                               return 'music';
       if (/おもちゃ/.test(keepaCat))                                return 'toy'; // 上記より後（ゲーム/フィギュア等を先に判定）
+      return '';
+    }
+    // Keepaタイトルや商品名のキーワードからゲーム系カテゴリを推測（category=other 時のフォールバック）
+    function guessGameCatFromTitle(title) {
+      if (!title) return '';
+      // 本体キーワードを先に評価（Switch本体がゲームソフトに誤判定されないよう）
+      if (/本体|Console|Joy-Con|DualSense|DualShock|PSP-[0-9]|CFI-[0-9]|CUH-[0-9]|HAC-[0-9]|HDH-[0-9]/.test(title)) return 'game_console';
+      // ゲームソフトキーワード
+      if (/PlayStation|Nintendo Switch|Nintendo 3DS|Nintendo DS|ニンテンドー|PSP|Xbox|CERO|ゲームソフト|Game Software/.test(title)) return 'game_software';
+      if (/\bWii\b/.test(title)) return 'game_software';
       return '';
     }
     // _userSetCategoryを考慮してカテゴリを自動反映する共通ヘルパー
@@ -2095,6 +2112,11 @@
       refreshFormSearchIcons(info.asin); // ASIN確定 → K ボタンを有効化
       _currentFormAsin = info.asin || ''; // onSearchClick でJAN経路・name fallback経路共通で使用
       applyCategoryIfAllowed(keepaCatToStolyCategory(info.category), 'Keepa category', info.category || '(不明)');
+      // Keepaカテゴリが判定不能でカテゴリがotherのままの場合、タイトルキーワードでゲーム系に補正
+      if (normCategory($('category').value) === 'other' && info.title) {
+        var _gCat = guessGameCatFromTitle(info.title);
+        if (_gCat) applyCategoryIfAllowed(_gCat, 'Keepa title game-guess', info.title.slice(0, 30));
+      }
       // コピーエリアに ASINコピーを表示
       var caBtn = document.getElementById('copyAsinBtn');
       if (caBtn) caBtn.style.display = '';
@@ -3545,6 +3567,7 @@
         if (kd.asin && !list[i].asin) { list[i].asin = kd.asin; changed = true; }
         // KeepaカテゴリでAIカテゴリを上書き（ドラッグストア/ビューティーなど正確な分類へ）
         var _kCat = keepaCatToStolyCategory(kd.category || '');
+        if (!_kCat && list[i].category === 'other' && kd.title) _kCat = guessGameCatFromTitle(kd.title);
         if (_kCat && _kCat !== list[i].category) { list[i].category = _kCat; changed = true; }
         list[i].keepa = {
           salesRank:       kd.salesRank      != null ? kd.salesRank      : null,
@@ -3646,6 +3669,11 @@
                 // KeepaカテゴリでAIカテゴリを上書き（正式分類へ）
                 var _upKeepaRawCat = (_upKd && _upKd.category) ? _upKd.category : '';
                 var _upCat = _upKeepaRawCat ? keepaCatToStolyCategory(_upKeepaRawCat) : normCategory($('category').value);
+                // Keepaカテゴリが判定不能 & カテゴリがotherのままならタイトルキーワードで補正
+                if ((!_upCat || _upCat === 'other') && _upList[_upI].category === 'other' && _upMemo) {
+                  var _upGameCat = guessGameCatFromTitle(_upMemo);
+                  if (_upGameCat) _upCat = _upGameCat;
+                }
                 if (_upCat && _upCat !== 'other' && _upCat !== _upList[_upI].category) {
                   dbgLog('[SAVE-KP] カテゴリ更新: "' + _upList[_upI].category + '" → "' + _upCat + '"');
                   _upList[_upI].category = _upCat; _upChanged = true;
